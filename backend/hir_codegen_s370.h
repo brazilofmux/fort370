@@ -91,10 +91,13 @@ static void cg_die(char *msg, int inst) {
 static char s370_line[200];
 static int  s370_pc;          /* bytes of code emitted in this CSECT, for alignment */
 
+static void s370_scache_clear(void);
+static int s370_scache[16];
 static void asm_stmt(char *label, char *op, char *operands) {
     int col;
     int i;
     char *p;
+    if (label && *label) s370_scache_clear();
     col = 0;
     p = label;
     while (p && *p) { cg_c(*p); p = p + 1; col = col + 1; }
@@ -121,10 +124,37 @@ static void asm_comment(char *text) {
     cg_c('\n');
 }
 
+/* Reload reuse: which value R1, R14 and R15 hold after a reload, so
+ * a second use in the same straight-line run needs no second load.
+ * Cleared at every label and whenever the register is written. */
+static int s370_scache[16];
+static void s370_scache_clear(void) { s370_scache[1] = -1; s370_scache[14] = -1; s370_scache[15] = -1; }
+
+/* Does this instruction write its first-operand register? */
+static int s370_writes_r1(char *op) {
+    if (op[0] == 'S' && op[1] == 'T') return 0;            /* ST STD STE STH STC STM */
+    if (op[0] == 'C') return op[1] == 'V' ? 1 : 0;          /* C CR CD CDR CL CLR CE CER; CNOP; CVD writes storage */
+    if (op[0] == 'B') return 0;                             /* B BC BR BCR BXLE BXH (BXLE writes r1!) */
+    if (op[0] == 'O' && op[1] == 'I') return 0;             /* OI */
+    if (op[0] == 'M' && op[1] == 'V') return 0;             /* MVC MVI */
+    if (op[0] == 'T' && op[1] == 'R') return 0;             /* TR */
+    return 1;
+}
+
 /* Machine instruction with a byte length, so alignment is known. */
 static void asm_ins(char *op, char *operands, int len) {
+    int r;
     asm_stmt("", op, operands);
     s370_pc = s370_pc + len;
+    /* keep the scratch cache honest */
+    if (op[0] == 'B' && op[1] == 'A') { s370_scache[14] = -1; s370_scache[15] = -1; }   /* BAL BALR */
+    if (op[0] == 'B' && op[1] == 'X') { r = atoi(operands); if (r >= 0 && r < 16) s370_scache[r] = -1; }
+    if ((op[0] == 'M' && op[1] != 'V') || op[0] == 'D') { if (op[1] == 'R' || op[1] == 0 || op[1] == 'H' || op[1] == 'D' || op[1] == 'E') { s370_scache[1] = -1; } }  /* M MR MH D DR: the pair */
+    if (s370_writes_r1(op)) {
+        r = atoi(operands);
+        if (r >= 0 && r < 16) s370_scache[r] = -1;
+    }
+    if (strcmp(op, "SRDA") == 0 || strcmp(op, "SRDL") == 0 || strcmp(op, "SLDA") == 0 || strcmp(op, "SLDL") == 0) s370_scache[1] = -1;
 }
 
 /* A small formatter for operand strings. */
@@ -595,6 +625,13 @@ static int s370_fold_chain(int addr, int *base, int *off) {
 static int s370_gpr(int v, int s) {
     if (v < 0) cg_die("missing operand", -1);
     if (ra_reg[v] >= 0 && !ra_is_fpv(v)) return ra_reg[v];
+    /* a scratch already holding this spilled value serves as well */
+    if (ra_spill_off[v] != 0 && !(bg_fold[v] && bg_mem_lnt[v] >= 0)) {
+        if (s370_scache[s] == v) return s;
+        if (s370_scache[14] == v) return 14;
+        if (s370_scache[15] == v) return 15;
+        if (s370_scache[1] == v) return 1;
+    }
     s370_load_into(s, v);
     return s;
 }
@@ -708,7 +745,9 @@ static void s370_load_into(int d, int v) {
         return;
     }
     if (s370_imem(v, mem)) {
+        if ((d == 1 || d == 14 || d == 15) && s370_scache[d] == v && ra_spill_off[v] != 0 && !(bg_fold[v] && bg_mem_lnt[v] >= 0)) return;
         f_reset(); f_s(s370_r(d)); f_c(','); f_s(mem); asm_ins("L", s370_line, 4);
+        if ((d == 1 || d == 14 || d == 15) && ra_spill_off[v] != 0 && !(bg_fold[v] && bg_mem_lnt[v] >= 0)) s370_scache[d] = v;
         return;
     }
     cg_die("cannot materialize value", v);
@@ -2846,6 +2885,7 @@ static void s370_gen_unit(Node *fn) {
     asm_ins("ST", s370_line, 4);
 
     s370_r1_intact = 1;
+    s370_scache_clear();
     q = 0;
     while (q < bb_nblk) { s370_block(hcg_emit_ord[q]); q = q + 1; }
 

@@ -1393,6 +1393,15 @@ static void ra_build_wuses(void) {
         w = ra_depth_w(h_blk[i]);
         if (h_src1[i] >= 0) ra_wuses[h_src1[i]] = ra_wuses[h_src1[i]] + w;
         if (h_src2[i] >= 0 && ho_src2_is_ref(k)) ra_wuses[h_src2[i]] = ra_wuses[h_src2[i]] + w;
+        {
+            /* the base and index read through a folded address: the
+             * folded instructions are NOPs, so their reads count here */
+            int mr[2];
+            int nm;
+            nm = s370_mem_regs(i, mr);
+            j = 0;
+            while (j < nm) { ra_wuses[mr[j]] = ra_wuses[mr[j]] + w; j = j + 1; }
+        }
         if ((k == HI_CALL || k == HI_CALLP) && h_cbase[i] >= 0) {
             base = h_cbase[i];
             cnt = h_val[i];
@@ -1671,7 +1680,7 @@ static void gc_alloc(void) {
         gc_find_moves();
         gc_irc();
         gc_select();
-        if (iter >= 32) break;
+        if (iter >= 256) break;
         if (gc_respill() == 0) break;
         iter = iter + 1;
     }

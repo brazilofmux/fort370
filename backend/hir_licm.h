@@ -777,6 +777,16 @@ static int sr_init[SR_MAX_IV];
 static int sr_step[SR_MAX_IV];      /* step VALUE (inst id) */
 static int sr_inc[SR_MAX_IV];
 static int sr_niv;
+/* fort370: derived IVs made so far in this loop, keyed on the base
+ * IV's phi, the operation and the other operand, so the same
+ * expression in another block of the body (SLL(K,3) under both arms of
+ * an IF) shares one phi instead of costing a second register. */
+static int sr_dk_phi[SR_MAX_IV];
+static int sr_dk_knd[SR_MAX_IV];
+static int sr_dk_other[SR_MAX_IV];
+static int sr_dk_oval[SR_MAX_IV];   /* the other operand's value when it is a constant, else a marker */
+static int sr_dk_new[SR_MAX_IV];
+static int sr_ndk;
 
 static int sr_arg_of(int phi, int blk) {
     int j;
@@ -944,6 +954,7 @@ static void licm_strred(int header, int latch) {
     /* Base IVs: two-arg phis of the header whose latch arg is an
      * ADD/ADDI of the phi by an invariant step. */
     sr_niv = 0;
+    sr_ndk = 0;
     phi = ssa_phi_head[header];
     while (phi >= 0 && sr_niv < SR_MAX_IV) {
         if (h_kind[phi] == HI_PHI && h_pcnt[phi] == 2) {
@@ -1034,6 +1045,29 @@ static void licm_strred(int header, int latch) {
                 fdputs(" kind=", 2);
                 fdputuint(2, (unsigned)k);
                 fdputs(" (nonlocal use)\n", 2);
+            }
+            if (r >= 0 && other >= 0 && sr_uses_local(i) && sr_count_refs(i) > 0) {
+                /* the same derived IV already made in this loop? */
+                int d;
+                int oconst;
+                int oval;
+                oconst = (h_kind[other] == HI_ICONST);
+                oval = oconst ? h_val[other] : 0;
+                d = 0;
+                while (d < sr_ndk) {
+                    if (sr_dk_phi[d] == sr_phi[r] && sr_dk_knd[d] == knd &&
+                        ((oconst && sr_dk_oval[d] == oval && sr_dk_other[d] == -1) ||
+                         (!oconst && sr_dk_other[d] == other))) break;
+                    d = d + 1;
+                }
+                if (d < sr_ndk) {
+                    sr_rewrite(i, sr_dk_new[d]);
+                    h_kind[i] = HI_NOP;
+                    h_src1[i] = -1;
+                    h_src2[i] = -1;
+                    i = i + 1;
+                    continue;
+                }
             }
             if (r >= 0 && other >= 0 && sr_uses_local(i) &&
                 sr_count_refs(i) > 0 &&
@@ -1129,6 +1163,14 @@ static void licm_strred(int header, int latch) {
                 h_src1[i] = -1;
                 h_src2[i] = -1;
                 /* register as an IV for round 2 */
+                if (sr_ndk < SR_MAX_IV) {
+                    sr_dk_phi[sr_ndk] = sr_phi[r];
+                    sr_dk_knd[sr_ndk] = knd;
+                    sr_dk_other[sr_ndk] = (h_kind[other] == HI_ICONST) ? -1 : other;
+                    sr_dk_oval[sr_ndk] = (h_kind[other] == HI_ICONST) ? h_val[other] : 0;
+                    sr_dk_new[sr_ndk] = nphi;
+                    sr_ndk = sr_ndk + 1;
+                }
                 sr_phi[sr_niv] = nphi;
                 sr_init[sr_niv] = ninit;
                 sr_step[sr_niv] = nstep;

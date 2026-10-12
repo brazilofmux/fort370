@@ -1,0 +1,23 @@
+fort370 S/370 back end, 2026-10-12 late: the spill cost now counts the
+reads an instruction makes through a folded address (base and index of
+a storage operand), which had been invisible since the folded address
+instructions are NOPs; a reload reuses whichever scratch register
+already holds the value; derived induction variables that differ only
+in name are shared.  Same TK5 system and kernels as
+results-2026-10-12.txt.  CPU seconds of the GO step; every checksum
+identical to FORTRAN H's; H's OPT=2 beside.  lll1's code is unchanged
+from the c results, so about 2% of these numbers is run-to-run noise.
+daxpy  cpu=4.65  H=4.40  |DAXPY CHECKSUM 0.100099999999737D 06
+ddot   cpu=3.49  H=3.37  |DDOT CHECKSUM 0.199999998516409D 06
+matmul cpu=4.79  H=5.04  |MATMUL CHECKSUM 0.166649999999761D 08
+lll1   cpu=9.49  H=8.85  |LLL1 CHECKSUM 0.500404006199570D 03
+lll5   cpu=5.70  H=5.53  |LLL5 CHECKSUM 0.500055259259247D 03
+lll7   cpu=15.20 H=15.14 |LLL7 CHECKSUM 0.847610420053770D 03
+linpk  cpu=13.62 H=13.64 |LINPACK INFO 0 CHECKSUM 0.100000000000001D 03
+
+DGEFA's inlined DSCAL and DAXPY loops are now register-only:
+L00125   LDR   0,2
+         MD    0,0(3,6)
+         AD    0,0(3,7)
+         STD   0,0(3,7)
+         BXLE  3,4,L00125

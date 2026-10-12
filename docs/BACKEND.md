@@ -237,7 +237,15 @@ hoisted into a register base: matmul's loop is the five-instruction
 floor against H's eight (4.78 to 5.04), lll5 and lll7 are at H's
 count, and the seven kernels stand at 0.95 to 1.18 of H's OPT=2, the
 1.18 being LINPACK, where register pressure in DGEFA spills hoisted
-bases into the innermost loop. `bench/ab.sh` runs one program through both
+bases into the innermost loop. `bench/results-s370-2026-10-12d.txt`
+removes that: the spill cost had not counted the reads an instruction
+makes through a folded address (the folded ADDs are NOPs), so the
+inner-loop bases weighed nothing and went first; with those reads
+counted, DGEFA's inlined DAXPY loop is `LDR / MD / AD / STD / BXLE`
+and LINPACK is 13.62 to H's 13.64. The seven kernels now stand
+between 0.95 and 1.07 of H's OPT=2, the difference in the slower ones
+being within the run-to-run noise of the measurement (about 2%)
+plus one or two instructions in loop setup. `bench/ab.sh` runs one program through both
 compilers and compares what they print; `tests/s370/` holds such
 programs; `F77_NO_MEM`, `F77_NO_BXLE`, `F77_NO_REASSOC` and
 `F77_NO_IDX` switch the step-3 transformations off one at a time,
