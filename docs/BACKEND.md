@@ -183,41 +183,71 @@ costs four instructions.
 Multiplication by a power of two is already a shift by the time the
 optimizer is done.
 
-## The runtime, for now
+## The runtime
 
-The kernels need `WRITE` with `D`, `F` and `I` editing, and `STOP`. For
-step 2 the generated code calls **IBCOM#**, FORTLIB's own I/O routine,
-exactly as H's code does. What an experiment with H's listings
-established (`BAL 14,n(,15)` returns past the inline words):
+The kernels of step 2 wrote through **IBCOM#**, FORTLIB's own I/O
+routine, exactly as H's code does, which gave H's digits for free and
+made the first checksum comparison exact (`F77_IBCOM=1` still emits
+that: `BAL 14,4(,15)` begins a WRITE, `BAL 14,8(,15)` one item with
+its length, type and S-constant inline, `BAL 14,16(,15)` ends it,
+`BAL 14,52(,15)` is STOP). IBCOM# knows nothing of CHARACTER,
+list-directed I/O, OPEN or internal files, so the runtime a Fortran 77
+program needs is fort370's own, and it is the SLOW-32 one
+(`runtime/libf77.c`, a C format interpreter) carried to MVS:
 
-    L     15,=V(IBCOM#)
-    BAL   14,64(,15)            once, in MAIN, before R13 is switched
-    BAL   14,4(,15)             begin a formatted WRITE
-    DC    F'6'                  the unit
-    DC    AL1(1),AL3(fmt)       the FORMAT text; AL1(0) would mean one
-                                H compiled, AL1(1) an array of text
-    BAL   14,8(,15)             one item
-    DC    AL1(8),AL1(X'60'),S(item)   length, type, base-displacement
-    BAL   14,16(,15)            end
-    BAL   14,52(,15)            STOP
-    DC    AL1(5),CL5'    0'     its message
+- `runtime/s370/port.py` generates `f77rt.c` and `f77rt.h` from
+  `libf77.c` by textual replacements, each asserted to match once, so
+  the SLOW-32 copy stays a copy (PROVENANCE.md) and what differs on MVS
+  is in one place: units are the DD names `FTnnF001`, as IBM's Fortran
+  names them (6 falls back to SYSPRINT, 5 to SYSIN); floating numbers
+  are edited by `f77dtoa.c`, an exact big-integer conversion with
+  half-up rounding (libc370's printf gives 0.1 as
+  `1.000000000000004E-01`, and D22.15 has to show the number's own
+  digits), and read by the compiler's own text-to-HFP (`s370_hfp.h`),
+  truncating as H does; C89's `sprintf` for the rest.
+- It is built with **cc370** for **libc370** (mvslovers), the toolchain
+  cobc370 is built with, and called by cc370's convention: the
+  arguments as values in a list R1 points to (a DOUBLE PRECISION a
+  doubleword, a REAL widened to one for the libm functions, which take
+  double), the C stack pointer in word 76 of the current save area,
+  results in R15 and FPR0. Every unit's prologue copies word 76 from
+  its caller's save area into its own static one, so a C function can
+  be called from any Fortran unit; FPRs are caller-saved on both sides
+  already. cc370 mangles C names to eight characters with `_` as `@`
+  (`f77_wr_begin` and `f77_wr_begin_int` would collide), so every entry
+  carries an asm label, `F77WRBEG`, from the table the compiler emits
+  from (`backend/s370_rtnames.h`; `tests/host/rtnames.sh` checks the
+  two agree). The intrinsics a program passes as actual arguments are
+  `I#DSQRT` and so on.
+- The load module's entry is libc370's `@@CRT0`; its C `main`
+  (`f77main.c`) calls the Fortran main program, whose CSECT is
+  therefore **F77MAIN** (C's `main` is already `MAIN`), and `exit`
+  flushes the units. STOP calls `exit` directly. Mathematical
+  intrinsics call libc370's `SQRT`, `EXP`, ... with the C convention
+  rather than FORTLIB's `DSQRT`.
+- The 64-bit millicode cc370 emits calls to (`@@MULDI3`, `@@NEGDI2`) is
+  cobc370's `mvs370-millicode.c`, copied.
 
-The item type byte is X'50' for INTEGER*4, X'60' for REAL*8, X'70'
-for REAL*4 and X'30' for LOGICAL*4. This gives the kernels H's digits
-for free and makes the checksum comparison exact.
-
-It is a bootstrap, not the design. IBCOM# knows nothing of CHARACTER,
-list-directed I/O, `OPEN` or internal files, so the Fortran 77 runtime
-(`runtime/libf77.c`, a C format interpreter today) will be ported to
-this linkage and take over; which of the two a program links is then a
-choice. Mathematical intrinsics call FORTLIB (`DSQRT`, `DEXP`, ...) so
-that a fort370 program and an H program compute the same values.
+A program is linked **on the host**: `bench/mkload.sh prog.f` runs the
+compiler, `as370`, and `cc370` as the linker (crt0, the runtime
+objects, libc.a) and writes a load module and its XMIT. Linking on the
+guest with IEWL would have let the IFOX00 decks of before include a
+runtime library, but IEWL misreads a module ld370 wrote (the relinked
+module took an operation exception in its first C function, both with
+an IFOX00 object added and alone; 2026-10-12, one for mvslovers), so
+the module goes aboard whole: `bench/ship.py` sends each XMIT as
+hexadecimal cards on SYSIN to **HEXIN** (`runtime/s370/hexin.c`, a cc370
+program installed once by tape, `ship.py --install`), which writes the
+image back as the FB/80 data set it was; RECEIVE makes a load library
+of it and the GO step runs it with `FT06F001` on the printer. A tape
+file per module was the first version, and MVS asked for the volume to
+be mounted again at every one.
 
 ## Names
 
 External names are at most eight characters, upper case. Fortran names
 fit. Runtime entry points are mapped to eight-character names in one
-table in the emitter (`f77_wr_begin` → `F77WRB`). Compiler-generated
+table (`backend/s370_rtnames.h`: `f77_wr_begin` → `F77WRBEG`). Compiler-generated
 labels are `Lnnnn` (blocks), `Tnnnn` (static-area slots), `Cnnnn`
 (constants), `Annnn` (address constants), `Vnnnn` (V-constants),
 `PLnnnn` (parameter lists). Blank COMMON is `#BLANK`.

@@ -74,3 +74,10 @@ lll1   cpu=9.06  H=9.15  |LLL1 CHECKSUM 0.500404006199570D 03
 lll5   cpu=5.54  H=5.53  |LLL5 CHECKSUM 0.500055259259247D 03
 lll7   cpu=14.80 H=15.14 |LLL7 CHECKSUM 0.847610420053770D 03
 linpk  cpu=12.97 H=13.64 |LINPACK INFO 0 CHECKSUM 0.100000000000001D 03
+
+The same seven through fort370's own runtime (runtime/s370: the SLOW-32
+format interpreter carried to MVS, built with cc370 for libc370,
+linked on the host and shipped as load modules by bench/ship.py):
+daxpy  cpu=4.43  ddot 3.54  matmul 4.50  lll1 9.11  lll5 5.55
+lll7   cpu=15.25 linpk 12.81; every checksum as before, the exponent
+written D+06 where H writes D 06.

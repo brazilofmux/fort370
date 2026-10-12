@@ -15,6 +15,11 @@ one is about to change its back end in ways SLOW-32 never will.
 | `runtime/libf77.c` | `fortran/runtime/` — the formatted-I/O runtime |
 | `tests/f77/` | `fortran/tests/f77/` — the regression programs |
 | `tests/oracle.sh` | `fortran/tests/` — gfortran in a container, for F77 semantics H can't answer |
+| `runtime/s370/millicode.c` | cobc370's `src/mvs370-millicode.c` (same author, MIT): the 64-bit millicode cc370 calls |
+
+`runtime/s370/f77rt.c` and `f77rt.h` are generated from `runtime/libf77.c`
+by `runtime/s370/port.py` and carry the MVS differences; the copy itself
+is not edited.
 
 ## Checking a copy
 

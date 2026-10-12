@@ -221,9 +221,26 @@ static char *s370_lab(char prefix, int n) {
 /* External names: eight characters, upper case.  The runtime's C names
  * map to short ones; FORTLIB's mathematical routines by their own
  * names, so a fort370 program and an H program call the same code. */
+#include "s370_rtnames.h"
+
+/* The runtime: fort370's own, in C, called by cc370's convention
+ * (values at 0(R1), the C stack pointer in word 76 of the save area,
+ * results in R15 and FPR0), or F77_IBCOM=1 for H's IBCOM# as the
+ * first version used it. */
+static int s370_crt = -1;
+static int s370_crt_on(void) {
+    if (s370_crt < 0) s370_crt = getenv("F77_IBCOM") ? 0 : 1;
+    return s370_crt;
+}
+
 static char s370_nbuf[12];
 static char *s370_extname(char *name) {
     int i;
+    if (s370_crt_on()) {
+        char *r;
+        r = s370_rt_extname(name);
+        if (r) return r;
+    }
     static char *map[] = {
         "sqrt", "DSQRT", "sqrtf", "SQRT", "sin", "DSIN", "cos", "DCOS", "tan", "DTAN",
         "asin", "DARSIN", "acos", "DARCOS", "atan", "DATAN", "atan2", "DATAN2",
@@ -1481,6 +1498,90 @@ static int s370_io_runtime(int i) {
     return 0;
 }
 
+/* A call into the runtime, by cc370's convention: the arguments as
+ * values in a list R1 points to, an INTEGER or an address a word, a
+ * DOUBLE PRECISION a doubleword, a REAL a word -- or a doubleword
+ * widened (a short floating number followed by a zero word IS the
+ * long one) for the libm functions, which take double.  Register
+ * arguments go first, then the ones in storage through FPR0, which is
+ * free by then: floating values do not survive a call here.  An
+ * integer result comes back in R15. */
+static void s370_ccall(int i) {
+    int n;
+    int base;
+    int j;
+    int pl;
+    int off;
+    int words;
+    int libm;
+    int pass;
+    char mem[40];
+    n = h_val[i];
+    base = h_cbase[i];
+    libm = s370_rt_libm(h_name[i]);
+    words = 0;
+    j = 0;
+    while (j < n) {
+        int v;
+        v = h_carg[base + j];
+        if (v >= 0 && ra_is_fpv(v)) words = words + ((ty_is_double(h_ty[v]) || libm) ? 2 : 1);
+        else words = words + 1;
+        j = j + 1;
+    }
+    pl = -1;
+    if (words > 0) {
+        if (s370_plist_lbl < 0) s370_plist_lbl = cg_label();
+        pl = s370_plist_lbl;
+        if (words > s370_plist_n) s370_plist_n = words;
+    }
+    pass = 0;
+    while (pass < 2) {
+        off = 0;
+        j = 0;
+        while (j < n) {
+            int v;
+            v = h_carg[base + j];
+            if (v >= 0 && ra_is_fpv(v)) {
+                int dbl;
+                int wide;
+                dbl = ty_is_double(h_ty[v]);
+                wide = dbl || libm;
+                if (pass == 0 && ra_reg[v] >= 0) {
+                    f_reset(); f_s(s370_r(ra_reg[v])); f_c(','); f_s(s370_lab('P', pl)); f_c('+'); f_n(off);
+                    asm_ins(dbl ? "STD" : "STE", s370_line, 4);
+                } else if (pass == 1 && ra_reg[v] < 0) {
+                    if (!s370_fmem(v, mem)) cg_die("floating argument", v);
+                    f_reset(); f_s("0,"); f_s(mem); asm_ins(dbl ? "LD" : "LE", s370_line, 4);
+                    f_reset(); f_s("0,"); f_s(s370_lab('P', pl)); f_c('+'); f_n(off);
+                    asm_ins(dbl ? "STD" : "STE", s370_line, 4);
+                }
+                if (pass == 1 && !dbl && wide) {
+                    f_reset(); f_s(s370_lab('P', pl)); f_c('+'); f_n(off + 4); f_s("(4),"); f_s(s370_lab('P', pl)); f_c('+'); f_n(off + 4);
+                    asm_ins("XC", s370_line, 6);
+                }
+                off = off + (wide ? 8 : 4);
+            } else {
+                if (pass == 1) {
+                    s370_load_into(0, v);
+                    f_reset(); f_s("0,"); f_s(s370_lab('P', pl)); f_c('+'); f_n(off);
+                    asm_ins("ST", s370_line, 4);
+                }
+                off = off + 4;
+            }
+            j = j + 1;
+        }
+        pass = pass + 1;
+    }
+    if (pl >= 0) { f_reset(); f_s("1,"); f_s(s370_lab('P', pl)); asm_ins("LA", s370_line, 4); }
+    f_reset(); f_s("15,"); f_s(s370_pool_v(s370_extname(h_name[i])));
+    asm_ins("L", s370_line, 4);
+    asm_ins("BALR", "14,15", 2);
+    if (bg_uses[i] == 0) return;
+    if (ra_is_fpv(i)) { s370_call_result(i); return; }
+    if (ra_reg[i] >= 0) { f_reset(); f_s(s370_r(ra_reg[i])); f_s(",15"); asm_ins("LR", s370_line, 2); }
+    else if (ra_spill_off[i] != 0) { f_reset(); f_s("15,"); f_s(s370_slot(i)); asm_ins("ST", s370_line, 4); }
+}
+
 static void s370_call(int i) {
     int n;
     int base;
@@ -1493,7 +1594,8 @@ static void s370_call(int i) {
     callp = (h_kind[i] == HI_CALLP);
     n = h_val[i];
     base = h_cbase[i];
-    if (!callp && h_name[i] && s370_io_runtime(i)) { s370_call_result(i); return; }
+    if (!callp && h_name[i] && s370_crt_on() && s370_rt_is_c(h_name[i])) { s370_ccall(i); return; }
+    if (!callp && h_name[i] && !s370_crt_on() && s370_io_runtime(i)) { s370_call_result(i); return; }
     ext = callp ? 0 : s370_extname(h_name[i]);
     bymask = (callp || !h_name[i]) ? 0 : s370_byval_mask(h_name[i]);
 
@@ -3159,7 +3261,7 @@ static void s370_emit_code(Node *fn, char *csect) {
         f_reset(); f_s("A("); f_s(s370_lab('S', s370_area_lbl)); f_c(')');
         s370_pc = (s370_pc + 3) & ~3;   /* the assembler aligns the A-constant */
         asm_stmt(s370_lab('L', lac), "DC", s370_line); s370_pc = s370_pc + 4;
-        if (s370_unit_is_main) {
+        if (s370_unit_is_main && !s370_crt_on()) {
             int lib;
             lib = cg_label();
             asm_stmt(s370_lab('L', lib), "DC", "V(IBCOM#)"); s370_pc = s370_pc + 4;
@@ -3175,6 +3277,7 @@ static void s370_emit_code(Node *fn, char *csect) {
     }
     asm_ins("ST", "13,4(,15)", 4);
     asm_ins("ST", "15,8(,13)", 4);
+    if (s370_crt_on()) asm_ins("MVC", "76(4,15),76(13)", 6);   /* the C runtime's stack pointer travels */
     asm_ins("LR", "13,15", 2);
     f_reset(); f_s(s370_lab('S', s370_area_lbl)); f_s(",13");
     asm_stmt("", "USING", s370_line);
