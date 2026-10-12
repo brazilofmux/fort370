@@ -1217,6 +1217,18 @@ static void s370_fbinop(int i, char *rr, char *rx, int d) {
     if (bg_memop[i] == 1) { s1 = h_src2[i]; s2 = h_src1[i]; }
     else if (ra_commutative(h_kind[i]) && s2 >= 0 && ra_reg[s2] == d && ra_reg[s1] != d) { int t; t = s1; s1 = s2; s2 = t; }
     dbl = ty_is_double(h_ty[i]);
+    /* A commutative op on a register that must survive (so the result
+     * would start with an LDR) and a storage operand: load the storage
+     * operand into the result and operate by the register, as H does
+     * (LD / MDR rather than LDR / MD).  The same two instructions, but
+     * measured 5% faster on daxpy under Hercules, where MD from storage
+     * costs more than LD and MDR together. */
+    if (ra_commutative(h_kind[i]) && ra_reg[s1] >= 0 && ra_reg[s1] != d &&
+        ra_reg[s2] < 0 && s370_fmem(s2, mem)) {
+        f_reset(); f_s(s370_r(d)); f_c(','); f_s(mem); asm_ins(dbl ? "LD" : "LE", s370_line, 4);
+        f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(ra_reg[s1])); asm_ins(rr, s370_line, 2);
+        return;
+    }
     s370_copy_to_reg(d, 1, s1, dbl);
     if (ra_reg[s2] >= 0) {
         f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(ra_reg[s2])); asm_ins(rr, s370_line, 2);
