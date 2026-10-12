@@ -21,3 +21,10 @@ L00125   LDR   0,2
          AD    0,0(3,7)
          STD   0,0(3,7)
          BXLE  3,4,L00125
+
+With a local passed to an inlined routine keeping its own type (the
+callee's declaration of the dummy had retyped the caller's slot to an
+address, so the SSA promoter took T's double loads for type puns and
+left T in memory), DSCAL's loop is LDR / MD / STD / BXLE; the other
+six kernels' code is unchanged:
+linpk  cpu=13.03 H=13.64  |LINPACK INFO 0 CHECKSUM 0.100000000000001D 03

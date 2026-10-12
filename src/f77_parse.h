@@ -560,8 +560,12 @@ static void f77_realloc_sym(int s) {
     f77_shi[s] = -1;
     if (f77_sarg[s]) {
         /* By-reference dummy: storage belongs to the caller.  Only the
-         * type and shape are recorded here. */
-        h_ty[f77_sval[s]] = HL_ADDR_TY;
+         * type and shape are recorded here.  A dummy the inliner bound
+         * to an actual (f77_bind_actual) shares the caller's own
+         * value -- often a local's alloca -- whose type must stay the
+         * local's: retyped to an address, the SSA promoter saw its
+         * double loads as type puns and left it in memory. */
+        if (h_kind[f77_sval[s]] == HI_PARAM) h_ty[f77_sval[s]] = HL_ADDR_TY;
         return;
     }
     bytes = f77_esize(s) * f77_sym_nelem(s);
