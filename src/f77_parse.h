@@ -2036,6 +2036,16 @@ static int f77_primary(void) {
                 h_carg[h_ncarg] = lens[ai]; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
                 nc = nc + 1;
             }
+#ifdef F77_NATIVE_F64
+            /* a DOUBLE PRECISION result is one value, in FPR0 */
+            r = hi_emit(HI_CALL, rty == TY_CPLX ? TY_FLOAT : rty, -1, -1, nc, f77_uname[u]);
+            h_cbase[r] = cb;
+            ex_ty = rty;
+            ex_log = f77_urlog[u];
+            if (rty == TY_CPLX)
+                ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
+            return r;
+#else
             r = hi_emit(HI_CALL, rty == TY_DOUBLE ? TY_INT : rty == TY_CPLX ? TY_FLOAT : rty, -1, -1,
                         nc, f77_uname[u]);
             h_cbase[r] = cb;
@@ -2046,6 +2056,7 @@ static int f77_primary(void) {
             else if (rty == TY_CPLX)
                 ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
             return r;
+#endif
         }
         s = f77_sym(nm);
         f77_tok();
@@ -4003,10 +4014,31 @@ static int f77_eq_find(int s, int *off) {
  * the entry block, which dominates every use. */
 static void f77_bind_static(int s, char *name, int off) {
     int ga;
+    int old;
+    int j;
+    old = f77_sval[s];
     ga = hi_emit(HI_GADDR, HL_ADDR_TY, -1, -1, 0, name);
     if (off != 0) ga = hi_emit(HI_ADDI, HL_ADDR_TY, ga, -1, off, NULL);
     f77_sval[s] = ga;
     f77_shi[s] = -1;    /* doubles live contiguously in static storage */
+    /* A reference made before the binding -- a COMMON member in a
+     * dimension bound of the declaration part, INTEGER A(N:M) with M
+     * in COMMON -- read the symbol's provisional local slot.  It reads
+     * the static now.  (SN713 of FCVS FM711: the extent came from an
+     * unset local, which SSA then made nothing at all.) */
+    if (old >= 0 && h_kind[old] == HI_ALLOCA) {
+        for (j = 0; j < h_ninst; j++) {
+            int k;
+            k = h_kind[j];
+            if (k == HI_NOP || j == ga) continue;
+            if (h_src1[j] == old) h_src1[j] = ga;
+            if (h_src2[j] == old && ho_src2_is_ref(k)) h_src2[j] = ga;
+            if ((k == HI_CALL || k == HI_CALLP) && h_cbase[j] >= 0) {
+                int q;
+                for (q = 0; q < h_val[j]; q++) if (h_carg[h_cbase[j] + q] == old) h_carg[h_cbase[j] + q] = ga;
+            }
+        }
+    }
 }
 
 /* Run once per unit when the declaration part closes: lay out this

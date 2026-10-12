@@ -15,9 +15,13 @@ for f in f77rt f77dtoa f77main f77math millicode; do
     cc370 -O1 -c -o "$R/out/crt/$f.o" "$R/runtime/s370/$f.c"
   fi
 done
+# the assembler shims for the integer intrinsics passed as arguments
+if [ ! -f "$R/out/crt/f77ishim.o" ] || [ "$R/runtime/s370/f77ishim.asm" -nt "$R/out/crt/f77ishim.o" ]; then
+  as370 -o "$R/out/crt/f77ishim.o" "$R/runtime/s370/f77ishim.asm" >/dev/null
+fi
 "$R/out/f77" "$p" "$O/$n.asm"
 as370 -o "$O/$n.o" "$O/$n.asm"
 # the output file's name is the load module's member name
 ( cd "$O" && cc370 -o "$n" "$n.o" "$R/out/crt/f77rt.o" "$R/out/crt/f77dtoa.o" \
-      "$R/out/crt/f77main.o" "$R/out/crt/f77math.o" "$R/out/crt/millicode.o" -Wl,--sparse-text -flinker-output=xmit )
+      "$R/out/crt/f77main.o" "$R/out/crt/f77math.o" "$R/out/crt/f77ishim.o" "$R/out/crt/millicode.o" -Wl,--sparse-text -flinker-output=xmit )
 echo "$O/$n.xmit"

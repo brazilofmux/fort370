@@ -54,6 +54,7 @@ static FILE *fio_fopen(const char *name, const char *mode) {
     char dd[16];
     int i;
     int n;
+    if (strncmp(name, "dd:", 3) == 0) return fopen(name, mode);   /* a unit's own FTnnF001 */
     strcpy(dd, "dd:");
     n = 3;
     for (i = 0; name[i] && n < 11; i++) {
@@ -144,6 +145,14 @@ static int   fio_prev_char;
 static FILE *fio_in;             /* stream of the READ in progress */
 static FILE *fio_out;            /* stream of the WRITE in progress */
 
+static void fio_exit(int code) {
+    int u;
+    for (u = 0; u < FIO_MAXUNIT; u++) if (fio_ufile[u]) { fclose(fio_ufile[u]); fio_ufile[u] = 0; }
+    fflush(stdout);
+    fflush(stderr);
+    exit(code);
+}
+
 static FILE *fio_resolve(int unit, int writing) {
     if (unit >= 0 && unit < FIO_MAXUNIT && fio_ufile[unit]) return fio_ufile[unit];
     if (unit == 0) return writing ? stderr : stdin;
@@ -165,9 +174,9 @@ static FILE *fio_resolve(int unit, int writing) {
     /* no such DD: the job's SYSPRINT or SYSIN stand in for 6 and 5 */
     if (writing && unit == 6) return stdout;
     if (!writing && unit == 5) return stdin;
-    fprintf(stderr, "f77: unit %d is not open for %s\n",
-            unit, writing ? "WRITE" : "READ");
-    exit(2);
+    fprintf(stderr, "f77: unit %d (DD FT%02dF001) is not open for %s\n",
+            unit, unit, writing ? "WRITE" : "READ");
+    fio_exit(2);
     return 0;
 }
 
@@ -213,11 +222,11 @@ static void fio_flush_line(void) {
         int i;
         if (fio_irec >= fio_inrec) {
             fprintf(stderr, "f77: WRITE past the end of an internal file\n");
-            exit(2);
+            fio_exit(2);
         }
         if (fio_len > fio_ilen) {
             fprintf(stderr, "f77: record longer than the internal file (%d > %d)\n", fio_len, fio_ilen);
-            exit(2);
+            fio_exit(2);
         }
         memcpy(fio_ibuf + fio_irec * fio_ilen, fio_line, (size_t)fio_len);
         for (i = fio_len; i < fio_ilen; i++) fio_ibuf[fio_irec * fio_ilen + i] = ' ';
@@ -230,7 +239,7 @@ static void fio_flush_line(void) {
         int i;
         if (fio_len > recl) {
             fprintf(stderr, "f77: record longer than RECL (%d > %d)\n", fio_len, recl);
-            exit(2);
+            fio_exit(2);
         }
         fputs(fio_line, f);
         for (i = fio_len; i < recl; i++) fputc(' ', f);
@@ -319,7 +328,7 @@ static int fio_getrec(void) {
 static void fio_next_record(void) {
     if (fio_getrec()) {
         fprintf(stderr, "f77: end of file on READ\n");
-        exit(2);
+        fio_exit(2);
     }
 }
 
@@ -658,7 +667,7 @@ static void fio_position(FILE *f, int unit) {
     if (!fio_udirect[unit]) return;
     if (rec <= 0) {
         fprintf(stderr, "f77: a direct-access unit needs REC=\n");
-        exit(2);
+        fio_exit(2);
     }
     fseek(f, (long)(rec - 1) * fio_urecl[unit], SEEK_SET);
 }
@@ -690,7 +699,7 @@ void f77_wu(const void *p, int n) {
     if (n <= 0) return;
     if (fio_ulen + n > FIO_MAXUREC) {
         fprintf(stderr, "f77: unformatted record too long\n");
-        exit(2);
+        fio_exit(2);
     }
     memcpy(fio_urec + fio_ulen, p, (size_t)n);
     fio_ulen += n;
@@ -701,7 +710,7 @@ void f77_wu_end(void) {
         int recl = fio_urecl[fio_unit];
         if (fio_ulen > recl) {
             fprintf(stderr, "f77: unformatted record longer than RECL\n");
-            exit(2);
+            fio_exit(2);
         }
         fwrite(fio_urec, 1, (size_t)fio_ulen, f);
         while (fio_ulen < recl) { fputc(0, f); fio_ulen++; }
@@ -734,7 +743,7 @@ int f77_ru_begin(int unit, int flags) {
         if (n == 0) {
             if (flags & 2) return 2;
             fprintf(stderr, "f77: READ past the end of a direct-access file\n");
-            exit(2);
+            fio_exit(2);
         }
         return 0;
     }
@@ -743,7 +752,7 @@ int f77_ru_begin(int unit, int flags) {
         if (flags & 1) return 1;
         if (flags & 2) return 1;
         fprintf(stderr, "f77: end of file on READ\n");
-        exit(2);
+        fio_exit(2);
     }
     {
         unsigned char lw[4];
@@ -752,13 +761,13 @@ int f77_ru_begin(int unit, int flags) {
             fio_uaeof[unit] = 1;
             if (flags & 3) return 1;
             fprintf(stderr, "f77: end of file on READ\n");
-            exit(2);
+            fio_exit(2);
         }
         n = lw[0] | (lw[1] << 8) | (lw[2] << 16) | (lw[3] << 24);
         if (n < 0 || n > FIO_MAXUREC) {
             if (flags & 2) return 2;
             fprintf(stderr, "f77: bad unformatted record\n");
-            exit(2);
+            fio_exit(2);
         }
         fio_ulen = (int)fread(fio_urec, 1, (size_t)n, f);
         fread(lw, 1, 4, f);
@@ -769,7 +778,7 @@ void f77_ru(void *p, int n) {
     if (n <= 0) return;
     if (fio_upos + n > fio_ulen) {
         fprintf(stderr, "f77: unformatted READ past the end of the record\n");
-        exit(2);
+        fio_exit(2);
     }
     memcpy(p, fio_urec + fio_upos, (size_t)n);
     fio_upos += n;
@@ -1171,7 +1180,7 @@ char *f77_cat(const char *a, int la, const char *b, int lb) {
     int n = (la > 0 ? la : 0) + (lb > 0 ? lb : 0);
     if (n > FIO_CATRING) {
         fprintf(stderr, "f77: concatenation result of %d bytes is too long\n", n);
-        exit(2);
+        fio_exit(2);
     }
     if (fio_catpos + n > FIO_CATRING) fio_catpos = 0;
     r = fio_catring + fio_catpos;
@@ -1228,13 +1237,9 @@ void f77_wr_end(void) {
 void f77_endfile(int unit) {
     FILE *f;
     fio_init_units();
-    f = fio_resolve(unit, 1);
-    if (f == stdout || f == stderr) return;
-    fflush(f);
-    if (unit > 0 && unit < FIO_MAXUNIT) {
-        fio_uend[unit] = ftell(f);
-        fio_uaeof[unit] = 1;       /* positioned after the endfile record */
-    }
+    if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) return;
+    if (fio_ufile[unit]) { fclose(fio_ufile[unit]); fio_ufile[unit] = 0; }   /* the file ends here; a READ now sees its end */
+    fio_uaeof[unit] = 1;
 }
 
 /* PAUSE [n | 'text']: report and continue (there is no operator). */
@@ -1284,7 +1289,7 @@ static int fio_in_logical(int w) {
     if (buf[i] == 'F' || buf[i] == 'f') return 0;
     if (buf[i] == 0) return 0;             /* all-blank field */
     fprintf(stderr, "f77: bad LOGICAL input field '%s'\n", buf);
-    exit(2);
+    fio_exit(2);
     return 0;   /* not reached; -fno-builtin hides exit's noreturn */
 }
 
@@ -1447,7 +1452,7 @@ static int fio_list_tok(void) {
         int r = (int)strtol(fio_ltok, 0, 10);
         if (r == 0) {
             fprintf(stderr, "f77: zero repeat count in list-directed input\n");
-            exit(2);
+            fio_exit(2);
         }
         if (fio_ltok[n + 1] == 0) { fio_l_nulls = r - 1; return 2; }
         if (r > 1) fio_l_pending = r - 1;
@@ -1523,7 +1528,7 @@ static int fio_rd_setup(const char *fmt, int has_end) {
         fio_reading = 0;
         if (has_end & 3) return 1;
         fprintf(stderr, "f77: end of file on READ\n");
-        exit(2);
+        fio_exit(2);
     }
     return 0;
 }
@@ -1555,7 +1560,7 @@ void f77_rd_i(int *p) {
     else if (d == 'I') *p = fio_in_int(fio_w);
     else if (d == 'A') {
         fprintf(stderr, "f77: A editing on READ needs CHARACTER (not implemented)\n");
-        exit(2);
+        fio_exit(2);
     }
     else *p = (int)fio_in_real(fio_w, fio_d);
     fio_consumed();
@@ -1577,7 +1582,7 @@ void f77_rd_d(double *p) {
     if (d == 'I') *p = (double)fio_in_int(fio_w);
     else if (d == 'A' || d == 'L') {
         fprintf(stderr, "f77: %c editing does not match a numeric READ item\n", d);
-        exit(2);
+        fio_exit(2);
     }
     else *p = fio_in_real(fio_w, fio_d);
     fio_consumed();
@@ -1599,7 +1604,7 @@ void f77_rd_r(float *p) {
     if (d == 'I') *p = (float)fio_in_int(fio_w);
     else if (d == 'A' || d == 'L') {
         fprintf(stderr, "f77: %c editing does not match a numeric READ item\n", d);
-        exit(2);
+        fio_exit(2);
     }
     else *p = (float)fio_in_real(fio_w, fio_d);
     fio_consumed();
@@ -1628,7 +1633,7 @@ void f77_rd_s(char *p, int len) {
     if (d == 0) return;
     if (d != 'A') {
         fprintf(stderr, "f77: %c editing does not match a CHARACTER READ item\n", d);
-        exit(2);
+        fio_exit(2);
     }
     w = fio_w > 0 ? fio_w : len;
     if (w >= len) {
@@ -1771,7 +1776,7 @@ int f77_open(int unit, const char *name, int nlen,
     if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) {
         if (recoverable) return 2;
         fprintf(stderr, "f77: cannot OPEN unit %d\n", unit);
-        exit(2);
+        fio_exit(2);
     }
     direct = (access && alen > 0 && fio_str_is(access, alen, "DIRECT"));
     unf = (form && fmlen > 0) ? fio_str_is(form, fmlen, "UNFORMATTED") : direct;
@@ -1779,13 +1784,13 @@ int f77_open(int unit, const char *name, int nlen,
     if (direct && recl <= 0) {
         if (recoverable) return 2;
         fprintf(stderr, "f77: OPEN ACCESS='DIRECT' needs RECL=\n");
-        exit(2);
+        fio_exit(2);
     }
     if (nlen > 0 && name) {
         if (nlen >= FIO_MAXNAME) {
             if (recoverable) return 2;
             fprintf(stderr, "f77: bad FILE= name in OPEN\n");
-            exit(2);
+            fio_exit(2);
         }
         memcpy(nm, name, nlen);
         nm[nlen] = 0;
@@ -1807,14 +1812,14 @@ int f77_open(int unit, const char *name, int nlen,
 
     if (scratch) {
         f = tmpfile();
-        if (!f) { if (recoverable) return 2; fprintf(stderr, "f77: OPEN cannot create a scratch file\n"); exit(2); }
+        if (!f) { if (recoverable) return 2; fprintf(stderr, "f77: OPEN cannot create a scratch file\n"); fio_exit(2); }
     } else if (status && slen > 0 && fio_str_is(status, slen, "OLD")) {
         f = fio_fopen(nm, "r+");
         if (!f) f = fio_fopen(nm, "r");
         if (!f) {
             if (recoverable) return 2;
             fprintf(stderr, "f77: OPEN STATUS='OLD': no such file '%s'\n", nm);
-            exit(2);
+            fio_exit(2);
         }
     } else if (status && slen > 0 && fio_str_is(status, slen, "NEW")) {
         f = fio_fopen(nm, "r");
@@ -1822,13 +1827,13 @@ int f77_open(int unit, const char *name, int nlen,
             fclose(f);
             if (recoverable) return 2;
             fprintf(stderr, "f77: OPEN STATUS='NEW': '%s' already exists\n", nm);
-            exit(2);
+            fio_exit(2);
         }
         f = fio_fopen(nm, "w+");
         if (!f) {
             if (recoverable) return 2;
             fprintf(stderr, "f77: OPEN cannot create '%s'\n", nm);
-            exit(2);
+            fio_exit(2);
         }
     } else if (!status || slen <= 0 ||
                fio_str_is(status, slen, "UNKNOWN")) {
@@ -1837,12 +1842,12 @@ int f77_open(int unit, const char *name, int nlen,
         if (!f) {
             if (recoverable) return 2;
             fprintf(stderr, "f77: OPEN cannot open '%s'\n", nm);
-            exit(2);
+            fio_exit(2);
         }
     } else {
         if (recoverable) return 2;
         fprintf(stderr, "f77: OPEN STATUS value is not supported\n");
-        exit(2);
+        fio_exit(2);
     }
     fio_ufile[unit] = f;
     strcpy(fio_ufname[unit], scratch ? "" : nm);
@@ -1862,7 +1867,7 @@ void f77_close(int unit, const char *status, int slen) {
     del = (status && slen > 0 && fio_str_is(status, slen, "DELETE"));
     if (status && slen > 0 && !del && !fio_str_is(status, slen, "KEEP")) {
         fprintf(stderr, "f77: CLOSE STATUS value is not supported\n");
-        exit(2);
+        fio_exit(2);
     }
     fclose(fio_ufile[unit]);
     fio_ufile[unit] = 0;
@@ -1967,10 +1972,9 @@ void f77_rewind(int unit) {
     fio_init_units();
     if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) {
         fprintf(stderr, "f77: REWIND: unit %d cannot be rewound\n", unit);
-        exit(2);
+        fio_exit(2);
     }
-    f = fio_resolve(unit, 1);
-    fflush(f);
-    fseek(f, 0L, SEEK_SET);
+    if (fio_ufile[unit]) { fclose(fio_ufile[unit]); fio_ufile[unit] = 0; }   /* reopened by the next statement, at the start */
+    fio_uend[unit] = -1;
     fio_uaeof[unit] = 0;
 }

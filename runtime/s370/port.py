@@ -28,8 +28,13 @@ src = open('runtime/libf77.c').read()
 tab = open('backend/s370_rtnames.h').read()
 m = re.search(r'static char \*s370_rt_map\[\] = \{(.*?)\n    0 \};', tab, re.S)
 ext = dict(re.findall(r'"([^"]+)",\s*"([^"]+)"', m.group(1)))
+# the INTEGER-valued intrinsics-as-arguments are assembler shims
+# (f77ishim.asm: Fortran's result register is R0, cc370's R15); the C
+# versions keep other names and go unused
+SHIMMED = ('f77i_iabs', 'f77i_isign', 'f77i_idim', 'f77i_mod', 'f77i_nint', 'f77i_idnint')
 def extname(c):
     if c in ext: return ext[c]
+    if c in SHIMMED: return ('C#' + c[5:].upper())[:8]
     if c.startswith('f77i_'): return ('I#' + c[5:].upper())[:8]
     sys.exit('no external name for ' + c)
 
@@ -89,6 +94,7 @@ rep('#include <stdlib.h>\n', '#include <stdlib.h>\n#include "f77rt.h"\n#include 
     '    char dd[16];\n'
     '    int i;\n'
     '    int n;\n'
+    '    if (strncmp(name, "dd:", 3) == 0) return fopen(name, mode);   /* a unit\'s own FTnnF001 */\n'
     '    strcpy(dd, "dd:");\n'
     '    n = 3;\n'
     '    for (i = 0; name[i] && n < 11; i++) {\n'
@@ -134,8 +140,8 @@ rep('''    fprintf(stderr, "f77: unit %d is not open for %s\\n",
 }''', '''    /* no such DD: the job's SYSPRINT or SYSIN stand in for 6 and 5 */
     if (writing && unit == 6) return stdout;
     if (!writing && unit == 5) return stdin;
-    fprintf(stderr, "f77: unit %d is not open for %s\\n",
-            unit, writing ? "WRITE" : "READ");
+    fprintf(stderr, "f77: unit %d (DD FT%02dF001) is not open for %s\\n",
+            unit, unit, writing ? "WRITE" : "READ");
     exit(2);
     return 0;
 }''')
@@ -213,6 +219,40 @@ rep('''    snprintf(num + k, sizeof num - k, "E%d", expv);
 rep('''    num[i] = 0;
     return strtod(num, 0);''', '''    num[i] = 0;
     return fio_strtod(num);''')
+# REWIND and ENDFILE: a QSAM data set cannot be repositioned, but it can
+# be closed and opened again, in the direction the next statement needs
+# (fio_resolve opens FTnnF001 for reading or writing on demand).
+rep('''    f = fio_resolve(unit, 1);
+    fflush(f);
+    fseek(f, 0L, SEEK_SET);
+    fio_uaeof[unit] = 0;
+}''', '''    if (fio_ufile[unit]) { fclose(fio_ufile[unit]); fio_ufile[unit] = 0; }   /* reopened by the next statement, at the start */
+    fio_uend[unit] = -1;
+    fio_uaeof[unit] = 0;
+}''')
+rep('''    f = fio_resolve(unit, 1);
+    if (f == stdout || f == stderr) return;
+    fflush(f);
+    if (unit > 0 && unit < FIO_MAXUNIT) {
+        fio_uend[unit] = ftell(f);
+        fio_uaeof[unit] = 1;       /* positioned after the endfile record */
+    }
+}''', '''    if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) return;
+    if (fio_ufile[unit]) { fclose(fio_ufile[unit]); fio_ufile[unit] = 0; }   /* the file ends here; a READ now sees its end */
+    fio_uaeof[unit] = 1;
+}''')
+# A fatal error must not lose what the program had written: close every
+# unit (and the standard streams) before leaving.
+rep('static FILE *fio_resolve(int unit, int writing) {', '''static void fio_exit(int code) {
+    int u;
+    for (u = 0; u < FIO_MAXUNIT; u++) if (fio_ufile[u]) { fclose(fio_ufile[u]); fio_ufile[u] = 0; }
+    fflush(stdout);
+    fflush(stderr);
+    exit(code);
+}
+
+static FILE *fio_resolve(int unit, int writing) {''')
+s = re.sub(r'\bexit\(2\);', 'fio_exit(2);', s)
 s = re.sub(r'snprintf\(buf, sizeof buf, ', 'sprintf(buf, ', s)
 s = re.sub(r'\bfopen\(nm, ', 'fio_fopen(nm, ', s)
 s = re.sub(r'snprintf\(dig, sizeof dig, ', 'sprintf(dig, ', s)

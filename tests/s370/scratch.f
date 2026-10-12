@@ -1,0 +1,25 @@
+C     A SCRATCH UNIT: WRITE, REWIND, READ BACK, ENDFILE
+      INTEGER I,J,K
+      WRITE(8,100) 12,34
+      WRITE(8,100) 56,78
+  100 FORMAT(2I5)
+      REWIND 8
+      READ(8,100) I,J
+      READ(8,100,END=20) K,K
+      WRITE(6,200) 'READ',I,J,K
+      READ(8,100,END=10) I,J
+      WRITE(6,201) 'NOEOF'
+      GO TO 30
+   10 WRITE(6,201) 'EOF OK'
+      GO TO 30
+   20 WRITE(6,201) 'EARLY EOF'
+   30 REWIND 8
+      WRITE(8,100) 1,2
+      ENDFILE 8
+      REWIND 8
+      READ(8,100) I,J
+      WRITE(6,200) 'AGAIN',I,J,0
+  200 FORMAT(' >',A5,3I6)
+  201 FORMAT(' >',A9)
+      STOP
+      END

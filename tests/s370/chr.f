@@ -1,0 +1,22 @@
+C     CHARACTER ASSIGNMENT AND COMPARISON ACROSS LENGTHS (FCVS FM301 18)
+      CHARACTER CVCOMP*5, FVTN01*3, C7*7, C14*14
+      CVCOMP = '   '
+      FVTN01 = 'ABC'
+      CVCOMP = FVTN01
+      IF (CVCOMP .EQ. 'ABC') WRITE(6,100) 'EQ1'
+      IF (CVCOMP .NE. 'ABC') WRITE(6,100) 'NE1'
+      C7 = 'ABC  XY'
+      IF (C7 .GT. CVCOMP) WRITE(6,100) 'GT2'
+      IF (C7(1:3) .EQ. FVTN01) WRITE(6,100) 'EQ3'
+      IF ('ABC' .LT. 'ABD') WRITE(6,100) 'LT4'
+      C14 = '              '
+      C14 = FVTN01
+      IF (C14 .EQ. 'ABC') WRITE(6,100) 'EQ5'
+      IF (C14 .NE. 'ABC') WRITE(6,100) 'NE5'
+      WRITE(6,101) CVCOMP, FVTN01, C7
+      WRITE(6,102) C14
+  100 FORMAT(' >',A3)
+  101 FORMAT(' >',A5,'#',A3,'#',A7,'#')
+  102 FORMAT(' >',A14,'#')
+      STOP
+      END

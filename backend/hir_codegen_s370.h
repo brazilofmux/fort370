@@ -805,17 +805,17 @@ static char *s370_faddr_text(int addr) {
     int index;
     int disp;
     char *save;
+    int x;
     if (s370_addr_form(addr, BG_FADDR, &root, &index, &disp) != 1) cg_die("not a static address", addr);
+    /* the index's register first: loading a spilled index emits an
+     * instruction through the formatter, which must not be ours */
+    x = index >= 0 ? s370_gpr(index, 1) : -1;
     save = fmt_p;
     fmt_p = s370_abuf;
     f_s(s370_lab('T', s370_alab[root]));
     if (disp > 0) { f_c('+'); f_n(disp); }
     else if (disp < 0) f_n(disp);
-    if (index >= 0) {
-        int x;
-        x = s370_gpr(index, 1);
-        f_c('('); f_s(s370_r(x)); f_c(')');
-    }
+    if (x >= 0) { f_c('('); f_s(s370_r(x)); f_c(')'); }
     fmt_p = save;
     return s370_abuf;
 }
@@ -1626,12 +1626,19 @@ static void s370_call(int i) {
     char *ext;
     int callp;
 
+    char extbuf[12];
+
     callp = (h_kind[i] == HI_CALLP);
     n = h_val[i];
     base = h_cbase[i];
     if (!callp && h_name[i] && s370_crt_on() && s370_rt_is_c(h_name[i])) { s370_ccall(i); return; }
     if (!callp && h_name[i] && !s370_crt_on() && s370_io_runtime(i)) { s370_call_result(i); return; }
-    ext = callp ? 0 : s370_extname(h_name[i]);
+    /* s370_extname's buffer is static, and an argument that is itself a
+     * procedure's address (CALL FS333(FF330, 5)) names another one
+     * through it while the list is built: keep this name in a buffer
+     * of its own, or the call goes to the argument */
+    ext = 0;
+    if (!callp) { strcpy(extbuf, s370_extname(h_name[i])); ext = extbuf; }
     bymask = (callp || !h_name[i]) ? 0 : s370_byval_mask(h_name[i]);
 
     s370_tmp_reset();
@@ -1828,6 +1835,9 @@ static void s370_inst(int i) {
             f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_hdr(S370_HDR_PARM)); asm_ins("L", s370_line, 4);
             f_reset(); f_s(s370_r(d)); f_c(','); f_n(4 * h_val[i]); f_s("(,"); f_s(s370_r(d)); f_c(')'); asm_ins("L", s370_line, 4);
         }
+        /* the last word of an OS parameter list carries X'80' in its
+         * first byte: an address, not a flag, from here on */
+        if (h_val[i] == hl_nparams - 1) { f_reset(); f_s(s370_r(d)); f_s(",0(,"); f_s(s370_r(d)); f_c(')'); asm_ins("LA", s370_line, 4); }
         s370_ifinish(i, d);
         return;
     }
@@ -2135,8 +2145,9 @@ static void s370_inst(int i) {
         int next_b;
         int q;
         v = h_src1[i];
-        if (v >= 0 && !s370_unit_is_main && f77_ukind[s370_cur_unit] == F77_UNIT_FUNC) {
-            /* a FUNCTION result: FPR0 (and FPR2 for COMPLEX) or R0 */
+        if (v >= 0 && !s370_unit_is_main) {
+            /* a FUNCTION result: FPR0 (and FPR2 for COMPLEX) or R0; a
+             * SUBROUTINE's RETURN n: the alternate return's index in R0 */
             if (ra_is_fpv(v)) {
                 s370_copy_to_reg(0, 1, v, ty_is_double(h_ty[v]));
                 if (h_src2[i] >= 0) s370_copy_to_reg(2, 1, h_src2[i], ty_is_double(h_ty[h_src2[i]]));
@@ -3153,8 +3164,11 @@ static void s370_gen_unit(Node *fn) {
 
     { int z; z = 0; while (z < HIR_MAX_INST) { bg_fold[z] = 0; bg_memop[z] = 0; bg_mem_lnt[z] = -1; z = z + 1; } }
     ssa_split_pairs = 0;
+    if (getenv("F77_HIR0")) ra_dump_intervals(fn->name);     /* the HIR as parsed */
     hir_ssa_construct();
+    if (getenv("F77_HIR1")) ra_dump_intervals(fn->name);     /* after SSA construction */
     hir_opt();
+    if (getenv("F77_HIR2")) ra_dump_intervals(fn->name);     /* after hir_opt */
     if (!getenv("F77_NO_REASSOC")) { s370_reassoc(); hir_opt(); }   /* the second hir_opt merges the shifted indexes */
     licm_cheap_fn = s370_cheap_operand;
     licm_loopopt = 1;
