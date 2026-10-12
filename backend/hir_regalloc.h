@@ -320,9 +320,9 @@ static int ra_stat_imm_base_reuse;  /* HI_ADDI results that reused their base re
  * IRC data structures (Chunk 3 — dead code until wiring step)
  * ================================================================= */
 
-#define GC_MAX_NODE  65536   /* was 4096 */
-#define GC_MAX_EDGE  2097152   /* was 262144 */   /* lowered for selfhost toolchain (BSS + assembler limits) */
-#define GC_MAX_MOVE  65536   /* was 8192 */
+#define GC_MAX_NODE 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define GC_MAX_EDGE 262144   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define GC_MAX_MOVE 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 
 static int gc_nnode;
 static int gc_inst[GC_MAX_NODE];
@@ -346,7 +346,7 @@ static int gc_nmove;
 #define GC_MV_CONSTRAINED 4
 static int gc_mv_status[GC_MAX_MOVE];
 
-#define GC_MAX_NMLIST 262144   /* was 16384 */   /* lowered for selfhost */
+#define GC_MAX_NMLIST 16384   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 static int gc_nmlist_mv[GC_MAX_NMLIST];
 static int gc_nmlist_next[GC_MAX_NMLIST];
 static int gc_nmlist_head[GC_MAX_NODE];
@@ -1238,7 +1238,7 @@ static unsigned int *lv_in;
 static unsigned int *lv_out;
 static unsigned int *lv_live;
 static int lv_w;                   /* row stride in words, = lv_nw */
-#define LV_BUDGET_WORDS 2097152    /* 8MB per liveness set; past it, intervals */
+#define LV_BUDGET_WORDS 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 static unsigned int lv_pool_in[LV_BUDGET_WORDS];
 static unsigned int lv_pool_out[LV_BUDGET_WORDS];
 

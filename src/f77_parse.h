@@ -268,7 +268,7 @@ static int  f77_stfb_n;
  * back, and the dead-ADDI marker that was meant to say "address taken"
  * is removed by DCE before the next promotion pass runs -- READ into a
  * split double returned the value from before the READ. */
-#define F77_MAX_ESC 8192
+#define F77_MAX_ESC 1024   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 static int  f77_cur_unit;              /* defined with the FORMAT tables */
 static char f77_esc_name[F77_MAX_ESC][F77_MAX_NAME];
 static int  f77_esc_unit[F77_MAX_ESC];

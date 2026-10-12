@@ -9,7 +9,7 @@
  */
 
 /* --- Output buffer --- */
-#define CG_MAX_OUT 4194304
+#define CG_MAX_OUT 262144   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 
 static char cg_out[CG_MAX_OUT];
 static int  cg_olen;
@@ -259,8 +259,8 @@ static int hcg_blk_pos[HIR_MAX_BLOCK]; /* estimated byte offset, over-estimated 
  * unique block-label numbers (hcg_blk_lbl values), which stay valid after
  * the per-function hcg_blk_lbl[] array is overwritten because cg_lbl is
  * monotonic. */
-#define CG_MAX_JT      4096   /* was 512 */
-#define CG_MAX_JT_ENT  262144   /* was 32768 */
+#define CG_MAX_JT 512   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define CG_MAX_JT_ENT 16384   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 static int cg_jt_id[CG_MAX_JT];      /* .LJT label number */
 static int cg_jt_base[CG_MAX_JT];    /* base into cg_jt_ent */
 static int cg_jt_span[CG_MAX_JT];    /* entry count */

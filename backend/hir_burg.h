@@ -51,7 +51,7 @@ static int bg_nchain;
 /* Per-instruction labeling: 8192 * 5 = 40960 entries.
  * Covers functions up to 8192 HIR instructions.
  * Functions exceeding this skip BURG (codegen falls back). */
-#define BG_MAX_INST 262144   /* was 8192 */
+#define BG_MAX_INST 8192   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 #define BG_COST_SZ (BG_MAX_INST * BG_NNT)   /* was 40960 = 8192 * 5, the old ceiling: a function past 8192 instructions indexed off both tables into their neighbours, and sqlite3VdbeExec got garbage costs, rules, folds and symbol names from it */
 static int bg_cost[BG_COST_SZ];
 static int bg_rule[BG_COST_SZ];

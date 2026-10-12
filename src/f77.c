@@ -393,7 +393,7 @@ static void hl_func(Node *fn) {
 }
 
 int main(int argc, char **argv) {
-    static char src[1 << 20];
+    static char src[1 << 18];   /* fort370: one unit in an 8MB region, docs/FITTING.md */
     int fd;
     int n;
 

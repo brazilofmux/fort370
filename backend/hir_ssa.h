@@ -18,12 +18,12 @@
  * count / HL_JT_MAX_SPAN).  4096 (the old 2-per-block bound) could be
  * exhausted by one large switch plus ordinary control flow, so allow ample
  * headroom; ssa_build_cfg still range-checks and aborts cleanly on overflow. */
-#define SSA_SUCC_SZ 131072   /* was 16384 */
+#define SSA_SUCC_SZ 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 static int ssa_succ[SSA_SUCC_SZ];
 static int ssa_nsucc[HIR_MAX_BLOCK];
 static int ssa_soff[HIR_MAX_BLOCK];
 
-#define SSA_MAX_PRED 65536   /* was 8192 */
+#define SSA_MAX_PRED 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 static int ssa_pred[SSA_MAX_PRED];
 static int ssa_pbase[HIR_MAX_BLOCK];
 static int ssa_npred[HIR_MAX_BLOCK];
@@ -49,7 +49,7 @@ static int ssa_idom[HIR_MAX_BLOCK];
  * phi and silently produce a wrong reaching definition, so stopping is
  * right -- the ceiling just has to be big enough. */
 #define SSA_DF_W 64
-#define SSA_DF_SZ 1048576   /* HIR_MAX_BLOCK * SSA_DF_W; was 524288 at W=32 */
+#define SSA_DF_SZ 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 static int ssa_df[SSA_DF_SZ];
 static int ssa_dfc[HIR_MAX_BLOCK];
 
@@ -102,7 +102,7 @@ static int ssa_dtc_cnt[HIR_MAX_BLOCK];
  * 256 leaves comfortable headroom; the cost is just static memory in
  * the compiler. */
 #define SSA_VD 1024   /* was 256 */
-#define SSA_VSTK_SZ 4194304   /* was 65536 */
+#define SSA_VSTK_SZ 32768   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 static int ssa_vstk[SSA_VSTK_SZ];
 static int ssa_vtop[SSA_MAX_PROMO];
 

@@ -120,7 +120,7 @@ static void  hl_inl_prepare(Node *prog) { (void)prog; }
 /* --- 4. global data tables walked by gen_data() --------------------- */
 
 #define P_MAX_GLOBALS 8192
-#define PS_MAX_INIT_POOL 262144
+#define PS_MAX_INIT_POOL 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 #define PS_MAX_INIT_RELOCS 8192
 
 static char *ps_gname[P_MAX_GLOBALS];
@@ -152,7 +152,7 @@ static char *ps_girel_name[PS_MAX_INIT_RELOCS];
 
 /* String pool: Fortran character constants (Hollerith and '...' alike)
  * land here and are emitted as .L.str labels by gen_data(). */
-#define LEX_STRPOOL_MAX 262144
+#define LEX_STRPOOL_MAX 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 #define LEX_MAX_STRINGS 8192
 static char lex_strpool[LEX_STRPOOL_MAX];
 static int  lex_str_off[LEX_MAX_STRINGS];
