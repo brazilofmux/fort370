@@ -1,0 +1,224 @@
+# The S/370 back end
+
+How the SLOW-32 optimizer is retargeted to System/370 for IFOX00 and
+IEWL. The generic half of `backend/` (`hir.h`, `hir_ssa.h`, `hir_opt.h`,
+`hir_licm.h`) stays as it is. The target half (`hir_burg.h`,
+`hir_regalloc.h`, `hir_codegen.h`, all SLOW-32) gets S/370 counterparts,
+`*_s370.h`, written to the same interfaces. The x86-64 and AArch64
+retargets of the same optimizer were the models: they kept the IRC
+allocator's core and the BURS engine and wrote the emitter fresh.
+
+What FORTRAN H's listings show (`docs/FORTRAN-H.md`, `bench/listings/`)
+is the shape to aim at, and where this design copies H it says so.
+
+## The machine, as the optimizer sees it
+
+- 16 general registers, 32-bit; four floating-point registers (0, 2, 4,
+  6), each holding a short (32-bit) or long (64-bit) hexadecimal float.
+- Storage operands on most instructions: `A 2,X(4,13)` adds from
+  storage, `AD 2,0(4,5)` likewise for doubles. Addressing is
+  base+index+displacement, displacement 0..4095, and register 0 as a
+  base or index means "none".
+- No immediates except `LA` (0..4095) and the halfword forms (`LH`,
+  `AH`, `MH`). Constants live in storage.
+- Multiply and divide want an even/odd register pair. `BXLE` wants an
+  even/odd pair for increment and limit.
+- Standard OS linkage: R1 → parameter list (addresses; the last entry
+  carries X'80'), R13 → the caller's save area, R14 return, R15 entry.
+  The callee saves R14–R12 with one `STM` and restores them with one
+  `LM`; the floating-point registers are not preserved across calls.
+
+## Values
+
+**Doubles are one value.** On SLOW-32 a double is a pair of 32-bit
+words and arithmetic is a pseudo-call (`__fp64_add`) the back end
+expands. The x86-64 retarget introduced `S12CC_NATIVE_F64` for the C
+front end: a double is a single HIR value of type `TY_DOUBLE`, operated
+on by `HI_FADD` and friends. The Fortran front end gets the same switch,
+`F77_NATIVE_F64`: one value, one 8-byte load or store, one `HI_FCONST`,
+one `HI_RET`. REAL is likewise one `TY_FLOAT` value. Both are allocated
+to floating-point registers. COMPLEX stays what it is, two values.
+
+**Integers are 32-bit**, as the HIR already assumes. `h_val` holds a
+32-bit constant; the optimizer folds in 32-bit arithmetic. Fortran 77
+has no 64-bit integer, so `TY_LLONG` never appears.
+
+**Byte order is big-endian.** Every place the front end writes a
+multi-byte image (DATA statements into `ps_ginit_pool`, the word order
+of a split constant) is host-order today and becomes explicit
+big-endian under the S/370 target.
+
+**Floating-point constants are converted by the compiler, truncating.**
+H truncates: `1.0D-6` is `3C10C6F7A0B5ED8D`, not `...8E`. Going through
+the host's IEEE `double` would double-round, so the lexer keeps the
+constant's text and `s370_hfp.h` converts decimal to a 56-bit fraction
+exactly, truncated. Constants the front end folds (`2.0D0*3.0D0`) are
+folded in host arithmetic and then converted, which can differ from H
+by an ulp; nothing in the kernels folds. The emitted form is
+`DC X'3C10C6F7A0B5ED8D'` with the decimal in a comment, so what the
+assembler sees is what the compiler decided, on any host.
+
+## Storage
+
+**A unit's storage is static.** Fortran 77 forbids recursion, so every
+unit gets one static area, as H does: the save area first (18 words),
+then its constants and address constants, then its scalars, temporaries
+and spill slots, then its arrays. R13 points at it, as standard linkage
+requires anyway, and everything in the first 4K is `D(0,13)` from it.
+
+The HIR's `HI_ALLOCA` carries a negative frame offset; here it becomes
+a label in the area, and every reference to the area is written
+symbolically (`L 2,T0012`, `LD 4,T0012(5)`), so the assembler chooses
+base and displacement from the `USING`s. If the near part of the area
+outgrows 4K, R11 becomes a second data base (`USING AREA+4096,11`) and
+is withheld from the allocator; the decision is made before register
+allocation from the sizes of the allocas.
+
+**Arrays past the first 4K are reached through address constants.** An
+ALLOCA that does not fit is not a storage-operand base; it is
+materialized into a register with `L r,A0003` (an `A(T0003)` in the
+pool), which invariant code motion hoists out of loops. That is H's
+`L 5,0(0,12)` for Y−8 in DAXPY. The layout pass puts small objects
+first so scalars, temporaries and spills are always near.
+
+**COMMON blocks are `COM` sections**, which the linkage editor merges
+across separately compiled units, the way H's are. SAVE'd and DATA'd
+locals are static anyway.
+
+A stack model (R13 → a frame carved from a GETMAINed stack, for
+languages with recursion) changes only the prologue, the epilogue and
+where the far arrays go; the body code is the same `D(X,13)` either
+way. It is not built, but the emitter keeps that door open by never
+assuming the area's address is a constant.
+
+## Registers
+
+**General registers.** R12 is the code base, R13 the data base, R14 and
+R15 linkage, R0 and R1 scratch (R0 cannot be a base or index; R1 holds
+the parameter list only around a call). The allocatable pool is
+**R2–R11, ten registers, all callee-saved**: standard linkage saves and
+restores them all with one `STM`/`LM`, so the allocator needs no
+per-register save bookkeeping and values stay in registers across calls,
+as H's BXLE triples do. R0/R1 serve as the even/odd scratch pair for
+`MR`/`DR`; R14/R15 are the reload scratch for spilled values (they can
+be bases and indexes; R0 cannot).
+
+**Floating-point registers.** A second register class, four colours,
+caller-saved: a value that crosses a call is spilled, not coloured. The
+IRC allocator gets two classes the way the AArch64 retarget did it: only
+same-class nodes interfere, chosen by `ty_is_fp`. The pair machinery the
+SLOW-32 allocator uses for fp64 halves is removed; later it may come
+back to pair the increment and limit of a `BXLE`.
+
+**Function results**: R0 for INTEGER and LOGICAL, FPR0 for REAL and
+DOUBLE PRECISION, as H and FORTLIB expect.
+
+## Code
+
+**Code is based on R12**, set by `BALR 12,0` in the prologue. Code never
+needs addressability for anything but branch targets: constants and data
+are reached through R13. A branch whose target may lie more than 4K
+from the base goes through an address constant, `L 15,A0021` /
+`BCR mask,15`, H's "ADCONS FOR B BLOCK LABELS". The decision uses an
+upper estimate of the target's offset, so a small unit (every kernel,
+most real subroutines) has only direct branches and a large one pays
+one extra instruction on its far branches.
+
+**Prologue and epilogue** are H's:
+
+    DAXPY    CSECT
+             USING *,15
+             B     12(,15)
+             DC    AL1(5),CL7'DAXPY'
+             STM   14,12,12(13)
+             BALR  12,0
+             USING *,12
+             DROP  15
+             LA    15,SAVE              own save area
+             ST    13,4(,15)            back chain
+             ST    15,8(,13)            forward chain
+             LR    13,15
+             USING SAVE,13
+             ...                        pick up arguments from 0(1)
+    ...
+             L     13,4(,13)
+             LM    14,12,12(13)
+             SR    15,15
+             BR    14
+
+For an INTEGER function, R0 is loaded before the `LM`; for a REAL or
+DOUBLE one, FPR0 is loaded and survives the `LM` untouched.
+
+**Calls** build a parameter list of addresses. Every argument is passed
+by reference, including the arguments of runtime routines: a by-value
+integer or double in the HIR is stored to a temporary and the
+temporary's address goes in the list. Lists whose words are all
+compile-time constants are assembled statically; computed addresses are
+stored into the list before the call, as H does.
+
+    LA    0,T0040
+    ST    0,PL0003+8
+    LA    1,PL0003
+    L     15,V0002                V(DAXPY) from the pool
+    BALR  14,15
+
+**Instruction selection.** The BURS grammar has the nonterminals REG,
+IMM (a constant that fits `LA`), FADDR (a static-area label plus
+displacement), SADDR (a symbol reached through an address constant) and
+STMT, as the SLOW-32 one does. The first version operates register to
+register: `L`, then `AR`. The second adds MEM, a storage operand
+(base, index, displacement) matched from a single-use load with no
+intervening store or call, and rules such as `REG: FADD(REG, MEM)`, so
+that DAXPY's loop becomes `LD / MDR / AD / STD / BXLE` rather than
+`LD / LD / MDR / ADR / STD`. The x86-64 retarget bolted its reg-mem
+forms on as rewrites after BURS; here they belong in the grammar, since
+on this machine the storage operand is the ordinary form.
+
+**Comparisons** fuse with the branch they feed, as on SLOW-32
+(`C 2,T0012` / `BC 2,L0017`). A comparison that must produce 0 or 1
+costs four instructions.
+
+**Integer multiply and divide** use the R0/R1 pair: `LR 1,a` /
+`MR 0,b` / `LR d,1`; `LR 1,a` / `SRDA 0,32` / `D 0,b` / `LR d,1`.
+Multiplication by a power of two is already a shift by the time the
+optimizer is done.
+
+## The runtime, for now
+
+The kernels need `WRITE` with `D`, `F` and `I` editing, and `STOP`. For
+step 2 the generated code calls **IBCOM#**, FORTLIB's own I/O routine,
+exactly as H's code does: `BAL 14,4(,15)` with the unit and format
+addresses inline, one `BAL 14,8(,15)` per item with H's four-byte item
+descriptor, `BAL 14,16(,15)` to end. The FORMAT is passed in the form
+IBCOM# expects, which the first experiment establishes from an object
+deck. This gives the kernels H's digits for free and makes the checksum
+comparison exact.
+
+It is a bootstrap, not the design. IBCOM# knows nothing of CHARACTER,
+list-directed I/O, `OPEN` or internal files, so the Fortran 77 runtime
+(`runtime/libf77.c`, a C format interpreter today) will be ported to
+this linkage and take over; which of the two a program links is then a
+choice. Mathematical intrinsics call FORTLIB (`DSQRT`, `DEXP`, ...) so
+that a fort370 program and an H program compute the same values.
+
+## Names
+
+External names are at most eight characters, upper case. Fortran names
+fit. Runtime entry points are mapped to eight-character names in one
+table in the emitter (`f77_wr_begin` → `F77WRB`). Compiler-generated
+labels are `Lnnnn` (blocks), `Tnnnn` (static-area slots), `Cnnnn`
+(constants), `Annnn` (address constants), `Vnnnn` (V-constants),
+`PLnnnn` (parameter lists). Blank COMMON is `#BLANK`.
+
+## The order of work
+
+1. `s370_hfp.h`: decimal → HFP, truncating, checked against the
+   constants in H's listings.
+2. `F77_NATIVE_F64` in the front end, and big-endian data images.
+3. `hir_burg_s370.h`, register-to-register grammar.
+4. `hir_regalloc_s370.h`: two classes, no pairs, no ABI colours.
+5. `hir_codegen_s370.h`: the emitter, static layout, IBCOM# I/O.
+6. The seven kernels through IFOX00 and IEWL on TK5, checksums against
+   `bench/results-2026-10-12.txt`, with the optimizer off.
+7. The optimizer on; then MEM in the grammar; then `BXLE`; compared
+   loop by loop with `bench/listings/`.

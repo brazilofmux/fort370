@@ -177,7 +177,16 @@ static int f77_esize(int s) {
     return ty_size(f77_sty[s]);
 }
 static int f77_tysize(int ty) { return ty == TY_CPLX ? 8 : ty_size(ty); }
+#ifdef F77_NATIVE_F64
+/* F77_NATIVE_F64 (the S/370 target): a DOUBLE PRECISION value is one
+ * HIR value of type TY_DOUBLE, operated on by HI_FADD and friends, as
+ * the C front end does under S12CC_NATIVE_F64.  The hi word that the
+ * SLOW-32 pair convention threads through the parser (ex_hi, *hi) is
+ * then always -1 for doubles; COMPLEX is still a pair of REALs. */
+static int f77_ispair(int ty) { return ty == TY_CPLX; }
+#else
 static int f77_ispair(int ty) { return ty == TY_DOUBLE || ty == TY_CPLX; }
+#endif
 
 /* --- EQUIVALENCE -------------------------------------------------------
  *
@@ -697,6 +706,42 @@ static void f77_emit_copyout(void);
  * the next emission overwrites the side channel. */
 
 /* Is this lo/hi value pair the fp64 constant +2.0 (0x4000000000000000)? */
+#ifdef F77_NATIVE_F64
+/* Native doubles: the pseudo-call names become HIR floating-point ops.
+ * Comparisons yield an int; sqrt is a real call the back end names. */
+static int f77_libm_d1(char *name, int a, int ahi, int *rhi);
+static int f77_fp64_call2(char *name, int alo, int ahi, int blo, int bhi, int *rhi) {
+    int k;
+    (void)ahi; (void)bhi;
+    if (rhi) *rhi = -1;
+    if (strcmp(name, "__fp64_add") == 0) k = HI_FADD;
+    else if (strcmp(name, "__fp64_sub") == 0) k = HI_FSUB;
+    else if (strcmp(name, "__fp64_mul") == 0) k = HI_FMUL;
+    else if (strcmp(name, "__fp64_div") == 0) k = HI_FDIV;
+    else if (strcmp(name, "__fp64_eq") == 0) return hi_emit(HI_FEQ, TY_INT, alo, blo, 0, NULL);
+    else if (strcmp(name, "__fp64_lt") == 0) return hi_emit(HI_FLT, TY_INT, alo, blo, 0, NULL);
+    else if (strcmp(name, "__fp64_le") == 0) return hi_emit(HI_FLE, TY_INT, alo, blo, 0, NULL);
+    else { f77_error("internal: unknown fp64 op"); return alo; }
+    return hi_emit(k, TY_DOUBLE, alo, blo, 0, NULL);
+}
+static int f77_fp64_pair1(char *name, int alo, int ahi, int *rhi) {
+    (void)ahi;
+    if (rhi) *rhi = -1;
+    if (strcmp(name, "__fp64_neg") == 0) return hi_emit(HI_FNEG, TY_DOUBLE, alo, -1, 0, NULL);
+    if (strcmp(name, "__fp64_sqrt") == 0) { int d; return f77_libm_d1("sqrt", alo, -1, &d); }
+    f77_error("internal: unknown fp64 unary op");
+    return alo;
+}
+static int f77_libm_f1(char *name, int a);
+static int f77_fp64_call1(char *name, int alo, int *rhi) {
+    if (rhi) *rhi = -1;
+    if (strcmp(name, "__fp64_cvt_itoD") == 0) return hi_emit(HI_FCVT_ItoF, TY_DOUBLE, alo, -1, 0, NULL);
+    if (strcmp(name, "__fp64_cvt_ftoD") == 0) return hi_emit(HI_FCVT_FtoD, TY_DOUBLE, alo, -1, 0, NULL);
+    if (strcmp(name, "__fp32_sqrt") == 0) return f77_libm_f1("sqrtf", alo);
+    f77_error("internal: unknown fp64 conversion");
+    return alo;
+}
+#else
 static int f77_fp64_is_two(int lo, int hi) {
     return lo >= 0 && hi >= 0 &&
            h_kind[lo] == HI_ICONST && h_val[lo] == 0 &&
@@ -750,6 +795,7 @@ static int f77_fp64_call1(char *name, int alo, int *rhi) {
     if (rhi) *rhi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
     return r;
 }
+#endif
 
 /* --- libm calls by their C names ---------------------------------------
  *
@@ -762,6 +808,32 @@ static int f77_fp64_call1(char *name, int alo, int *rhi) {
  * __fp64_* pseudo-calls the backend inlines, they carry real ABI tags
  * (aligned pairs for doubles). */
 
+#ifdef F77_NATIVE_F64
+static int f77_libm_d1(char *name, int a, int ahi, int *rhi) {
+    int cb;
+    int r;
+    (void)ahi;
+    cb = h_ncarg;
+    h_carg[h_ncarg] = a; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+    r = hi_emit(HI_CALL, TY_DOUBLE, -1, -1, 1, name);
+    h_cbase[r] = cb;
+    *rhi = -1;
+    return r;
+}
+
+static int f77_libm_d2(char *name, int a, int ahi, int b, int bhi, int *rhi) {
+    int cb;
+    int r;
+    (void)ahi; (void)bhi;
+    cb = h_ncarg;
+    h_carg[h_ncarg] = a; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+    h_carg[h_ncarg] = b; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+    r = hi_emit(HI_CALL, TY_DOUBLE, -1, -1, 2, name);
+    h_cbase[r] = cb;
+    *rhi = -1;
+    return r;
+}
+#else
 static int f77_libm_d1(char *name, int a, int ahi, int *rhi) {
     int cb;
     int r;
@@ -787,6 +859,7 @@ static int f77_libm_d2(char *name, int a, int ahi, int b, int bhi, int *rhi) {
     *rhi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
     return r;
 }
+#endif
 
 static int f77_libm_f1(char *name, int a) {
     int cb;
@@ -809,6 +882,22 @@ static int f77_libm_f2(char *name, int a, int b) {
     return r;
 }
 
+#ifdef F77_NATIVE_F64
+/* A floating constant is HI_FCONST carrying its decimal TEXT in h_name:
+ * the back end converts it to the target's format exactly (S/370
+ * hexadecimal float, truncated as FORTRAN H does), which a host double
+ * could not promise.  Literals keep the source spelling; values the
+ * compiler made up are printed with enough digits to be exact. */
+static int f77_fconst_text(char *text, int ty) {
+    return hi_emit(HI_FCONST, ty, -1, -1, 0, strdup(text));
+}
+static int f77_dconst(double d, int *hi) {
+    char b[40];
+    *hi = -1;
+    snprintf(b, sizeof b, "%.17g", d);
+    return f77_fconst_text(b, TY_DOUBLE);
+}
+#else
 /* A DOUBLE literal is just its two words as constants. */
 static int f77_dconst(double d, int *hi) {
     int w[2];
@@ -816,6 +905,7 @@ static int f77_dconst(double d, int *hi) {
     *hi = hi_emit(HI_ICONST, TY_INT, -1, -1, w[1], NULL);
     return hi_emit(HI_ICONST, TY_INT, -1, -1, w[0], NULL);
 }
+#endif
 
 /* Convert `v` (with hi word *hi when it is a double) from one type to
  * another, updating *hi in place. */
@@ -841,6 +931,13 @@ static int f77_cvt(int v, int *hi, int from, int to) {
         if (from == TY_FLOAT) return f77_fp64_call1("__fp64_cvt_ftoD", v, hi);
         return v;
     }
+#ifdef F77_NATIVE_F64
+    if (from == TY_DOUBLE) {
+        *hi = -1;
+        if (to == TY_INT) return hi_emit(HI_FCVT_FtoI, TY_INT, v, -1, 0, NULL);
+        return hi_emit(HI_FCVT_DtoF, TY_FLOAT, v, -1, 0, NULL);
+    }
+#else
     if (from == TY_DOUBLE) {
         int cb;
         int r;
@@ -853,6 +950,7 @@ static int f77_cvt(int v, int *hi, int from, int to) {
         h_ty[r] = to;
         return r;
     }
+#endif
     if (from == TY_INT && to == TY_FLOAT)
         return hi_emit(HI_FCVT_ItoF, TY_FLOAT, v, -1, 0, NULL);
     if (from == TY_FLOAT && to == TY_INT)
@@ -919,6 +1017,13 @@ static int f77_iconst(int v) {
 
 /* REAL constant: f32 bits carried in an ICONST typed TY_FLOAT, which is
  * how the C compiler represents them too. */
+#ifdef F77_NATIVE_F64
+static int f77_rconst(double d) {
+    char b[40];
+    snprintf(b, sizeof b, "%.17g", d);
+    return f77_fconst_text(b, TY_FLOAT);
+}
+#else
 static int f77_rconst(double d) {
     float f;
     int bits;
@@ -926,6 +1031,7 @@ static int f77_rconst(double d) {
     memcpy(&bits, &f, 4);
     return hi_emit(HI_ICONST, TY_FLOAT, -1, -1, bits, NULL);
 }
+#endif
 
 /* Address of A(s1,s2,...).  Fortran is COLUMN-MAJOR and 1-based by
  * default, so the element offset is
@@ -1434,6 +1540,12 @@ static int f77_primary(void) {
 
     ex_log = 0;
     if (lx_t == T_ICON) { v = f77_iconst(lex_ival); ex_ty = TY_INT; f77_tok(); return v; }
+#ifdef F77_NATIVE_F64
+    if (lx_t == T_RCON) { v = f77_fconst_text(lex_ftext, TY_FLOAT); ex_ty = TY_FLOAT; f77_tok(); return v; }
+    if (lx_t == T_DCON) {
+        v = f77_fconst_text(lex_ftext, TY_DOUBLE); ex_hi = -1; ex_ty = TY_DOUBLE; f77_tok(); return v;
+    }
+#endif
     if (lx_t == T_RCON) { v = f77_rconst(lex_dval); ex_ty = TY_FLOAT; f77_tok(); return v; }
     if (lx_t == T_DCON) {
         v = f77_dconst(lex_dval, &ex_hi); ex_ty = TY_DOUBLE; f77_tok(); return v;
@@ -1948,16 +2060,16 @@ static int f77_primary(void) {
              * the call came out as "EN", whatever the buffer held by
              * codegen time). */
             if (fptr >= 0)
-                r = hi_emit(HI_CALLP, rty == TY_DOUBLE ? TY_INT : rty == TY_CPLX ? TY_FLOAT : rty, fptr, -1,
+                r = hi_emit(HI_CALLP, f77_ispair(rty) ? (rty == TY_CPLX ? TY_FLOAT : TY_INT) : rty, fptr, -1,
                             nc, NULL);
             else
-                r = hi_emit(HI_CALL, rty == TY_DOUBLE ? TY_INT : rty == TY_CPLX ? TY_FLOAT : rty, -1, -1,
+                r = hi_emit(HI_CALL, f77_ispair(rty) ? (rty == TY_CPLX ? TY_FLOAT : TY_INT) : rty, -1, -1,
                             nc, strdup(nm));
             h_cbase[r] = cb;
             ex_ty = rty;
             ex_log = f77_slog[s];
             ex_hi = -1;
-            if (rty == TY_DOUBLE) ex_hi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
+            if (f77_ispair(rty) && rty == TY_DOUBLE) ex_hi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
             else if (rty == TY_CPLX) ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
             return r;
         }
@@ -2023,12 +2135,20 @@ static int f77_power(void) {
         }
         cb = h_ncarg;
         if (aty == TY_DOUBLE) {
+#ifdef F77_NATIVE_F64
+            h_carg[h_ncarg] = a;   h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+            h_carg[h_ncarg] = b;   h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+            r = hi_emit(HI_CALL, TY_DOUBLE, -1, -1, 2, "f77_dpow_i");
+            h_cbase[r] = cb;
+            ex_hi = -1;
+#else
             h_carg[h_ncarg] = a;   h_carg_tag[h_ncarg] = 1; h_ncarg = h_ncarg + 1;
             h_carg[h_ncarg] = ahi; h_carg_tag[h_ncarg] = 2; h_ncarg = h_ncarg + 1;
             h_carg[h_ncarg] = b;   h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
             r = hi_emit(HI_CALL, TY_INT, -1, -1, 3, "f77_dpow_i");
             h_cbase[r] = cb;
             ex_hi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
+#endif
             ex_ty = TY_DOUBLE;
             return r;
         }
@@ -2563,6 +2683,7 @@ static int f77_stf_expand(int si) {
     int save_namelen;
     int save_ival;
     double save_dval;
+    char save_ftext[128];
     int save_sidx;
     int save_slen;
 
@@ -2599,7 +2720,7 @@ static int f77_stf_expand(int si) {
     save_t = lx_t;
     memcpy(save_name, lex_name, F77_MAX_NAME);
     save_namelen = lex_namelen;
-    save_ival = lex_ival; save_dval = lex_dval;
+    save_ival = lex_ival; save_dval = lex_dval; strcpy(save_ftext, lex_ftext);
     save_sidx = lex_sidx; save_slen = lex_slen;
 
     memcpy(lx_stmt, f77_stf_pool + f77_stf_text[si], f77_stf_len[si]);
@@ -2624,7 +2745,7 @@ static int f77_stf_expand(int si) {
     lx_t = save_t;
     memcpy(lex_name, save_name, F77_MAX_NAME);
     lex_namelen = save_namelen;
-    lex_ival = save_ival; lex_dval = save_dval;
+    lex_ival = save_ival; lex_dval = save_dval; strcpy(lex_ftext, save_ftext);
     lex_sidx = save_sidx; lex_slen = save_slen;
 
     fs = f77_stf_sym[si];
@@ -3404,6 +3525,41 @@ static double f77_di_d2[F77_MAX_DINIT];
 static int    f77_di_sub[F77_MAX_DINIT];   /* substring target: byte length, elem is a byte offset */
 static int    f77_di_n;
 
+/* Byte images of DATA values, in the TARGET's order and format.  The
+ * S/370 is big-endian and its floats are hexadecimal; the SLOW-32 is
+ * little-endian IEEE, which the host also is. */
+#ifdef F77_TARGET_S370
+static void f77_image_int(unsigned char *p, unsigned int v, int n) {
+    int k;
+    for (k = 0; k < n; k++) p[k] = (unsigned char)((v >> ((n - 1 - k) * 8)) & 255);
+}
+static void f77_image_fp(unsigned char *p, double d, int bytes) {
+    char b[40];
+    unsigned int hi, lo;
+    snprintf(b, sizeof b, "%.17g", d);
+    if (hfp_from_text(b, &hi, &lo) < 0) { hi = 0; lo = 0; }
+    f77_image_int(p, hi, 4);
+    if (bytes == 8) f77_image_int(p + 4, lo, 4);
+}
+#else
+static void f77_image_int(unsigned char *p, unsigned int v, int n) {
+    int k;
+    for (k = 0; k < n; k++) p[k] = (unsigned char)((v >> (k * 8)) & 255);
+}
+static void f77_image_fp(unsigned char *p, double d, int bytes) {
+    int k;
+    if (bytes == 8) {
+        union { double d; unsigned char b[8]; } u;
+        u.d = d;
+        for (k = 0; k < 8; k++) p[k] = u.b[k];
+    } else {
+        union { float f; unsigned char b[4]; } u;
+        u.f = (float)d;
+        for (k = 0; k < 4; k++) p[k] = u.b[k];
+    }
+}
+#endif
+
 /* One DATA constant: sign, literal, .TRUE./.FALSE., or a PARAMETER
  * name.  NOT f77_cexpr: `/` is the value-list delimiter here, and the
  * evaluator would read it as division. */
@@ -3978,23 +4134,20 @@ static void f77_layout_static(void) {
             f77_error("a CHARACTER item needs a character constant in DATA");
             return;
         } else if (f77_sty[s] == TY_CPLX) {
-            union { float f; unsigned char b[4]; } u;
-            u.f = (f77_di_ty[i] == TY_INT) ? (float)f77_di_i[i] : (float)f77_di_d[i];
-            for (k = 0; k < 4; k++) ps_ginit_pool[off + k] = u.b[k];
-            u.f = (f77_di_ty[i] == TY_CPLX) ? (float)f77_di_d2[i] : 0.0f;
-            for (k = 0; k < 4; k++) ps_ginit_pool[off + 4 + k] = u.b[k];
+            f77_image_fp(ps_ginit_pool + off,
+                         (f77_di_ty[i] == TY_INT) ? (double)f77_di_i[i] : f77_di_d[i], 4);
+            f77_image_fp(ps_ginit_pool + off + 4,
+                         (f77_di_ty[i] == TY_CPLX) ? f77_di_d2[i] : 0.0, 4);
         } else if (f77_sty[s] == TY_DOUBLE) {
-            union { double d; unsigned char b[8]; } u;
-            u.d = (f77_di_ty[i] == TY_INT) ? (double)f77_di_i[i] : f77_di_d[i];
-            for (k = 0; k < 8; k++) ps_ginit_pool[off + k] = u.b[k];
+            f77_image_fp(ps_ginit_pool + off,
+                         (f77_di_ty[i] == TY_INT) ? (double)f77_di_i[i] : f77_di_d[i], 8);
         } else if (f77_sty[s] == TY_FLOAT) {
-            union { float f; unsigned char b[4]; } u;
-            u.f = (f77_di_ty[i] == TY_INT) ? (float)f77_di_i[i] : (float)f77_di_d[i];
-            for (k = 0; k < 4; k++) ps_ginit_pool[off + k] = u.b[k];
+            f77_image_fp(ps_ginit_pool + off,
+                         (f77_di_ty[i] == TY_INT) ? (double)f77_di_i[i] : f77_di_d[i], 4);
         } else {
             int v;
             v = (f77_di_ty[i] == TY_INT) ? f77_di_i[i] : (int)f77_di_d[i];
-            for (k = 0; k < 4; k++) ps_ginit_pool[off + k] = (unsigned char)((v >> (k * 8)) & 255);
+            f77_image_int(ps_ginit_pool + off, (unsigned int)v, 4);
         }
     }
 }
@@ -4370,7 +4523,7 @@ static void f77_emit_return(void) {
     }
     if (f77_ukind[f77_cur_unit] == F77_UNIT_FUNC && f77_result_sym >= 0) {
         v = f77_load_sym(f77_result_sym);
-        if (ex_ty == TY_DOUBLE || ex_ty == TY_CPLX) {
+        if (f77_ispair(ex_ty)) {
             /* Wide result: lo in src1, hi in src2, and ty stays 0 --
              * the convention the C compiler uses for llong/double
              * returns on SLOW-32. */
@@ -4677,6 +4830,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     int save_namelen;
     int save_ival;
     double save_dval;
+    char save_ftext[128];
     int save_sidx;
     int save_slen;
     int save_scope;
@@ -4707,7 +4861,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     save_t = lx_t;
     memcpy(save_name, lex_name, F77_MAX_NAME);
     save_namelen = lex_namelen;
-    save_ival = lex_ival; save_dval = lex_dval;
+    save_ival = lex_ival; save_dval = lex_dval; strcpy(save_ftext, lex_ftext);
     save_sidx = lex_sidx; save_slen = lex_slen;
     save_scope = f77_scope_base;
     save_lblbase = f77_label_base;
@@ -4801,7 +4955,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     lx_t = save_t;
     memcpy(lex_name, save_name, F77_MAX_NAME);
     lex_namelen = save_namelen;
-    lex_ival = save_ival; lex_dval = save_dval;
+    lex_ival = save_ival; lex_dval = save_dval; strcpy(lex_ftext, save_ftext);
     lex_sidx = save_sidx; lex_slen = save_slen;
 
     return result;
@@ -5264,9 +5418,14 @@ static void f77_wr_item(int v, int vty, int vhi) {
         return;
     }
     if (vty == TY_DOUBLE) {
+#ifdef F77_NATIVE_F64
+        h_carg[h_ncarg] = v; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+        r = hi_emit(HI_CALL, TY_INT, -1, -1, 1, "f77_wr_d");
+#else
         h_carg[h_ncarg] = v;   h_carg_tag[h_ncarg] = 1; h_ncarg = h_ncarg + 1;
         h_carg[h_ncarg] = vhi; h_carg_tag[h_ncarg] = 2; h_ncarg = h_ncarg + 1;
         r = hi_emit(HI_CALL, TY_INT, -1, -1, 2, "f77_wr_d");
+#endif
     } else if (vty == TY_FLOAT) {
         h_carg[h_ncarg] = v; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
         r = hi_emit(HI_CALL, TY_INT, -1, -1, 1, "f77_wr_r");

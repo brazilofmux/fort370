@@ -64,6 +64,7 @@ static char   lex_name[F77_MAX_NAME];  /* T_NAME text (upper case) */
 static int    lex_namelen;
 static int    lex_ival;                /* T_ICON value */
 static double lex_dval;                /* T_RCON / T_DCON value */
+static char   lex_ftext[128];          /* T_RCON / T_DCON source text, D as E */
 static int    lex_sidx;                /* T_SCON: string-pool index */
 static int    lex_slen;                /* T_SCON: length in bytes */
 
@@ -157,17 +158,18 @@ static int f77_number(char *ts, char *te, char *pe) {
         lx_t = T_ICON;
     } else {
         lex_dval = strtod(buf, NULL);
+        strcpy(lex_ftext, buf);
         lx_t = isdbl ? T_DCON : T_RCON;
     }
     return (int)(te - ts);
 }
 
 
-#line 230 "f77_lexer.rl"
+#line 232 "f77_lexer.rl"
 
 
 
-#line 171 "f77_lexer_gen.c"
+#line 173 "f77_lexer_gen.c"
 static const int f77_lexer_start = 38;
 static const int f77_lexer_first_final = 38;
 static const int f77_lexer_error = 0;
@@ -175,7 +177,7 @@ static const int f77_lexer_error = 0;
 static const int f77_lexer_en_main = 38;
 
 
-#line 233 "f77_lexer.rl"
+#line 235 "f77_lexer.rl"
 
 /* Point the scanner at the statement the card reader just assembled. */
 static void f77_lex_stmt_init(void) {
@@ -186,7 +188,7 @@ static void f77_lex_stmt_init(void) {
     lx_rp = lx_stmt;
     lx_rpe = lx_stmt + lx_stmt_len;
     
-#line 190 "f77_lexer_gen.c"
+#line 192 "f77_lexer_gen.c"
 	{
 	cs = f77_lexer_start;
 	ts = 0;
@@ -194,7 +196,7 @@ static void f77_lex_stmt_init(void) {
 	act = 0;
 	}
 
-#line 243 "f77_lexer.rl"
+#line 245 "f77_lexer.rl"
     lx_rcs = cs;
     lx_ract = act;
     lx_rts = ts;
@@ -224,7 +226,7 @@ static void f77_tok(void) {
     if (p >= pe) return;
 
     
-#line 228 "f77_lexer_gen.c"
+#line 230 "f77_lexer_gen.c"
 	{
 	if ( p == pe )
 		goto _test_eof;
@@ -243,157 +245,157 @@ tr0:
 	}
 	goto st38;
 tr13:
-#line 193 "f77_lexer.rl"
+#line 195 "f77_lexer.rl"
 	{{p = ((te))-1;}{
             p = ts + f77_number(ts, te, pe) - 1;
             {p++; cs = 38; goto _out;}
         }}
 	goto st38;
 tr18:
-#line 180 "f77_lexer.rl"
+#line 182 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_AND;   {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr20:
-#line 174 "f77_lexer.rl"
+#line 176 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_EQ;    {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr22:
-#line 183 "f77_lexer.rl"
+#line 185 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_EQV;   {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr27:
-#line 186 "f77_lexer.rl"
+#line 188 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_FALSE; {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr30:
-#line 179 "f77_lexer.rl"
+#line 181 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_GE;    {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr31:
-#line 178 "f77_lexer.rl"
+#line 180 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_GT;    {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr34:
-#line 177 "f77_lexer.rl"
+#line 179 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_LE;    {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr35:
-#line 176 "f77_lexer.rl"
+#line 178 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_LT;    {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr38:
-#line 175 "f77_lexer.rl"
+#line 177 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_NE;    {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr41:
-#line 184 "f77_lexer.rl"
+#line 186 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_NEQV;  {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr43:
-#line 182 "f77_lexer.rl"
+#line 184 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_NOT;   {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr45:
-#line 181 "f77_lexer.rl"
+#line 183 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_OR;    {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr49:
-#line 185 "f77_lexer.rl"
+#line 187 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_TRUE;  {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr50:
-#line 189 "f77_lexer.rl"
+#line 191 "f77_lexer.rl"
 	{{p = ((te))-1;}{
             p = ts + f77_number(ts, te, pe) - 1;
             {p++; cs = 38; goto _out;}
         }}
 	goto st38;
 tr53:
-#line 201 "f77_lexer.rl"
+#line 203 "f77_lexer.rl"
 	{{p = ((te))-1;}{
             p = ts + f77_number(ts, te, pe) - 1;
             {p++; cs = 38; goto _out;}
         }}
 	goto st38;
 tr58:
-#line 215 "f77_lexer.rl"
+#line 217 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_LP;     {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr59:
-#line 216 "f77_lexer.rl"
+#line 218 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_RP;     {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr61:
-#line 219 "f77_lexer.rl"
+#line 221 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_PLUS;   {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr62:
-#line 217 "f77_lexer.rl"
+#line 219 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_COMMA;  {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr63:
-#line 220 "f77_lexer.rl"
+#line 222 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_MINUS;  {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr67:
-#line 223 "f77_lexer.rl"
+#line 225 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_COLON;  {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr68:
-#line 218 "f77_lexer.rl"
+#line 220 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_ASSIGN; {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr69:
-#line 227 "f77_lexer.rl"
+#line 229 "f77_lexer.rl"
 	{te = p;p--;{ /* skip */ }}
 	goto st38;
 tr70:
-#line 210 "f77_lexer.rl"
+#line 212 "f77_lexer.rl"
 	{te = p;p--;{ f77_name_tok(ts, te); {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr71:
-#line 207 "f77_lexer.rl"
+#line 209 "f77_lexer.rl"
 	{te = p;p--;{ f77_string_tok(ts, te); {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr72:
-#line 221 "f77_lexer.rl"
+#line 223 "f77_lexer.rl"
 	{te = p;p--;{ lx_t = T_STAR;   {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr73:
-#line 213 "f77_lexer.rl"
+#line 215 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_POWER;  {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr74:
-#line 193 "f77_lexer.rl"
+#line 195 "f77_lexer.rl"
 	{te = p;p--;{
             p = ts + f77_number(ts, te, pe) - 1;
             {p++; cs = 38; goto _out;}
         }}
 	goto st38;
 tr76:
-#line 222 "f77_lexer.rl"
+#line 224 "f77_lexer.rl"
 	{te = p;p--;{ lx_t = T_SLASH;  {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr77:
-#line 214 "f77_lexer.rl"
+#line 216 "f77_lexer.rl"
 	{te = p+1;{ lx_t = T_CONCAT; {p++; cs = 38; goto _out;} }}
 	goto st38;
 tr78:
-#line 201 "f77_lexer.rl"
+#line 203 "f77_lexer.rl"
 	{te = p;p--;{
             p = ts + f77_number(ts, te, pe) - 1;
             {p++; cs = 38; goto _out;}
         }}
 	goto st38;
 tr81:
-#line 189 "f77_lexer.rl"
+#line 191 "f77_lexer.rl"
 	{te = p;p--;{
             p = ts + f77_number(ts, te, pe) - 1;
             {p++; cs = 38; goto _out;}
         }}
 	goto st38;
 tr83:
-#line 197 "f77_lexer.rl"
+#line 199 "f77_lexer.rl"
 	{te = p;p--;{
             p = ts + f77_number(ts, te, pe) - 1;
             {p++; cs = 38; goto _out;}
@@ -409,7 +411,7 @@ st38:
 case 38:
 #line 1 "NONE"
 	{ts = p;}
-#line 413 "f77_lexer_gen.c"
+#line 415 "f77_lexer_gen.c"
 	switch( (*p) ) {
 		case 9: goto st39;
 		case 32: goto st39;
@@ -475,14 +477,14 @@ case 1:
 tr2:
 #line 1 "NONE"
 	{te = p+1;}
-#line 207 "f77_lexer.rl"
+#line 209 "f77_lexer.rl"
 	{act = 18;}
 	goto st41;
 st41:
 	if ( ++p == pe )
 		goto _test_eof41;
 case 41:
-#line 486 "f77_lexer_gen.c"
+#line 488 "f77_lexer_gen.c"
 	if ( (*p) == 39 )
 		goto st1;
 	goto tr71;
@@ -518,7 +520,7 @@ st43:
 	if ( ++p == pe )
 		goto _test_eof43;
 case 43:
-#line 522 "f77_lexer_gen.c"
+#line 524 "f77_lexer_gen.c"
 	if ( (*p) < 68 ) {
 		if ( 48 <= (*p) && (*p) <= 57 )
 			goto tr3;
@@ -781,7 +783,7 @@ st46:
 	if ( ++p == pe )
 		goto _test_eof46;
 case 46:
-#line 785 "f77_lexer_gen.c"
+#line 787 "f77_lexer_gen.c"
 	if ( (*p) == 46 )
 		goto tr79;
 	if ( (*p) < 68 ) {
@@ -801,7 +803,7 @@ st47:
 	if ( ++p == pe )
 		goto _test_eof47;
 case 47:
-#line 805 "f77_lexer_gen.c"
+#line 807 "f77_lexer_gen.c"
 	if ( (*p) < 68 ) {
 		if ( 48 <= (*p) && (*p) <= 57 )
 			goto tr79;
@@ -940,7 +942,7 @@ case 49:
 	_out: {}
 	}
 
-#line 272 "f77_lexer.rl"
+#line 274 "f77_lexer.rl"
 
     lx_rp = p;
     lx_rcs = cs;

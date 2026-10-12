@@ -364,6 +364,7 @@ static int hi_is_remat(int kind) {
     if (kind == HI_SADDR) return 1;
     if (kind == HI_FADDR) return 1;
     if (kind == HI_GETFP) return 1;
+    if (kind == HI_FCONST) return 1;   /* fort370: one load from the constant pool */
     return 0;
 }
 
@@ -408,6 +409,14 @@ static int hi_is_pure(int k) {
     if (k == HI_FADDR) return 1;
     if (k == HI_GETFP) return 1;
     if (k == HI_FSQRT) return 1;
+    /* fort370: native floating point (F77_NATIVE_F64).  Add, subtract,
+     * multiply, negate, convert and compare cannot trap on S/370 with
+     * the exponent-overflow mask off; divide can, so it stays put like
+     * integer DIV. */
+    if (k == HI_FADD || k == HI_FSUB || k == HI_FMUL || k == HI_FNEG) return 1;
+    if (k == HI_FEQ || k == HI_FLT || k == HI_FLE) return 1;
+    if (k == HI_FCVT_ItoF || k == HI_FCVT_FtoI || k == HI_FCVT_FtoD || k == HI_FCVT_DtoF) return 1;
+    if (k == HI_FCONST) return 1;
     return 0;
 }
 

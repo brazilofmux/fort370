@@ -27,6 +27,13 @@ to fit in about 7.9MB, and a job that asks for more than 8704K will not
 start on this system. cobc370 settled on REGION=8192K; that is the
 right number here too.
 
+The S822 is the initiator's, not the program's: the failing steps show
+`VIRT 0K` and no CPU time, so the ceiling is the private area TK5's
+own layout leaves below 16MB (nucleus, SQA, CSA, LPA), and the
+toolchain has no say in it. Where the toolchain could matter is the
+second figure, what malloc hands out inside the region, and 7,936K of
+8,704K leaves little to gain there.
+
 ## The compiler as it is
 
 The starting point is the FORTRAN 77 compiler in slow32-public: a C

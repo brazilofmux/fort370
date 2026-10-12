@@ -62,6 +62,7 @@ static char   lex_name[F77_MAX_NAME];  /* T_NAME text (upper case) */
 static int    lex_namelen;
 static int    lex_ival;                /* T_ICON value */
 static double lex_dval;                /* T_RCON / T_DCON value */
+static char   lex_ftext[128];          /* T_RCON / T_DCON source text, D as E */
 static int    lex_sidx;                /* T_SCON: string-pool index */
 static int    lex_slen;                /* T_SCON: length in bytes */
 
@@ -155,6 +156,7 @@ static int f77_number(char *ts, char *te, char *pe) {
         lx_t = T_ICON;
     } else {
         lex_dval = strtod(buf, NULL);
+        strcpy(lex_ftext, buf);
         lx_t = isdbl ? T_DCON : T_RCON;
     }
     return (int)(te - ts);
