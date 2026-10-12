@@ -156,6 +156,21 @@ static void fio_exit(int code) {
 static FILE *fio_resolve(int unit, int writing) {
     if (unit >= 0 && unit < FIO_MAXUNIT && fio_ufile[unit]) return fio_ufile[unit];
     if (unit == 0) return writing ? stderr : stdin;
+    if (unit > 0 && unit < FIO_MAXUNIT && fio_ufname[unit][0]) {
+        /* a unit OPENed by name, or closed by REWIND: its data set,
+         * opened now in the direction this statement takes */
+        FILE *f;
+        char *mode;
+        if (fio_udirect[unit]) mode = writing ? "rb+" : "rb";
+        else if (fio_uunf[unit]) mode = writing ? "wb" : "rb";
+        else mode = writing ? "w" : "r";
+        f = fopen(fio_ufname[unit], mode);
+        if (!f && fio_udirect[unit] && writing) f = fopen(fio_ufname[unit], "wb+");
+        if (!f && fio_udirect[unit] && writing) f = fopen(fio_ufname[unit], "wb");
+        if (f) { fio_ufile[unit] = f; return f; }
+        fprintf(stderr, "f77: unit %d (%s) cannot be opened for %s\n", unit, fio_ufname[unit], writing ? "WRITE" : "READ");
+        fio_exit(2);
+    }
     if (unit > 0 && unit < FIO_MAXUNIT) {
         /* Preconnected unit: the DD name FTnnF001, as IBM's Fortran
          * names them, opened on first use for the direction asked. */
@@ -1766,11 +1781,12 @@ int f77_open(int unit, const char *name, int nlen,
              const char *form, int fmlen,
              const char *blank, int blen,
              int recl, int recoverable) {
-    FILE *f;
     char nm[FIO_MAXNAME];
     int direct;
     int unf;
     int scratch;
+    int i;
+    int n;
 
     fio_init_units();
     if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) {
@@ -1786,72 +1802,26 @@ int f77_open(int unit, const char *name, int nlen,
         fprintf(stderr, "f77: OPEN ACCESS='DIRECT' needs RECL=\n");
         fio_exit(2);
     }
-    if (nlen > 0 && name) {
-        if (nlen >= FIO_MAXNAME) {
-            if (recoverable) return 2;
-            fprintf(stderr, "f77: bad FILE= name in OPEN\n");
-            fio_exit(2);
+    /* the DD name: FILE= without its blanks, upper case, eight
+     * characters at most; a nameless or SCRATCH unit uses its own */
+    strcpy(nm, "dd:");
+    n = 3;
+    if (nlen > 0 && name && !scratch) {
+        for (i = 0; i < nlen && n < 11; i++) {
+            int c = (unsigned char)name[i];
+            if (c == ' ') continue;
+            if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
+            nm[n++] = (char)c;
         }
-        memcpy(nm, name, nlen);
-        nm[nlen] = 0;
-        while (nlen > 0 && nm[nlen - 1] == ' ') nm[--nlen] = 0;   /* Fortran pads */
+        nm[n] = 0;
+        if (n == 3) sprintf(nm, "dd:FT%02dF001", unit);
     } else {
-        sprintf(nm, "fort.%d", unit);
+        sprintf(nm, "dd:FT%02dF001", unit);
     }
-
-    if (fio_ufile[unit]) {
-        /* Reconnecting the same file changes its attributes only. */
-        if (strcmp(fio_ufname[unit], nm) == 0 && !scratch) {
-            fio_udirect[unit] = direct; fio_uunf[unit] = unf; fio_urecl[unit] = recl;
-            fio_ubz[unit] = (blank && blen > 0 && fio_str_is(blank, blen, "ZERO"));
-            return 0;
-        }
-        fclose(fio_ufile[unit]);
-        fio_ufile[unit] = 0;
-    }
-
-    if (scratch) {
-        f = tmpfile();
-        if (!f) { if (recoverable) return 2; fprintf(stderr, "f77: OPEN cannot create a scratch file\n"); fio_exit(2); }
-    } else if (status && slen > 0 && fio_str_is(status, slen, "OLD")) {
-        f = fio_fopen(nm, "r+");
-        if (!f) f = fio_fopen(nm, "r");
-        if (!f) {
-            if (recoverable) return 2;
-            fprintf(stderr, "f77: OPEN STATUS='OLD': no such file '%s'\n", nm);
-            fio_exit(2);
-        }
-    } else if (status && slen > 0 && fio_str_is(status, slen, "NEW")) {
-        f = fio_fopen(nm, "r");
-        if (f) {
-            fclose(f);
-            if (recoverable) return 2;
-            fprintf(stderr, "f77: OPEN STATUS='NEW': '%s' already exists\n", nm);
-            fio_exit(2);
-        }
-        f = fio_fopen(nm, "w+");
-        if (!f) {
-            if (recoverable) return 2;
-            fprintf(stderr, "f77: OPEN cannot create '%s'\n", nm);
-            fio_exit(2);
-        }
-    } else if (!status || slen <= 0 ||
-               fio_str_is(status, slen, "UNKNOWN")) {
-        f = fio_fopen(nm, "r+");
-        if (!f) f = fio_fopen(nm, "w+");
-        if (!f) {
-            if (recoverable) return 2;
-            fprintf(stderr, "f77: OPEN cannot open '%s'\n", nm);
-            fio_exit(2);
-        }
-    } else {
-        if (recoverable) return 2;
-        fprintf(stderr, "f77: OPEN STATUS value is not supported\n");
-        fio_exit(2);
-    }
-    fio_ufile[unit] = f;
-    strcpy(fio_ufname[unit], scratch ? "" : nm);
+    if (fio_ufile[unit]) { fclose(fio_ufile[unit]); fio_ufile[unit] = 0; }
+    strcpy(fio_ufname[unit], nm);
     fio_uend[unit] = -1;
+    fio_uaeof[unit] = 0;
     fio_udirect[unit] = direct;
     fio_uunf[unit] = unf;
     fio_urecl[unit] = recl;
@@ -1863,7 +1833,8 @@ int f77_open(int unit, const char *name, int nlen,
  * open is permitted and does nothing, as the standard says. */
 void f77_close(int unit, const char *status, int slen) {
     int del;
-    if (unit < 0 || unit >= FIO_MAXUNIT || !fio_ufile[unit]) return;
+    if (unit < 0 || unit >= FIO_MAXUNIT) return;
+    if (!fio_ufile[unit]) { fio_ufname[unit][0] = 0; return; }   /* OPENed, never used */
     del = (status && slen > 0 && fio_str_is(status, slen, "DELETE"));
     if (status && slen > 0 && !del && !fio_str_is(status, slen, "KEEP")) {
         fprintf(stderr, "f77: CLOSE STATUS value is not supported\n");
@@ -1872,7 +1843,7 @@ void f77_close(int unit, const char *status, int slen) {
     fclose(fio_ufile[unit]);
     fio_ufile[unit] = 0;
     fio_uend[unit] = -1;
-    if (del) remove(fio_ufname[unit]);
+    (void)del;                                  /* a DD's data set is the job's to keep or delete */
     fio_ufname[unit][0] = 0;
 }
 
@@ -1893,46 +1864,63 @@ static int  inq_recl;
 static long inq_nextrec;
 static int  inq_bz;
 
+static void inq_ddname(char *dd, const char *file, int flen) {
+    int i;
+    int n;
+    strcpy(dd, "dd:");
+    n = 3;
+    for (i = 0; i < flen && n < 11; i++) {
+        int c = (unsigned char)file[i];
+        if (c == ' ') continue;
+        if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
+        dd[n++] = (char)c;
+    }
+    dd[n] = 0;
+}
+
 int f77_inquire(int unit, const char *file, int flen) {
     int i;
     fio_init_units();
     inq_unit = -1; inq_exist = 0; inq_opened = 0; inq_name[0] = 0; inq_named = 0;
     inq_direct = 0; inq_unf = 0; inq_recl = 0; inq_nextrec = 0; inq_bz = 0;
     if (file && flen > 0) {
-        char nm[FIO_MAXNAME];
-        FILE *f;
-        int n = flen < FIO_MAXNAME - 1 ? flen : FIO_MAXNAME - 1;
-        memcpy(nm, file, (size_t)n); nm[n] = 0;
-        while (n > 0 && nm[n - 1] == ' ') nm[--n] = 0;
-        strcpy(inq_name, nm);
+        char dd[16];
+        inq_ddname(dd, file, flen);
+        strcpy(inq_name, dd + 3);
         inq_named = 1;
-        f = fio_fopen(nm, "r");
-        if (f) { inq_exist = 1; fclose(f); }
         for (i = 1; i < FIO_MAXUNIT; i++) {
-            if (fio_ufile[i] && strcmp(fio_ufname[i], nm) == 0) { inq_opened = 1; inq_unit = i; break; }
+            if (fio_ufname[i][0] && strcmp(fio_ufname[i], dd) == 0) { inq_opened = 1; inq_unit = i; break; }
         }
-        if (inq_opened) { unit = inq_unit; }
-        else return 0;
+        if (inq_opened) { inq_exist = 1; unit = inq_unit; }
+        else {
+            /* the DD exists when it can be opened; an unwritten one opens
+             * for output (and stays empty) */
+            FILE *f;
+            f = fopen(dd, "r");
+            if (!f) f = fopen(dd, "w");
+            if (f) { inq_exist = 1; fclose(f); }
+            return 0;
+        }
     } else {
         if (unit < 0 || unit >= FIO_MAXUNIT) { inq_exist = 0; return 0; }
         inq_exist = 1;
         inq_unit = unit;
         if (unit == 5 || unit == 6 || unit == 0) {
             inq_opened = 1;
-            strcpy(inq_name, unit == 5 ? "stdin" : unit == 6 ? "stdout" : "stderr");
+            strcpy(inq_name, unit == 5 ? "FT05F001" : unit == 6 ? "FT06F001" : "SYSTERM");
             inq_named = 0;
             return 0;
         }
-        if (!fio_ufile[unit]) { inq_opened = 0; return 0; }
+        if (!fio_ufname[unit][0]) { inq_opened = 0; return 0; }
         inq_opened = 1;
-        strcpy(inq_name, fio_ufname[unit]);
-        inq_named = inq_name[0] != 0;
+        strcpy(inq_name, fio_ufname[unit] + 3);
+        inq_named = 1;
     }
     inq_direct = fio_udirect[unit];
     inq_unf = fio_uunf[unit];
     inq_recl = fio_urecl[unit];
     inq_bz = fio_ubz[unit];
-    if (inq_direct && inq_recl > 0) {
+    if (inq_direct && inq_recl > 0 && fio_ufile[unit]) {
         fflush(fio_ufile[unit]);
         inq_nextrec = ftell(fio_ufile[unit]) / inq_recl + 1;
     }

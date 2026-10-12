@@ -53,10 +53,37 @@ def member_of(xmit):
     if not m: sys.exit(f'{xmit}: no member found')
     return m.group(1)
 
+PRT = os.path.expanduser(os.environ.get('TK5_PRT', '~/tk5/prt/prt00f.txt'))
+
 def run_deck(deck, out):
+    """Submit through the runner, then wait for the printer: the runner
+    slices the printer file when the job ends, and JES2 is still
+    printing the steps' SYSOUT then (a 900-line report took a few
+    seconds once the midnight SMF job was running beside it), so the
+    slice is re-taken once the job's END trailer has been printed."""
     r = subprocess.run([RUNNER, deck, out], capture_output=True, text=True)
     if r.returncode != 0:
         sys.exit(f'{RUNNER} failed: {r.stderr[-400:]}')
+    text = open(out, 'rb').read()
+    m = re.search(rb'JOB (\d+)', text)
+    if not m or not os.path.exists(PRT): return
+    job = m.group(1)
+    head = text[:200].split(b'\n')[0]
+    trailer = re.compile(rb'\*\*\*\*Z\s+END\s+JOB\s+' + job + rb'\s')
+    deadline = time.time() + 300
+    while time.time() < deadline:
+        prt = open(PRT, 'rb').read()
+        start = prt.rfind(head)
+        if start >= 0:
+            tail = prt[start:]
+            ends = [mm.end() for mm in trailer.finditer(tail)]
+            if ends:
+                # the trailer repeats on the banner page; take through the last one, then the rest of its line
+                e = ends[-1]
+                nl = tail.find(b'\n', e)
+                open(out, 'wb').write(tail[:nl + 1 if nl >= 0 else len(tail)])
+                return
+        time.sleep(2)
 
 def mount_watcher(aws, stop):
     """Re-init the tape whenever MVS asks for the volume again: only
@@ -175,13 +202,14 @@ def main():
                 f"//SYSOUT   DD SYSOUT=Z\n"
                 f"//SYSUDUMP DD {'SYSOUT=Z' if dump else 'DUMMY'}\n"
                 f"//FT06F001 DD SYSOUT=Z,DCB=(RECFM=FBA,LRECL=133,BLKSIZE=133)\n"
-                f"//FT07F001 DD SYSOUT=Z,DCB=(RECFM=FB,LRECL=80,BLKSIZE=80)\n")
+                )
         # the FCVS's OPEN FILE= names: a sequential and a direct-access file
-        jcl += ("//CSEQ     DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
-                "//            DCB=(RECFM=VB,LRECL=260,BLKSIZE=2604)\n"
-                "//CDIR     DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
-                "//            DCB=(RECFM=F,LRECL=80,BLKSIZE=80)\n")
-        for u in (1, 2, 3, 4, 8, 9, 10, 11, 12):
+        for nm, dcb in (('CSEQ', 'RECFM=VB,LRECL=260,BLKSIZE=2604'), ('SEQFILE', 'RECFM=VB,LRECL=260,BLKSIZE=2604'),
+                        ('CDIR', 'RECFM=F,LRECL=132,BLKSIZE=132'), ('DIRFILE', 'RECFM=F,LRECL=132,BLKSIZE=132')):
+            jcl += (f"//{nm:<8} DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
+                    f"//            DCB=({dcb})\n")
+        # the FCVS writes, rewinds and reads unit 7 like any other scratch unit
+        for u in list(range(1, 5)) + list(range(7, 31)):
             jcl += (f"//FT{u:02d}F001 DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
                     f"//            DCB=(RECFM=VB,LRECL=260,BLKSIZE=2604)\n")
         if sysin:
