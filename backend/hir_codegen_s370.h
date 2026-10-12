@@ -2252,13 +2252,17 @@ static void s370_reassoc(void) {
         int m;
         if ((h_kind[i] == HI_SLL || h_kind[i] == HI_MUL) && h_src1[i] >= 0 && h_src2[i] >= 0 &&
             bg_const_imm_inst(h_src2[i], &m, &root) && hi_is_remat(h_kind[root]) &&
-            (h_kind[h_src1[i]] == HI_ADD || h_kind[h_src1[i]] == HI_ADDI) &&
+            (h_kind[h_src1[i]] == HI_ADD || h_kind[h_src1[i]] == HI_ADDI || h_kind[h_src1[i]] == HI_SUB) &&
             s370_use_count[h_src1[i]] == 1 && h_blk[h_src1[i]] == h_blk[i]) {
             int x;
             int cval;
             int shifted;
             a = h_src1[i];
             if (h_kind[a] == HI_ADDI) { x = h_src1[a]; cval = h_val[a]; }
+            else if (h_kind[a] == HI_SUB) {
+                if (bg_const_imm_inst(h_src2[a], &c, &root) && hi_is_remat(h_kind[root])) { x = h_src1[a]; cval = 0 - c; }
+                else { i = i + 1; continue; }
+            }
             else if (bg_const_imm_inst(h_src2[a], &c, &root) && hi_is_remat(h_kind[root])) { x = h_src1[a]; cval = c; }
             else if (bg_const_imm_inst(h_src1[a], &c, &root) && hi_is_remat(h_kind[root])) { x = h_src2[a]; cval = c; }
             else { i = i + 1; continue; }
@@ -2294,6 +2298,179 @@ static void s370_reassoc(void) {
             h_src2[i] = idx;
             h_val[i] = 0;
         }
+        i = i + 1;
+    }
+}
+
+/* ---------------------------------------------------------------- */
+/* Loops: the innermost header of each block, from the back edges    */
+/* ---------------------------------------------------------------- */
+
+static int s370_loop_hdr[HIR_MAX_BLOCK];   /* innermost loop header containing the block, or -1 */
+static int s370_loop_size[HIR_MAX_BLOCK];  /* body size of the loop headed here */
+static int s370_lwl[HIR_MAX_BLOCK];
+static char s370_lvis[HIR_MAX_BLOCK];
+
+static void s370_find_loops(void) {
+    int b;
+    int si;
+    int s;
+    int n;
+    int wh;
+    int wt;
+    int j;
+    int p;
+    int i;
+    b = 0;
+    while (b < bb_nblk) { s370_loop_hdr[b] = -1; s370_loop_size[b] = 0; b = b + 1; }
+    b = 0;
+    while (b < bb_nblk) {
+        si = 0;
+        while (si < ssa_nsucc[b]) {
+            s = ssa_succ[ssa_soff[b] + si];
+            if (s >= 0 && s < bb_nblk && licm_dominates(s, b)) {
+                /* back edge b -> s: body = blocks reaching b without passing s */
+                i = 0;
+                while (i < bb_nblk) { s370_lvis[i] = 0; i = i + 1; }
+                s370_lvis[s] = 1;
+                n = 1;
+                wh = 0; wt = 0;
+                if (b != s) { s370_lwl[wt] = b; wt = wt + 1; s370_lvis[b] = 1; n = n + 1; }
+                while (wh < wt) {
+                    int x;
+                    x = s370_lwl[wh];
+                    wh = wh + 1;
+                    j = 0;
+                    while (j < ssa_npred[x]) {
+                        p = ssa_pred[ssa_pbase[x] + j];
+                        if (p >= 0 && p < bb_nblk && !s370_lvis[p]) {
+                            s370_lvis[p] = 1;
+                            n = n + 1;
+                            if (wt < HIR_MAX_BLOCK) { s370_lwl[wt] = p; wt = wt + 1; }
+                        }
+                        j = j + 1;
+                    }
+                }
+                i = 0;
+                while (i < bb_nblk) {
+                    if (s370_lvis[i] && (s370_loop_hdr[i] < 0 || n < s370_loop_size[s370_loop_hdr[i]] ||
+                                         (s370_loop_hdr[i] == s))) {
+                        s370_loop_hdr[i] = s;
+                    }
+                    i = i + 1;
+                }
+                if (s370_loop_size[s] == 0 || n < s370_loop_size[s]) s370_loop_size[s] = n;
+            }
+            si = si + 1;
+        }
+        b = b + 1;
+    }
+}
+
+/* Is v invariant with respect to the loop headed by hdr: a constant,
+ * an address, or defined in a block outside the loop? */
+static int s370_invariant_in(int v, int hdr) {
+    int b;
+    if (v < 0) return 1;
+    if (hi_is_remat(h_kind[v])) return 1;
+    b = h_blk[v];
+    if (b < 0 || b >= bb_nblk) return 0;
+    if (s370_loop_hdr[b] < 0) return 1;
+    /* inside some loop: outside THIS one if its block is not in this
+     * loop's body, which the header map approximates by headers */
+    {
+        int h;
+        h = s370_loop_hdr[b];
+        while (h >= 0) {
+            if (h == hdr) return 0;
+            h = (ssa_idom[h] >= 0 && ssa_idom[h] < bb_nblk) ? s370_loop_hdr[ssa_idom[h]] : -1;
+        }
+    }
+    return 1;
+}
+
+/* ADD(b, ADD(a, c)) with b and c invariant in the loop and a not:
+ * -> ADD(n, a) with n = ADD(b, c) hoisted to the preheader, so the
+ * operand is D(a, n).  The inner ADD must have no other use. */
+static void s370_hoist_bases(void) {
+    int i;
+    int hdr;
+    int pre;
+    int inner;
+    int b;
+    int a;
+    int c;
+    int n;
+    int j;
+    s370_find_loops();
+    i = 0;
+    while (i < h_ninst) { s370_use_count[i] = 0; i = i + 1; }
+    i = 0;
+    while (i < h_ninst) {
+        int k;
+        k = h_kind[i];
+        if (k == HI_NOP) { i = i + 1; continue; }
+        if (h_src1[i] >= 0) s370_use_count[h_src1[i]] = s370_use_count[h_src1[i]] + 1;
+        if (h_src2[i] >= 0 && ho_src2_is_ref(k)) s370_use_count[h_src2[i]] = s370_use_count[h_src2[i]] + 1;
+        if ((k == HI_CALL || k == HI_CALLP) && h_cbase[i] >= 0) {
+            j = 0;
+            while (j < h_val[i]) { if (h_carg[h_cbase[i] + j] >= 0) s370_use_count[h_carg[h_cbase[i] + j]] = s370_use_count[h_carg[h_cbase[i] + j]] + 1; j = j + 1; }
+        }
+        if (k == HI_PHI && h_pbase[i] >= 0) {
+            j = 0;
+            while (j < h_pcnt[i]) { if (h_pval[h_pbase[i] + j] >= 0) s370_use_count[h_pval[h_pbase[i] + j]] = s370_use_count[h_pval[h_pbase[i] + j]] + 1; j = j + 1; }
+        }
+        i = i + 1;
+    }
+    i = 0;
+    while (i < h_ninst) {
+        if (h_kind[i] != HI_ADD || h_blk[i] < 0 || h_blk[i] >= bb_nblk) { i = i + 1; continue; }
+        hdr = s370_loop_hdr[h_blk[i]];
+        if (hdr < 0) { i = i + 1; continue; }
+        pre = ssa_idom[hdr];
+        if (pre < 0 || pre >= bb_nblk || s370_loop_hdr[pre] == hdr) { i = i + 1; continue; }
+        inner = -1;
+        b = -1;
+        if (h_src2[i] >= 0 && h_kind[h_src2[i]] == HI_ADD && s370_use_count[h_src2[i]] == 1 &&
+            h_blk[h_src2[i]] == h_blk[i] && s370_invariant_in(h_src1[i], hdr)) { inner = h_src2[i]; b = h_src1[i]; }
+        else if (h_src1[i] >= 0 && h_kind[h_src1[i]] == HI_ADD && s370_use_count[h_src1[i]] == 1 &&
+                 h_blk[h_src1[i]] == h_blk[i] && s370_invariant_in(h_src2[i], hdr)) { inner = h_src1[i]; b = h_src2[i]; }
+        if (inner < 0) {
+            /* ADD(b, ADDI(a, c)) with b a register base: the constant
+             * cannot be a negative displacement, so it joins the base:
+             * ADD(n, a) with n = ADDI(b, c) hoisted.  A static base
+             * keeps its constant symbolically and needs no register. */
+            int ad;
+            ad = -1;
+            if (h_src2[i] >= 0 && h_kind[h_src2[i]] == HI_ADDI && s370_use_count[h_src2[i]] == 1 &&
+                h_blk[h_src2[i]] == h_blk[i] && s370_invariant_in(h_src1[i], hdr) &&
+                !s370_invariant_in(h_src1[h_src2[i]], hdr) && !bg_static_chain(h_src1[i])) { ad = h_src2[i]; b = h_src1[i]; }
+            else if (h_src1[i] >= 0 && h_kind[h_src1[i]] == HI_ADDI && s370_use_count[h_src1[i]] == 1 &&
+                h_blk[h_src1[i]] == h_blk[i] && s370_invariant_in(h_src2[i], hdr) &&
+                !s370_invariant_in(h_src1[h_src1[i]], hdr) && !bg_static_chain(h_src2[i])) { ad = h_src1[i]; b = h_src2[i]; }
+            if (ad < 0 || h_val[ad] >= 0) { i = i + 1; continue; }
+            if (h_ninst + 1 >= HIR_MAX_INST) break;
+            n = sp_new_inst(HI_ADDI, h_ty[i], b, -1, h_val[ad], pre);
+            if (licm_tail[pre] >= 0) licm_next[licm_tail[pre]] = n;
+            else licm_head[pre] = n;
+            licm_tail[pre] = n;
+            h_src1[i] = n;
+            h_src2[i] = h_src1[ad];
+            h_kind[ad] = HI_NOP;
+            i = i + 1;
+            continue;
+        }
+        if (s370_invariant_in(h_src2[inner], hdr) && !s370_invariant_in(h_src1[inner], hdr)) { c = h_src2[inner]; a = h_src1[inner]; }
+        else if (s370_invariant_in(h_src1[inner], hdr) && !s370_invariant_in(h_src2[inner], hdr)) { c = h_src1[inner]; a = h_src2[inner]; }
+        else { i = i + 1; continue; }
+        if (h_ninst + 1 >= HIR_MAX_INST) break;
+        n = sp_new_inst(HI_ADD, h_ty[i], b, c, 0, pre);
+        if (licm_tail[pre] >= 0) licm_next[licm_tail[pre]] = n;
+        else licm_head[pre] = n;
+        licm_tail[pre] = n;
+        h_src1[i] = n;
+        h_src2[i] = a;
+        h_kind[inner] = HI_NOP;
         i = i + 1;
     }
 }
@@ -2540,6 +2717,7 @@ static void s370_gen_unit(Node *fn) {
     s370_layout();
     s370_mark_loop_consts();
     { int z; z = 0; while (z < h_ninst + 16 && z < HIR_MAX_INST) { ra_pair_of[z] = -1; ra_pair_lo[z] = 0; z = z + 1; } }
+    if (!getenv("F77_NO_HOIST")) s370_hoist_bases();
     if (!getenv("F77_NO_BXLE")) s370_loops();
     { int z; z = h_ninst; while (z < HIR_MAX_INST) { ra_pair_of[z] = -1; z = z + 1; } }
     hir_burg();

@@ -1,0 +1,12 @@
+fort370 S/370 back end, third version (each subscript term scaled by
+itself, 8*(K+j) in the displacement, invariant terms hoisted out of
+the index side into a register base, BXLE), 2026-10-12 night, same
+TK5 system and kernels as results-2026-10-12.txt.  CPU seconds of the
+GO step; every checksum identical to FORTRAN H's; H's OPT=2 beside.
+daxpy  cpu=4.63  H=4.40  |DAXPY CHECKSUM 0.100099999999737D 06
+ddot   cpu=3.49  H=3.37  |DDOT CHECKSUM 0.199999998516409D 06
+matmul cpu=4.79  H=5.04  |MATMUL CHECKSUM 0.166649999999761D 08
+lll1   cpu=9.36  H=8.85  |LLL1 CHECKSUM 0.500404006199570D 03
+lll5   cpu=5.55  H=5.53  |LLL5 CHECKSUM 0.500055259259247D 03
+lll7   cpu=14.81 H=15.14 |LLL7 CHECKSUM 0.847610420053770D 03
+linpk  cpu=18.05 H=13.64 |LINPACK INFO 0 CHECKSUM 0.100000000000001D 03

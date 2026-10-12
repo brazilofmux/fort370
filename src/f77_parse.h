@@ -1089,11 +1089,37 @@ static int f77_subscript_addr(int s) {
                 else
                     coff = coff - f77_slo[s][k] * cstride;
             }
+#ifdef F77_TARGET_S370
+            /* Each term scaled to bytes by itself, so a term that is
+             * invariant in a loop (the column of A(I,J)) can be hoisted
+             * and the index register carries only the subscript that
+             * varies: base+index+displacement in one operand. */
+            if (!(f77_sty[s] == TY_CHAR && f77_slen[s] < 0)) {
+                int m;
+                int lg;
+                m = f77_esize(s);
+                if (vstride >= 0) {
+                    idx = hi_emit(HI_MUL, TY_INT, idx, vstride, 0, NULL);
+                } else {
+                    m = m * cstride;
+                }
+                lg = -1;
+                if (m == 1) lg = 0;
+                else if (m == 2) lg = 1; else if (m == 4) lg = 2; else if (m == 8) lg = 3;
+                else if (m == 16) lg = 4; else if (m == 32) lg = 5;
+                if (lg > 0) idx = hi_emit(HI_SLL, TY_INT, idx, f77_iconst(lg), 0, NULL);
+                else if (lg < 0) idx = hi_emit(HI_MUL, TY_INT, idx, f77_iconst(m), 0, NULL);
+                off = (off < 0) ? idx : hi_emit(HI_ADD, TY_INT, off, idx, 0, NULL);
+            } else {
+#endif
             if (vstride >= 0)
                 idx = hi_emit(HI_MUL, TY_INT, idx, vstride, 0, NULL);
             else if (cstride != 1)
                 idx = hi_emit(HI_MUL, TY_INT, idx, f77_iconst(cstride), 0, NULL);
             off = (off < 0) ? idx : hi_emit(HI_ADD, TY_INT, off, idx, 0, NULL);
+#ifdef F77_TARGET_S370
+            }
+#endif
 
             /* Advance the stride by this dimension's extent.  Once any
              * extent is a run-time value the stride becomes one too;
@@ -1124,7 +1150,12 @@ static int f77_subscript_addr(int s) {
     if (k != f77_srank[s]) f77_error("wrong number of subscripts");
 
     if (off < 0) off = f77_iconst(0);
+#ifdef F77_TARGET_S370
+    if (!(f77_sty[s] == TY_CHAR && f77_slen[s] < 0)) byte = off;   /* already bytes */
+    else byte = f77_elem_bytes(s, off);
+#else
     byte = f77_elem_bytes(s, off);
+#endif
     addr = hi_emit(HI_ADD, HL_ADDR_TY, f77_sval[s], byte, 0, NULL);
     if (coff != 0 && f77_sty[s] == TY_CHAR && f77_slen[s] < 0) {
         /* assumed-length elements: the offset is a run-time product */
