@@ -2565,6 +2565,158 @@ static void s370_hoist_bases(void) {
 }
 
 /* ---------------------------------------------------------------- */
+/* Lifting an inner loop's setup out of the enclosing loop           */
+/* ---------------------------------------------------------------- */
+
+static int s370_const_eval(int v, int *out, int depth);
+
+/* Replace every use of value old by nw. */
+static void s370_replace_uses(int old, int nw) {
+    int i;
+    int j;
+    int k;
+    i = 0;
+    while (i < h_ninst) {
+        k = h_kind[i];
+        if (k == HI_NOP || i == nw) { i = i + 1; continue; }
+        if (h_src1[i] == old) h_src1[i] = nw;
+        if (h_src2[i] == old && ho_src2_is_ref(k)) h_src2[i] = nw;
+        if ((k == HI_CALL || k == HI_CALLP) && h_cbase[i] >= 0) {
+            j = 0;
+            while (j < h_val[i]) { if (h_carg[h_cbase[i] + j] == old) h_carg[h_cbase[i] + j] = nw; j = j + 1; }
+        }
+        if (k == HI_PHI && h_pbase[i] >= 0) {
+            j = 0;
+            while (j < h_pcnt[i]) { if (h_pval[h_pbase[i] + j] == old) h_pval[h_pbase[i] + j] = nw; j = j + 1; }
+        }
+        i = i + 1;
+    }
+}
+
+/* Does v feed, through an address chain in its own block, a load or
+ * store there?  Such a chain folds in place, and moving v out of the
+ * block would unfold it. */
+static int s370_feeds_memop_here(int v, int depth) {
+    int i;
+    int k;
+    if (depth > 4) return 1;
+    i = 0;
+    while (i < h_ninst) {
+        k = h_kind[i];
+        if (k == HI_NOP || h_blk[i] != h_blk[v]) { i = i + 1; continue; }
+        if (h_src1[i] == v || (h_src2[i] == v && ho_src2_is_ref(k))) {
+            if (k == HI_LOAD || k == HI_STORE) return 1;
+            if ((k == HI_ADD || k == HI_ADDI) && s370_feeds_memop_here(i, depth + 1)) return 1;
+        }
+        i = i + 1;
+    }
+    return 0;
+}
+
+/* The passes after LICM -- strength reduction's derived induction
+ * variables, s370_hoist_bases, s370_loops -- put an inner loop's setup
+ * in its preheader, which is the enclosing loop's body: an index's
+ * initial value, its step and limit, the bases.  Where those are
+ * invariant in the enclosing loop too, they move to its preheader,
+ * and the outer loop is left with the inner loop and its own
+ * counting, as H's is.  Integer arithmetic only, from a block inside
+ * a loop, not feeding an address that folds in that block, not a
+ * static chain (which folds symbolically wherever it is).  Rounds until nothing moves (a lifted value
+ * may be lifted again from the next loop out). */
+/* Integer arithmetic on constants becomes the constant, in place: the
+ * passes after hir_opt (strength reduction, s370_loops) build such
+ * expressions for an index's initial value, step and limit.  A pinned
+ * one stays pinned (a constant in a register materializes once). */
+static void s370_fold_consts(void) {
+    int i;
+    int k;
+    int c;
+    i = 0;
+    while (i < h_ninst) {
+        k = h_kind[i];
+        if ((k == HI_ADD || k == HI_ADDI || k == HI_SUB || k == HI_MUL || k == HI_SLL) &&
+            !ty_is_fp(h_ty[i]) && s370_const_eval(i, &c, 0)) {
+            h_kind[i] = HI_ICONST;
+            h_src1[i] = -1;
+            h_src2[i] = -1;
+            h_val[i] = c;
+        }
+        i = i + 1;
+    }
+}
+
+static void s370_rehoist(void) {
+    int i;
+    int k;
+    int b;
+    int hdr;
+    int pre;
+    int n;
+    int c;
+    int round;
+    int moved;
+    if (getenv("F77_NO_REHOIST")) return;
+    round = 0;
+    for (;;) {
+        moved = 0;
+        s370_fold_consts();
+        s370_find_loops();
+        i = 0;
+        while (i < h_ninst) {
+            k = h_kind[i];
+            if (!(k == HI_ADD || k == HI_ADDI || k == HI_SUB || k == HI_MUL || k == HI_SLL ||
+                  k == HI_SRL || k == HI_SRA || k == HI_AND || k == HI_OR || k == HI_XOR)) { i = i + 1; continue; }
+            /* a pinned constant (a BXLE's step or limit) stays where it
+             * is: one LA per outer iteration, against a register pair
+             * held across every enclosing loop, which matmul's three
+             * nested loops could not afford -- the pair went uncoloured
+             * and the loop lost its BXLE */
+            if (h_no_remat[i] && hi_is_remat(k)) { i = i + 1; continue; }
+            if (ty_is_fp(h_ty[i])) { i = i + 1; continue; }
+            b = h_blk[i];
+            if (b < 0 || b >= bb_nblk) { i = i + 1; continue; }
+            hdr = s370_loop_hdr[b];
+            if (hdr < 0) { i = i + 1; continue; }
+            pre = ssa_idom[hdr];
+            if (pre < 0 || pre >= bb_nblk || pre == hdr || s370_loop_hdr[pre] == hdr) { i = i + 1; continue; }
+            if (!s370_invariant_in(h_src1[i], hdr)) { i = i + 1; continue; }
+            if (ho_src2_is_ref(k) && !s370_invariant_in(h_src2[i], hdr)) { i = i + 1; continue; }
+            if (s370_feeds_memop_here(i, 0)) { i = i + 1; continue; }
+            if (bg_static_chain(i)) { i = i + 1; continue; }   /* folds symbolically anywhere */
+            if (h_ninst + 1 >= HIR_MAX_INST) return;
+            {
+                n = sp_new_inst(k, h_ty[i], h_src1[i], ho_src2_is_ref(k) ? h_src2[i] : -1, h_val[i], pre);
+                h_no_remat[n] = h_no_remat[i];
+                ra_pair_of[n] = -1; ra_pair_lo[n] = 0;
+                if (ra_pair_of[i] >= 0) {
+                    ra_pair_of[n] = ra_pair_of[i];
+                    ra_pair_lo[n] = ra_pair_lo[i];
+                    ra_pair_of[ra_pair_of[i]] = n;
+                    ra_pair_of[i] = -1;
+                }
+            }
+            if (licm_tail[pre] >= 0) licm_next[licm_tail[pre]] = n;
+            else licm_head[pre] = n;
+            licm_tail[pre] = n;
+            s370_replace_uses(i, n);
+            if (getenv("F77_REHOIST_DEBUG")) {
+                fdputs("REHOIST ", 2); fdputuint(2, (unsigned)i); fdputs(" ", 2); fdputs(bg_op_name(k), 2);
+                fdputs(" s1=", 2); fdputs(h_src1[i] >= 0 ? bg_op_name(h_kind[h_src1[i]]) : "-", 2);
+                fdputs(" s2=", 2); fdputs((ho_src2_is_ref(k) && h_src2[i] >= 0) ? bg_op_name(h_kind[h_src2[i]]) : "-", 2);
+                fdputs(" pin=", 2); fdputuint(2, (unsigned)h_no_remat[i]);
+                fdputs(" -> ", 2); fdputuint(2, (unsigned)n); fdputs(" ", 2); fdputs(bg_op_name(h_kind[n]), 2);
+                fdputs(" blk ", 2); fdputuint(2, (unsigned)b); fdputs(" -> ", 2); fdputuint(2, (unsigned)pre); fdputc(10, 2);
+            }
+            h_kind[i] = HI_NOP;
+            moved = moved + 1;
+            i = i + 1;
+        }
+        round = round + 1;
+        if (moved == 0 || round >= 8) break;
+    }
+}
+
+/* ---------------------------------------------------------------- */
 /* Counted loops: BXLE                                               */
 /* ---------------------------------------------------------------- */
 
@@ -2791,6 +2943,7 @@ static void s370_gen_unit(Node *fn) {
     if (!getenv("F77_NO_REASSOC")) { s370_reassoc(); hir_opt(); }   /* the second hir_opt merges the shifted indexes */
     licm_cheap_fn = s370_cheap_operand;
     licm_loopopt = 1;
+    licm_split_on = getenv("F77_SPLIT") ? 1 : 0;   /* the allocator's own spilling serves; see s370_rehoist */
     licm_no_ptr_iv = getenv("F77_NO_IDX") ? 0 : 1;
     if (ho_mask & 1024) hir_licm();
 
@@ -2808,6 +2961,7 @@ static void s370_gen_unit(Node *fn) {
     { int z; z = 0; while (z < h_ninst + 16 && z < HIR_MAX_INST) { ra_pair_of[z] = -1; ra_pair_lo[z] = 0; z = z + 1; } }
     if (!getenv("F77_NO_HOIST")) s370_hoist_bases();
     if (!getenv("F77_NO_BXLE")) s370_loops();
+    s370_rehoist();
     { int z; z = h_ninst; while (z < HIR_MAX_INST) { ra_pair_of[z] = -1; z = z + 1; } }
     hir_burg();
     hcg_identify_fusions();

@@ -28,6 +28,7 @@ static int licm_head[HIR_MAX_BLOCK];  /* first hoisted inst, -1 = none */
  * the passes run only where the target's driver turns them on
  * (hir_codegen.h sets it before calling hir_licm). */
 static int licm_loopopt;
+static int licm_split_on = 1;        /* licm_split around each loop (a target may decline) */
 /* fort370: on S/370 an array reference is base+index+displacement in
  * one instruction, so ADD(iv, base) must stay an ADD rather than
  * become a pointer induction variable; set by the S/370 emitter. */
@@ -1462,7 +1463,7 @@ static void hir_licm(void) {
                 licm_mark(body_count);
                 if (!getenv("S12CC_NO_LICM")) licm_hoist(s, body_count);   /* A/B knob */
                 if (licm_loopopt) {
-                    licm_split(s);
+                    if (licm_split_on) licm_split(s);
                     licm_strred(s, b);
                 }
             }

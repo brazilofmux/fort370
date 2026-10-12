@@ -44,3 +44,22 @@ lll1   cpu=9.20  H=9.15  |LLL1 CHECKSUM 0.500404006199570D 03
 lll5   cpu=5.55  H=5.53  |LLL5 CHECKSUM 0.500055259259247D 03
 lll7   cpu=14.98 H=15.14 |LLL7 CHECKSUM 0.847610420053770D 03
 linpk  cpu=13.18 H=13.64 |LINPACK INFO 0 CHECKSUM 0.100000000000001D 03
+
+With an inner loop's setup lifted out of the enclosing loop
+(s370_rehoist: the passes after LICM had put the derived induction
+variables' initial values, the BXLE step and limit and the hoisted
+bases in the inner preheader, which is the outer loop's body), LICM's
+live-range split around loops off for S/370 (the allocator's own
+spilling serves, and the split's reload hid the outer loop's trip
+count from the BXLE pass), a BXLE's step and limit weighted by their
+loop use rather than treated as free to unpin, and a fused compare's
+operands counted in the spill weights (the compare is a NOP by then):
+daxpy's outer loop is LA / inner / AH / C / BC, the kernels' code is
+15-25% shorter, LINPACK has 14 BXLEs where it had 11.
+daxpy  cpu=4.46  H=4.40  |DAXPY CHECKSUM 0.100099999999737D 06
+ddot   cpu=3.51  H=3.49  |DDOT CHECKSUM 0.199999998516409D 06
+matmul cpu=4.50  H=5.04  |MATMUL CHECKSUM 0.166649999999761D 08
+lll1   cpu=9.19  H=9.15  |LLL1 CHECKSUM 0.500404006199570D 03
+lll5   cpu=5.55  H=5.53  |LLL5 CHECKSUM 0.500055259259247D 03
+lll7   cpu=15.13 H=15.14 |LLL7 CHECKSUM 0.847610420053770D 03
+linpk  cpu=13.00 H=13.64 |LINPACK INFO 0 CHECKSUM 0.100000000000001D 03

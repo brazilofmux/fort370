@@ -254,10 +254,29 @@ reloaded in every iteration of DSCAL's loop; LINPACK 13.03); and
 instructions -- is 5% on daxpy under Hercules, so a commutative
 operation on a surviving register takes H's order. With H re-measured
 the same hour, the seven kernels stand at 0.91 to 1.01 of H's OPT=2
-(the last block of `bench/results-s370-2026-10-12d.txt`). `bench/ab.sh` runs one program through both
+(the last block of `bench/results-s370-2026-10-12d.txt`). Then
+`s370_rehoist`: the passes after LICM (strength reduction's derived
+induction variables, `s370_hoist_bases`, `s370_loops`) left an inner
+loop's setup in its preheader, which is the enclosing loop's body;
+what is invariant there now moves to the enclosing loop's preheader,
+round by round, so daxpy's outer loop is `LA / inner / AH / C / BC`
+and the kernels' code is 15-25% shorter. Three things had to go with
+it. LICM's live-range split around loops is off for S/370
+(`F77_SPLIT=1` restores it): the allocator's own spilling serves, and
+the split's reload hid the outer loop's trip count from the BXLE pass.
+A BXLE's step and limit, pinned constants, had been free to unpin when
+a colouring failed, so lifting them to where three loops' pairs
+competed lost matmul's inner BXLE; they now weigh their loop use
+twice, pinned constants are not lifted at all (one `LA` an outer
+iteration), and a respill victim must be of the failing node's own
+class. And a fused compare is a NOP by allocation time, so its
+operands -- a BXLE's index and limit -- had no weight and DGEFA's
+DSCAL limit was the first thing spilled. `F77_NO_REHOIST` switches
+the pass off. `bench/ab.sh` runs one program through both
 compilers and compares what they print; `tests/s370/` holds such
-programs; `F77_NO_MEM`, `F77_NO_BXLE`, `F77_NO_REASSOC` and
-`F77_NO_IDX` switch the step-3 transformations off one at a time,
+programs; `F77_NO_MEM`, `F77_NO_BXLE`, `F77_NO_REASSOC`,
+`F77_NO_IDX`, `F77_NO_HOIST` and `F77_NO_REHOIST` switch the step-3
+transformations off one at a time,
 which is how the two miscompiles they first brought were found.
 
 ## The order of work

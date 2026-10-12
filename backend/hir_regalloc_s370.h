@@ -1402,6 +1402,14 @@ static void ra_build_wuses(void) {
             j = 0;
             while (j < nm) { ra_wuses[mr[j]] = ra_wuses[mr[j]] + w; j = j + 1; }
         }
+        if (k == HI_BRC && hcg_brc_fuse[i] >= 0) {
+            /* a fused compare is a NOP too; the branch reads its
+             * operands (the index and limit of a BXLE among them) */
+            int cmp;
+            cmp = hcg_brc_fuse[i];
+            if (h_src1[cmp] >= 0) ra_wuses[h_src1[cmp]] = ra_wuses[h_src1[cmp]] + w;
+            if (h_src2[cmp] >= 0) ra_wuses[h_src2[cmp]] = ra_wuses[h_src2[cmp]] + w;
+        }
         if ((k == HI_CALL || k == HI_CALLP) && h_cbase[i] >= 0) {
             base = h_cbase[i];
             cnt = h_val[i];
@@ -1434,7 +1442,11 @@ static int gc_select_spill(void) {
         if (gc_wl[n] == GC_WL_SPILL) {
             inst = gc_inst[n];
             cost = (ra_wuses[inst] * 100) / (gc_degree[n] + 1);
-            if (h_no_remat[inst] && hi_is_remat(h_kind[inst])) cost = 0;
+            /* An unpinned constant costs nothing (it is a storage
+             * operand again), except a BXLE's step or limit, whose loss
+             * costs the loop two instructions an iteration, more than
+             * reloading any one operand there. */
+            if (h_no_remat[inst] && hi_is_remat(h_kind[inst])) cost = ra_pair_of[inst] >= 0 ? cost * 2 : 0;
             if (cost < best_cost) { best_cost = cost; best = n; }
         }
         n = n + 1;
@@ -1640,14 +1652,17 @@ static int gc_respill(void) {
         if (gc_color[n] < 0) {
             best = n;
             bcost = ra_wuses[gc_inst[n]];
-            if (h_no_remat[gc_inst[n]] && hi_is_remat(h_kind[gc_inst[n]])) bcost = 0;
+            if (h_no_remat[gc_inst[n]] && hi_is_remat(h_kind[gc_inst[n]])) bcost = ra_pair_of[gc_inst[n]] >= 0 ? bcost * 2 : 0;
             e = gc_adj_head[n];
             while (e >= 0) {
                 a = gc_get_alias(gc_adj_peer[e]);
                 inst = gc_inst[a];
-                if (!ra_mem_forced[inst] && !gc_force_spill[a]) {
+                /* a victim must be of the node's own class: spilling a
+                 * floating value frees no general register */
+                if (!ra_mem_forced[inst] && !gc_force_spill[a] && gc_cls[a] == gc_cls[n] &&
+                    a != gc_node[ra_pair_of[gc_inst[n]] >= 0 ? ra_pair_of[gc_inst[n]] : gc_inst[n]]) {
                     cost = ra_wuses[inst];
-                    if (h_no_remat[inst] && hi_is_remat(h_kind[inst])) cost = 0;
+                    if (h_no_remat[inst] && hi_is_remat(h_kind[inst])) cost = ra_pair_of[inst] >= 0 ? cost * 2 : 0;
                     if (cost < bcost) { best = a; bcost = cost; }
                 }
                 e = gc_adj_next[e];
