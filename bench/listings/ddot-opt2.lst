@@ -1,0 +1,383 @@
+                                                J E S 2   J O B   L O G
+
+
+17.24.09 JOB 3737  IEF677I WARNING MESSAGE(S) FOR JOB FHDDOT2  ISSUED
+17.24.09 JOB 3737  $HASP373 FHDDOT2  STARTED - INIT  1 - CLASS A - SYS TK5R
+17.24.09 JOB 3737  IEF403I FHDDOT2 - STARTED - TIME=17.24.09
+17.24.09 JOB 3737  IEFACTRT - Stepname  Procstep  Program   Retcode
+17.24.09 JOB 3737  FHDDOT2    S1        FORT      IEKAA00   RC= 0000
+17.24.09 JOB 3737  FHDDOT2    S1        LKED      IEWL      RC= 0000
+17.24.12 JOB 3737  FHDDOT2    S1        GO        PGM=*.DD  RC= 0000
+17.24.12 JOB 3737  IEF404I FHDDOT2 - ENDED - TIME=17.24.12
+17.24.12 JOB 3737  $HASP395 FHDDOT2  ENDED
+
+
+------ JES2 JOB STATISTICS ------
+
+
+ 12 OCT 26 JOB EXECUTION DATE
+
+
+        24 CARDS READ
+
+
+       313 SYSOUT PRINT RECORDS
+
+
+         0 SYSOUT PUNCH RECORDS
+
+
+      0.05 MINUTES EXECUTION TIME
+
+    1     //FHDDOT2  JOB (1),'FORTH',                                             JOB 3737
+          //             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),
+          //             USER=HERC01,PASSWORD=
+    2     //S1       EXEC FORTHCLG,SOUT=Z,PARM.FORT='OPT=2,LIST,MAP'
+    3     XXFORTHCLG  PROC SOUT='*'                                               00000100
+    4     XXFORT   EXEC  PGM=IEKAA00                                              00000200
+    5     XXSYSPRINT DD  SYSOUT=&SOUT                                             00000300
+    6     XXSYSPUNCH DD  SYSOUT=B                                                 00000400
+    7     XXSYSLIN   DD  DSNAME=&LOADSET,UNIT=SYSSQ,DISP=(MOD,PASS),             *00000500
+          XX             SPACE=(400,(200,50),RLSE)                                00000600
+    8     //FORT.SYSIN DD *
+    9     XXLKED EXEC PGM=IEWL,PARM=(MAP,LET,LIST),COND=(4,LT,FORT)               00000700
+   10     XXSYSLIB   DD  DSNAME=SYS1.FORTLIB,DISP=SHR                             00000800
+   11     XXSYSPRINT DD  SYSOUT=&SOUT                                             00000900
+   12     XXSYSLMOD  DD  DSNAME=&GOSET(MAIN),UNIT=SYSDA,DISP=(,PASS),            *00001000
+          XX             SPACE=(3072,(30,10,1),RLSE)                              00001100
+   13     XXSYSUT1 DD DSNAME=&SYSUT1,UNIT=SYSDA,SPACE=(1024,(200,20)),SEP=SYSLMOD 00001200
+   14     XXSYSLIN DD    DSNAME=&LOADSET,DISP=(OLD,DELETE)                        00001300
+   15     XX         DD  DDNAME=SYSIN                                             00001400
+   16     XXGO  EXEC PGM=*.LKED.SYSLMOD,COND=((4,LT,FORT),(4,LT,LKED))            00001500
+   17     XXFT05F001 DD  DDNAME=SYSIN                                             00001600
+   18     XXFT06F001 DD  SYSOUT=&SOUT                                             00001700
+   19     XXFT07F001 DD SYSOUT=B                                                  00001800
+   20     //GO.SYSIN DD DUMMY
+          //
+
+ STMT NO. MESSAGE
+-
+    5     IEF653I SUBSTITUTION JCL - SYSOUT=Z
+   11     IEF653I SUBSTITUTION JCL - SYSOUT=Z
+   18     IEF653I SUBSTITUTION JCL - SYSOUT=Z
+   16     IEF686I DDNAME REFERRED TO ON DDNAME KEYWORD IN PRIOR STEP WAS NOT RESOLVED
+IEF236I ALLOC. FOR FHDDOT2 FORT S1
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I JES2 ALLOCATED TO SYSPUNCH
+IEF237I 292  ALLOCATED TO SYSLIN
+IEF237I JES2 ALLOCATED TO SYSIN
+IEF142I FHDDOT2 FORT S1 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   JES2.JOB03737.SO0102                         SYSOUT
+IEF285I   JES2.JOB03737.SO0103                         SYSOUT
+IEF285I   SYS26285.T172409.RA000.FHDDOT2.LOADSET       PASSED        *-------18
+IEF285I   VOL SER NOS= WORK03.
+IEF285I   JES2.JOB03737.SI0101                         SYSIN
+IEF373I STEP /FORT    / START 26285.1724
+IEF374I STEP /FORT    / STOP  26285.1724 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC VIRT   832K SYS   212K
+************************************************************************************************************************************
+*     1. Jobstep of job: FHDDOT2     Stepname: FORT        Program name: IEKAA00    Executed on 12.10.26 from 17.24.09 to 17.24.09 *
+*         elapsed time  00:00:00,03                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,01               Virtual Storage used:    832K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,01   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:     16                                                                           *
+*     DMY.......0 DMY.......0 292......18 DMY.......0                                                                              *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,01                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR FHDDOT2 LKED S1
+IEF237I 390  ALLOCATED TO SYSLIB
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I 291  ALLOCATED TO SYSLMOD
+IEF237I 290  ALLOCATED TO SYSUT1
+IEF237I 292  ALLOCATED TO SYSLIN
+IEF237I DMY  ALLOCATED TO
+IEF142I FHDDOT2 LKED S1 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS1.FORTLIB                                 KEPT          *-------66
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   JES2.JOB03737.SO0104                         SYSOUT
+IEF285I   SYS26285.T172409.RA000.FHDDOT2.GOSET         PASSED        *-------21
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26285.T172409.RA000.FHDDOT2.SYSUT1        DELETED       *--------0
+IEF285I   VOL SER NOS= WORK01.
+IEF285I   SYS26285.T172409.RA000.FHDDOT2.LOADSET       DELETED       *-------19
+IEF285I   VOL SER NOS= WORK03.
+IEF373I STEP /LKED    / START 26285.1724
+IEF374I STEP /LKED    / STOP  26285.1724 CPU    0MIN 00.01SEC SRB    0MIN 00.00SEC VIRT   264K SYS   208K
+************************************************************************************************************************************
+*     2. Jobstep of job: FHDDOT2     Stepname: LKED        Program name: IEWL       Executed on 12.10.26 from 17.24.09 to 17.24.09 *
+*         elapsed time  00:00:00,02                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,01               Virtual Storage used:    264K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,01   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      0                                                                           *
+*     390......66 DMY.......0 291......21 290.......0 292......19 DMY.......0                                                      *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,01                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR FHDDOT2 GO S1
+IEF237I 291  ALLOCATED TO PGM=*.DD
+IEF237I DMY  ALLOCATED TO FT05F001
+IEF237I JES2 ALLOCATED TO FT06F001
+IEF237I JES2 ALLOCATED TO FT07F001
+IEF142I FHDDOT2 GO S1 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS26285.T172409.RA000.FHDDOT2.GOSET         KEPT          *--------0
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   JES2.JOB03737.SO0105                         SYSOUT
+IEF285I   JES2.JOB03737.SO0106                         SYSOUT
+IEF373I STEP /GO      / START 26285.1724
+IEF374I STEP /GO      / STOP  26285.1724 CPU    0MIN 03.37SEC SRB    0MIN 00.00SEC VIRT    44K SYS   204K
+************************************************************************************************************************************
+*     3. Jobstep of job: FHDDOT2     Stepname: GO          Program name: PGM=*.DD   Executed on 12.10.26 from 17.24.09 to 17.24.12 *
+*         elapsed time  00:00:03,39                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:03,37               Virtual Storage used:     44K         Page-out:      0                           *
+*           corr. CPU:  00:00:03,37   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      0                                                                           *
+*     291.......0 DMY.......0 DMY.......0 DMY.......0                                                                              *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          5,61                                             *
+************************************************************************************************************************************
+IEF237I 291  ALLOCATED TO SYS00001
+IEF285I   SYS26285.T172412.RA000.FHDDOT2.R0000001      KEPT          *--------0
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26285.T172409.RA000.FHDDOT2.GOSET         DELETED
+IEF285I   VOL SER NOS= WORK02.
+IEF375I  JOB /FHDDOT2 / START 26285.1724
+IEF376I  JOB /FHDDOT2 / STOP  26285.1724 CPU    0MIN 03.39SEC SRB    0MIN 00.00SEC
+
+ LEVEL 21.8 ( JUN 74 )                          OS/360  FORTRAN H                                 DATE  26.285/17.24.09
+
+           COMPILER OPTIONS - NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+                              SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+                C     DDOT KERNEL: S = S + X*Y, N=1000, NREP TIMES
+   ISN 0002           REAL*8 X(1000),Y(1000),S
+   ISN 0003           DATA NREP/200000/
+   ISN 0004           N=1000
+   ISN 0005           DO 10 I=1,N
+   ISN 0006           X(I)=DFLOAT(I)*1.0D-3
+   ISN 0007        10 Y(I)=1.0D0/DFLOAT(I)
+   ISN 0008           S=0.0D0
+   ISN 0009           DO 30 IR=1,NREP
+   ISN 0010           DO 20 I=1,N
+   ISN 0011        20 S=S+X(I)*Y(I)
+   ISN 0012        30 CONTINUE
+   ISN 0013           WRITE(6,100) S
+   ISN 0014       100 FORMAT(' DDOT CHECKSUM ',D22.15)
+   ISN 0015           STOP
+   ISN 0016           END
+                                                                                                               PAGE 002
+
+                   000000  47 F0 F 00C    MAIN      BC    15,12(0,15)
+                   000004  07                       DC    XL1'07'
+                   000005  D4C1C9D5404040           DC    CL7'MAIN   '
+                   00000C  90 EC D 00C              STM   14,12,12(13)
+                   000010  98 23 F 020              LM    2,3,32(15)
+                   000014  50 30 D 008              ST    3,8(13)
+                   000018  50 D0 3 004              ST    13,4(0,3)
+                   00001C  07 F2                    BCR   15,2
+
+TEMPORARY FOR FLOAT/FIX
+CONSTANTS
+                   000098  00000000                 DC    XL4'00000000'
+                   00009C  00000000                 DC    XL4'00000000'
+                   0000A0  3E418937                 DC    XL4'3E418937'
+                   0000A4  4BC6A7EF                 DC    XL4'4BC6A7EF'
+                   0000A8  41100000                 DC    XL4'41100000'
+                   0000AC  00000000                 DC    XL4'00000000'
+                   0000B0  4E000000                 DC    XL4'4E000000'
+                   0000B4  00000000                 DC    XL4'00000000'
+                   0000B8  00000001                 DC    XL4'00000001'
+                   0000BC  000003E8                 DC    XL4'000003E8'
+ADCONS FOR VARIABLES AND CONSTANTS
+                   003F58  00002010                 DC    XL4'00002010'
+ADCONS FOR EXTERNAL REFERENCES
+                   003F5C  00000000                 DC    XL4'00000000'                      IBCOM#
+DATA CONSTANTS
+                   0000CC  00030D40                 DC    XL4'00030D40'                        NREP
+                   003F78  41 90 0 001      100000  LA     9,   1( 0, 0)                          1
+                   003F7C  41 B0 0 008              LA    11,   8( 0, 0)                          8
+                   003F80  41 A0 0 3E8              LA    10,1000( 0, 0)                        3E8
+                   003F84  41 40 0 001              LA     4,   1( 0, 0)                          1
+                   003F88  41 50 0 008              LA     5,   8( 0, 0)                          8
+                   003F8C  58 60 C 000              L      6,   0( 0,12)
+                   003F90  41 20 0 001              LA     2,   1( 0, 0)                          1
+                   003F94  18 3A                    LR     3,10
+                   003F96  41 70 0 008              LA     7,   8( 0, 0)                          8
+                   003F9A  68 60 D 070      100001  LD     6, 112( 0,13)
+                   003F9E  60 60 D 050              STD    6,  80( 0,13)
+                   003FA2  12 44                    LTR    4, 4
+                   003FA4  47 40 C 05C              BC     4,  92( 0,12)
+                   003FA8  50 40 D 054              ST     4,  84( 0,13)
+                   003FAC  6A 60 D 050              AD     6,  80( 0,13)
+                   003FB0  47 F0 C 066              BC    15, 102( 0,12)
+                   003FB4  10 04                    LPR    0, 4
+                   003FB6  50 00 D 054              ST     0,  84( 0,13)
+                   003FBA  6B 60 D 050              SD     6,  80( 0,13)
+                   003FBE  28 26                    LDR    2, 6
+                   003FC0  6C 20 D 060              MD     2,  96( 0,13)           3E4189374BC6A7EF
+                                                                                                               PAGE 003
+
+                   003FC4  60 25 D 090              STD    2, 144( 5,13)                          X
+                   003FC8  68 20 D 068          10  LD     2, 104( 0,13)           4110000000000000
+                   003FCC  2D 26                    DDR    2, 6
+                   003FCE  60 25 6 000              STD    2,   0( 5, 6)                          Y
+                   003FD2  1A 57                    AR     5, 7
+                   003FD4  87 42 C 042              BXLE   4,  66( 2,12)                       ·Â@
+                   003FD8  68 00 D 058      100002  LD     0,  88( 0,13)                          0
+                   003FDC  60 00 D 090              STD    0, 144( 0,13)                          S
+                   003FE0  18 0A                    LR     0,10
+                   003FE2  89 00 0 003              SLL    0,   3( 0, 0)
+                   003FE6  50 00 C 010              ST     0,  16( 0,12)                       .Q02
+                   003FEA  18 89                    LR     8, 9
+                   003FEC  58 70 D 08C              L      7, 140( 0,13)                       NREP
+                   003FF0  58 30 C 010              L      3,  16( 0,12)                       .Q02
+                   003FF4  58 50 C 000              L      5,   0( 0,12)
+                   003FF8  18 69                    LR     6, 9
+                   003FFA  18 2B                    LR     2,11
+                   003FFC  68 40 D 090      100003  LD     4, 144( 0,13)                          S
+                   004000  18 42                    LR     4, 2
+                   004002  68 24 D 090          20  LD     2, 144( 4,13)                          X
+                   004006  6C 24 5 000              MD     2,   0( 4, 5)
+                   00400A  2A 42                    ADR    4, 2
+                   00400C  87 42 C 0AA              BXLE   4, 170( 2,12)                         20
+                   004010  60 40 D 090              STD    4, 144( 0,13)                          S
+                   004014  87 86 C 0A4          30  BXLE   8, 164( 6,12)                      § ·Á«
+                   004018  58 F0 C 004      100005  L     15,   4( 0,12)                     IBCOM#
+                   00401C  45 E0 F 004              BAL   14,   4( 0,15)
+                   004020  00000006                 DC    XL4'00000006'                           6
+                   004024  00000028                 DC    XL4'00000028'
+                   004028  45 E0 F 008              BAL   14,   8( 0,15)
+                   00402C  0860D090                 DC    XL4'0860D090'                           S
+                   004030  45 E0 F 010              BAL   14,  16( 0,15)
+                   004034  58 F0 C 004              L     15,   4( 0,12)                     IBCOM#
+                   004038  45 E0 F 034              BAL   14,  52( 0,15)
+                   00403C  05                       DC    XL1'05'
+                   00403D  40                       DC    XL1'40'
+                   00403E  40                       DC    XL1'40'
+                   00403F  40                       DC    XL1'40'
+                   004040  40                       DC    XL1'40'
+                   004041  F0                       DC    XL1'F0'
+ADDRESS OF EPILOGUE
+                   004042  58 F0 C 004              L     15,   4( 0,12)
+                   004046  45 E0 F 034              BAL   14,  52( 0,15)                     IBCOM#
+                   00404A  0540                     DC    XL2'0540'
+                   00404C  404040F0                 DC    XL4'404040F0'
+ADDRESS OF PROLOGUE
+                   004052  58 C0 3 048              L     12,  72( 0, 3)
+                   004056  58 F0 C 004              L     15,   4( 0,12)
+
+                                                                                                               PAGE 004
+
+                   00405A  45 E0 F 040              BAL   14,  64( 0,15)                     IBCOM#
+                   00405E  18 D3                    LR    13, 3
+                   004060  47 F0 C 020              BC    15,  32( 0,12)
+ADCON FOR PROLOGUE
+                   000020  00004052                 DC    XL4'00004052'
+ADCON FOR SAVE AREA
+                   000024  00000040                 DC    XL4'00000040'
+ADCON FOR EPILOGUE
+                   000040  00004042                 DC    XL4'00004042'
+ADCON FOR REG 12
+                   000088  00003F58                 DC    XL4'00003F58'
+TEMPORARIES AND PHASE 20 CONSTANTS
+                   003F60  00000008                 DC    XL4'00000008'
+                   003F64  00000000                 DC    XL4'00000000'
+                   003F68  00000000                 DC    XL4'00000000'
+                   003F6C  00000000                 DC    XL4'00000000'
+                   003F70  00000000                 DC    XL4'00000000'
+                   003F74  00000000                 DC    XL4'00000000'
+ADCONS FOR B BLOCK LABELS
+                                                     /     MAIN /     SIZE OF PROGRAM 004064 HEXADECIMAL BYTES PAGE 005
+
+
+      NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.
+          I SFA     I*4  0000C0           N SF      I*4  0000C4           S SF      R*8  0000D0           X SF      R*8  0000D8
+          Y SF      R*8  002018          IR SF      I*4  0000C8        NREP  F      I*4  0000CC      IBCOM#  F  XF  I*4  000000
+
+    LABEL   ADDR                LABEL   ADDR                LABEL   ADDR                LABEL   ADDR           PAGE 006
+
+       10  003FC8                  20  004002                  30  004014
+
+*OPTIONS IN EFFECT*      NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+
+*OPTIONS IN EFFECT*      SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+
+*STATISTICS*     SOURCE STATEMENTS =      15 ,PROGRAM SIZE =    16484
+
+*STATISTICS*  NO  DIAGNOSTICS GENERATED
+
+****** END OF COMPILATION ******                                       689K BYTES OF CORE NOT USED
+
+
+ F64-LEVEL LINKAGE EDITOR OPTIONS SPECIFIED MAP,LET,LIST
+          DEFAULT OPTION(S) USED -  SIZE=(231424,55296)
+
+
+
+                                                      MODULE MAP
+
+
+  CONTROL SECTION                       ENTRY
+
+    NAME    ORIGIN  LENGTH                NAME   LOCATION     NAME   LOCATION     NAME   LOCATION     NAME   LOCATION
+  MAIN          00    4064
+  IHCECOMH*   4068     F61
+                                        IBCOM#      4068    FDIOCS#     4124    INTSWTCH    4FAE
+  IHCCOMH2*   4FD0     65D
+                                        SEQDASD     5348
+  IHCFCVTH*   5630    11B5
+                                        ADCON#      5630    FCVAOUTP    56DA    FCVLOUTP    576A    FCVZOUTP    58C2
+                                        FCVIOUTP    5C76    FCVEOUTP    6178    FCVCOUTP    6392    INT6SWCH    667B
+  IHCEFNTH*   67E8     542
+                                        ARITH#      67E8    ADJSWTCH    6B84
+  IHCEFIOS*   6D30     F28
+                                        FIOCS#      6D30    FIOCSBEP    6D36
+  IHCFIOS2*   7C58     52E
+  IHCUOPT *   8188     300
+  IHCERRM *   8488     5DC
+                                        ERRMON      8488    IHCERRE     84A0
+  IHCUATBL*   8A68     638
+  IHCETRCH*   90A0     28E
+                                        IHCTRCH     90A0    ERRTRA      90A8
+
+ ENTRY ADDRESS       00
+
+ TOTAL LENGTH      9330
+****MAIN      DOES NOT EXIST BUT HAS BEEN ADDED TO DATA SET
+AUTHORIZATION CODE IS         0.
+
+
+
+DDOT CHECKSUM  0.199999998516409D 06
+
+                        FFFFFFFFFFFF  HH        HH  DDDDDDDDD     DDDDDDDDD     OOOOOOOOOOOO  TTTTTTTTTTTT   2222222222
+                       FFFFFFFFFFFF  HH        HH  DDDDDDDDDD    DDDDDDDDDD    OOOOOOOOOOOO  TTTTTTTTTTTT  222222222222
+                      FF            HH        HH  DD       DD   DD       DD   OO        OO       TT       22        22
+                     FF            HH        HH  DD        DD  DD        DD  OO        OO       TT                 22
+                    FF            HH        HH  DD        DD  DD        DD  OO        OO       TT                 22
+                   FFFFFFFF      HHHHHHHHHHHH  DD        DD  DD        DD  OO        OO       TT                22
+                  FFFFFFFF      HHHHHHHHHHHH  DD        DD  DD        DD  OO        OO       TT              22
+                 FF            HH        HH  DD        DD  DD        DD  OO        OO       TT            22
+                FF            HH        HH  DD        DD  DD        DD  OO        OO       TT          22
+               FF            HH        HH  DD       DD   DD       DD   OO        OO       TT        22
+              FF            HH        HH  DDDDDDDDDD    DDDDDDDDDD    OOOOOOOOOOOO       TT       222222222222
+             FF            HH        HH  DDDDDDDDD     DDDDDDDDD     OOOOOOOOOOOO       TT       222222222222
+
+
+
+                    JJJJJJJJJJ   3333333333   777777777777   3333333333   777777777777                ZZZZZZZZZZZZ
+                    JJJJJJJJJJ  333333333333  77777777777   333333333333  77777777777                 ZZZZZZZZZZZZ
+                        JJ      33        33  77      77    33        33  77      77                           ZZ
+                        JJ                33         77               33         77                           ZZ
+                        JJ                33        77                33        77                           ZZ
+                        JJ             3333        77              3333        77                        ZZZZZZZ
+                        JJ             3333        77              3333        77                        ZZZZZZZ
+                        JJ                33       77                 33       77                         ZZ
+                  JJ    JJ                33       77                 33       77                        ZZ
+                  JJ    JJ      33        33       77       33        33       77                       ZZ
+                  JJJJJJJJ      333333333333       77       333333333333       77                      ZZZZZZZZZZZ
+                   JJJJJJ        3333333333        77        3333333333        77                     ZZZZZZZZZZZZ

@@ -1,0 +1,16 @@
+C     DDOT KERNEL: S = S + X*Y, N=1000, NREP TIMES
+      REAL*8 X(1000),Y(1000),S
+      DATA NREP/200000/
+      N=1000
+      DO 10 I=1,N
+      X(I)=DFLOAT(I)*1.0D-3
+   10 Y(I)=1.0D0/DFLOAT(I)
+      S=0.0D0
+      DO 30 IR=1,NREP
+      DO 20 I=1,N
+   20 S=S+X(I)*Y(I)
+   30 CONTINUE
+      WRITE(6,100) S
+  100 FORMAT(' DDOT CHECKSUM ',D22.15)
+      STOP
+      END

@@ -1,0 +1,1515 @@
+                                                J E S 2   J O B   L O G
+
+
+17.29.19 JOB 3752  IEF677I WARNING MESSAGE(S) FOR JOB FHLINPK2 ISSUED
+17.29.19 JOB 3752  $HASP373 FHLINPK2 STARTED - INIT  1 - CLASS A - SYS TK5R
+17.29.19 JOB 3752  IEF403I FHLINPK2 - STARTED - TIME=17.29.19
+17.29.19 JOB 3752  IEFACTRT - Stepname  Procstep  Program   Retcode
+17.29.19 JOB 3752  FHLINPK2   S1        FORT      IEKAA00   RC= 0000
+17.29.19 JOB 3752  FHLINPK2   S1        LKED      IEWL      RC= 0000
+17.29.33 JOB 3752  FHLINPK2   S1        GO        PGM=*.DD  RC= 0000
+17.29.33 JOB 3752  IEF404I FHLINPK2 - ENDED - TIME=17.29.33
+17.29.33 JOB 3752  $HASP395 FHLINPK2 ENDED
+
+
+------ JES2 JOB STATISTICS ------
+
+
+ 12 OCT 26 JOB EXECUTION DATE
+
+
+       133 CARDS READ
+
+
+     1,372 SYSOUT PRINT RECORDS
+
+
+         0 SYSOUT PUNCH RECORDS
+
+
+      0.23 MINUTES EXECUTION TIME
+
+    1     //FHLINPK2 JOB (1),'FORTH',                                             JOB 3752
+          //             CLASS=A,MSGCLASS=Z,MSGLEVEL=(1,1),
+          //             USER=HERC01,PASSWORD=
+    2     //S1       EXEC FORTHCLG,SOUT=Z,PARM.FORT='OPT=2,LIST,MAP'
+    3     XXFORTHCLG  PROC SOUT='*'                                               00000100
+    4     XXFORT   EXEC  PGM=IEKAA00                                              00000200
+    5     XXSYSPRINT DD  SYSOUT=&SOUT                                             00000300
+    6     XXSYSPUNCH DD  SYSOUT=B                                                 00000400
+    7     XXSYSLIN   DD  DSNAME=&LOADSET,UNIT=SYSSQ,DISP=(MOD,PASS),             *00000500
+          XX             SPACE=(400,(200,50),RLSE)                                00000600
+    8     //FORT.SYSIN DD *
+    9     XXLKED EXEC PGM=IEWL,PARM=(MAP,LET,LIST),COND=(4,LT,FORT)               00000700
+   10     XXSYSLIB   DD  DSNAME=SYS1.FORTLIB,DISP=SHR                             00000800
+   11     XXSYSPRINT DD  SYSOUT=&SOUT                                             00000900
+   12     XXSYSLMOD  DD  DSNAME=&GOSET(MAIN),UNIT=SYSDA,DISP=(,PASS),            *00001000
+          XX             SPACE=(3072,(30,10,1),RLSE)                              00001100
+   13     XXSYSUT1 DD DSNAME=&SYSUT1,UNIT=SYSDA,SPACE=(1024,(200,20)),SEP=SYSLMOD 00001200
+   14     XXSYSLIN DD    DSNAME=&LOADSET,DISP=(OLD,DELETE)                        00001300
+   15     XX         DD  DDNAME=SYSIN                                             00001400
+   16     XXGO  EXEC PGM=*.LKED.SYSLMOD,COND=((4,LT,FORT),(4,LT,LKED))            00001500
+   17     XXFT05F001 DD  DDNAME=SYSIN                                             00001600
+   18     XXFT06F001 DD  SYSOUT=&SOUT                                             00001700
+   19     XXFT07F001 DD SYSOUT=B                                                  00001800
+   20     //GO.SYSIN DD DUMMY
+          //
+
+ STMT NO. MESSAGE
+-
+    5     IEF653I SUBSTITUTION JCL - SYSOUT=Z
+   11     IEF653I SUBSTITUTION JCL - SYSOUT=Z
+   18     IEF653I SUBSTITUTION JCL - SYSOUT=Z
+   16     IEF686I DDNAME REFERRED TO ON DDNAME KEYWORD IN PRIOR STEP WAS NOT RESOLVED
+IEF236I ALLOC. FOR FHLINPK2 FORT S1
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I JES2 ALLOCATED TO SYSPUNCH
+IEF237I 290  ALLOCATED TO SYSLIN
+IEF237I JES2 ALLOCATED TO SYSIN
+IEF142I FHLINPK2 FORT S1 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   JES2.JOB03752.SO0102                         SYSOUT
+IEF285I   JES2.JOB03752.SO0103                         SYSOUT
+IEF285I   SYS26285.T172919.RA000.FHLINPK2.LOADSET      PASSED        *------141
+IEF285I   VOL SER NOS= WORK01.
+IEF285I   JES2.JOB03752.SI0101                         SYSIN
+IEF373I STEP /FORT    / START 26285.1729
+IEF374I STEP /FORT    / STOP  26285.1729 CPU    0MIN 00.04SEC SRB    0MIN 00.02SEC VIRT   832K SYS   212K
+************************************************************************************************************************************
+*     1. Jobstep of job: FHLINPK2    Stepname: FORT        Program name: IEKAA00    Executed on 12.10.26 from 17.29.19 to 17.29.19 *
+*         elapsed time  00:00:00,11                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,06               Virtual Storage used:    832K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,06   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:    125                                                                           *
+*     DMY.......0 DMY.......0 290.....141 DMY.......0                                                                              *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,10                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR FHLINPK2 LKED S1
+IEF237I 390  ALLOCATED TO SYSLIB
+IEF237I JES2 ALLOCATED TO SYSPRINT
+IEF237I 292  ALLOCATED TO SYSLMOD
+IEF237I 291  ALLOCATED TO SYSUT1
+IEF237I 290  ALLOCATED TO SYSLIN
+IEF237I DMY  ALLOCATED TO
+IEF142I FHLINPK2 LKED S1 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS1.FORTLIB                                 KEPT          *-------66
+IEF285I   VOL SER NOS= TK5RES.
+IEF285I   JES2.JOB03752.SO0104                         SYSOUT
+IEF285I   SYS26285.T172919.RA000.FHLINPK2.GOSET        PASSED        *-------25
+IEF285I   VOL SER NOS= WORK03.
+IEF285I   SYS26285.T172919.RA000.FHLINPK2.SYSUT1       DELETED       *-------36
+IEF285I   VOL SER NOS= WORK02.
+IEF285I   SYS26285.T172919.RA000.FHLINPK2.LOADSET      DELETED       *------142
+IEF285I   VOL SER NOS= WORK01.
+IEF373I STEP /LKED    / START 26285.1729
+IEF374I STEP /LKED    / STOP  26285.1729 CPU    0MIN 00.02SEC SRB    0MIN 00.01SEC VIRT   264K SYS   208K
+************************************************************************************************************************************
+*     2. Jobstep of job: FHLINPK2    Stepname: LKED        Program name: IEWL       Executed on 12.10.26 from 17.29.19 to 17.29.19 *
+*         elapsed time  00:00:00,04                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:00,03               Virtual Storage used:    264K         Page-out:      0                           *
+*           corr. CPU:  00:00:00,03   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      0                                                                           *
+*     390......66 DMY.......0 292......25 291......36 290.....142 DMY.......0                                                      *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):          0,05                                             *
+************************************************************************************************************************************
+IEF236I ALLOC. FOR FHLINPK2 GO S1
+IEF237I 292  ALLOCATED TO PGM=*.DD
+IEF237I DMY  ALLOCATED TO FT05F001
+IEF237I JES2 ALLOCATED TO FT06F001
+IEF237I JES2 ALLOCATED TO FT07F001
+IEF142I FHLINPK2 GO S1 - STEP WAS EXECUTED - COND CODE 0000
+IEF285I   SYS26285.T172919.RA000.FHLINPK2.GOSET        KEPT          *--------0
+IEF285I   VOL SER NOS= WORK03.
+IEF285I   JES2.JOB03752.SO0105                         SYSOUT
+IEF285I   JES2.JOB03752.SO0106                         SYSOUT
+IEF373I STEP /GO      / START 26285.1729
+IEF374I STEP /GO      / STOP  26285.1729 CPU    0MIN 13.64SEC SRB    0MIN 00.00SEC VIRT   112K SYS   204K
+************************************************************************************************************************************
+*     3. Jobstep of job: FHLINPK2    Stepname: GO          Program name: PGM=*.DD   Executed on 12.10.26 from 17.29.19 to 17.29.33 *
+*         elapsed time  00:00:13,66                      CPU-Identifier:  TK5R           Page-in:      0                           *
+*             CPU time  00:00:13,64               Virtual Storage used:    112K         Page-out:      0                           *
+*           corr. CPU:  00:00:13,64   CPU time has been corrected by  1 / 1,0  multiplier                                          *
+*                                                                                                                                  *
+*     I/O Operation                                                                                                                *
+*     Number of records read via DD * or DD DATA:      0                                                                           *
+*     292.......0 DMY.......0 DMY.......0 DMY.......0                                                                              *
+*                                                                                                                                  *
+*                                          Charge for step (w/o SYSOUT):         22,73                                             *
+************************************************************************************************************************************
+IEF237I 292  ALLOCATED TO SYS00001
+IEF285I   SYS26285.T172933.RA000.FHLINPK2.R0000001     KEPT          *--------0
+IEF285I   VOL SER NOS= WORK03.
+IEF285I   SYS26285.T172919.RA000.FHLINPK2.GOSET        DELETED
+IEF285I   VOL SER NOS= WORK03.
+IEF375I  JOB /FHLINPK2/ START 26285.1729
+IEF376I  JOB /FHLINPK2/ STOP  26285.1729 CPU    0MIN 13.70SEC SRB    0MIN 00.03SEC
+
+ LEVEL 21.8 ( JUN 74 )                          OS/360  FORTRAN H                                 DATE  26.285/17.29.19
+
+           COMPILER OPTIONS - NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+                              SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+                C     LINPACK 100: DGEFA + DGESL WITH THE BLAS, AS DONGARRA WROTE THEM
+   ISN 0002           REAL*8 A(101,100),B(100),X(100),RESID,S
+   ISN 0003           INTEGER IPVT(100)
+   ISN 0004           DATA NREP/1000/
+   ISN 0005           N=100
+   ISN 0006           LDA=101
+   ISN 0007           DO 50 IR=1,NREP
+   ISN 0008           CALL MATGEN(A,LDA,N,B)
+   ISN 0009           CALL DGEFA(A,LDA,N,IPVT,INFO)
+   ISN 0010           CALL DGESL(A,LDA,N,IPVT,B,0)
+   ISN 0011        50 CONTINUE
+   ISN 0012           S=0.0D0
+   ISN 0013           DO 60 I=1,N
+   ISN 0014        60 S=S+B(I)
+   ISN 0015           WRITE(6,100) INFO,S
+   ISN 0016       100 FORMAT(' LINPACK INFO ',I3,' CHECKSUM ',D22.15)
+   ISN 0017           STOP
+   ISN 0018           END
+                                                                                                               PAGE 002
+
+                   000000  47 F0 F 00C    MAIN      BC    15,12(0,15)
+                   000004  07                       DC    XL1'07'
+                   000005  D4C1C9D5404040           DC    CL7'MAIN   '
+                   00000C  90 EC D 00C              STM   14,12,12(13)
+                   000010  98 23 F 020              LM    2,3,32(15)
+                   000014  50 30 D 008              ST    3,8(13)
+                   000018  50 D0 3 004              ST    13,4(0,3)
+                   00001C  07 F2                    BCR   15,2
+
+CONSTANTS
+                   0000D8  00000000                 DC    XL4'00000000'
+                   0000DC  00000000                 DC    XL4'00000000'
+                   0000E0  00000000                 DC    XL4'00000000'
+                   0000E4  00000001                 DC    XL4'00000001'
+                   0000E8  00000064                 DC    XL4'00000064'
+                   0000EC  00000065                 DC    XL4'00000065'
+                   0000F0  00000328                 DC    XL4'00000328'
+ADCONS FOR VARIABLES AND CONSTANTS
+ADCONS FOR EXTERNAL REFERENCES
+                   014170  00000000                 DC    XL4'00000000'                       DGEFA
+                   014174  00000000                 DC    XL4'00000000'                       DGESL
+                   014178  00000000                 DC    XL4'00000000'                      IBCOM#
+                   01417C  00000000                 DC    XL4'00000000'                      MATGEN
+DATA CONSTANTS
+                   000108  000003E8                 DC    XL4'000003E8'                        NREP
+                   01418C  41 60 0 001      100000  LA     6,   1( 0, 0)                          1
+                   014190  41 70 0 008              LA     7,   8( 0, 0)                          8
+                   014194  41 80 0 064              LA     8, 100( 0, 0)                         64
+                   014198  41 90 0 065              LA     9, 101( 0, 0)                         65
+                   01419C  58 A0 D 0B8              L     10, 184( 0,13)                       NREP
+                   0141A0  50 80 D 0A8              ST     8, 168( 0,13)                          N
+                   0141A4  50 90 D 0B0              ST     9, 176( 0,13)                        LDA
+                   0141A8  41 40 0 001              LA     4,   1( 0, 0)                          1
+                   0141AC  58 30 D 0B8              L      3, 184( 0,13)                       NREP
+                   0141B0  41 20 0 001              LA     2,   1( 0, 0)                          1
+                   0141B4  41 10 D 04C      100001  LA     1,  76( 0,13)
+                   0141B8  58 F0 C 00C              L     15,  12( 0,12)                     MATGEN
+                   0141BC  05 EF                    BALR  14,15
+                   0141BE  41 10 D 05C              LA     1,  92( 0,13)
+                   0141C2  58 F0 C 000              L     15,   0( 0,12)                      DGEFA
+                   0141C6  05 EF                    BALR  14,15
+                   0141C8  41 10 D 070              LA     1, 112( 0,13)
+                   0141CC  58 F0 C 004              L     15,   4( 0,12)                      DGESL
+                   0141D0  05 EF                    BALR  14,15
+                   0141D2  87 42 C 044          50  BXLE   4,  68( 2,12)                      »
+                   0141D6  68 00 D 088      100002  LD     0, 136( 0,13)                          0
+                   0141DA  60 00 D 0C0              STD    0, 192( 0,13)                          S
+                   0141DE  58 50 D 0A8              L      5, 168( 0,13)                          N
+                                                                                                               PAGE 003
+
+                   0141E2  89 50 0 003              SLL    5,   3( 0, 0)
+                   0141E6  68 20 D 0C0              LD     2, 192( 0,13)                          S
+                   0141EA  18 47                    LR     4, 7
+                   0141EC  18 27                    LR     2, 7
+                   0141EE  18 35                    LR     3, 5
+                   0141F0  6A 24 D 250          60  AD     2, 592( 4,13)
+                   0141F4  87 42 C 080              BXLE   4, 128( 2,12)                         60
+                   0141F8  60 20 D 0C0              STD    2, 192( 0,13)                          S
+                   0141FC  58 F0 C 008      100003  L     15,   8( 0,12)                     IBCOM#
+                   014200  45 E0 F 004              BAL   14,   4( 0,15)
+                   014204  00000006                 DC    XL4'00000006'                           6
+                   014208  00000028                 DC    XL4'00000028'
+                   01420C  45 E0 F 008              BAL   14,   8( 0,15)
+                   014210  0450D0B4                 DC    XL4'0450D0B4'                        INFO
+                   014214  45 E0 F 008              BAL   14,   8( 0,15)
+                   014218  0860D0C0                 DC    XL4'0860D0C0'                           S
+                   01421C  45 E0 F 010              BAL   14,  16( 0,15)
+                   014220  58 F0 C 008              L     15,   8( 0,12)                     IBCOM#
+                   014224  45 E0 F 034              BAL   14,  52( 0,15)
+                   014228  05                       DC    XL1'05'
+                   014229  40                       DC    XL1'40'
+                   01422A  40                       DC    XL1'40'
+                   01422B  40                       DC    XL1'40'
+                   01422C  40                       DC    XL1'40'
+                   01422D  F0                       DC    XL1'F0'
+ADDRESS OF EPILOGUE
+                   01422E  58 F0 C 008              L     15,   8( 0,12)
+                   014232  45 E0 F 034              BAL   14,  52( 0,15)                     IBCOM#
+                   014236  0540                     DC    XL2'0540'
+                   014238  404040F0                 DC    XL4'404040F0'
+ADDRESS OF PROLOGUE
+                   01423E  58 C0 3 048              L     12,  72( 0, 3)
+                   014242  58 F0 C 008              L     15,   8( 0,12)
+                   014246  45 E0 F 040              BAL   14,  64( 0,15)                     IBCOM#
+                   01424A  18 D3                    LR    13, 3
+                   01424C  47 F0 C 01C              BC    15,  28( 0,12)
+ADCON FOR PROLOGUE
+                   000020  0001423E                 DC    XL4'0001423E'
+ADCON FOR SAVE AREA
+                   000024  00000050                 DC    XL4'00000050'
+ADCON FOR EPILOGUE
+                   000050  0001422E                 DC    XL4'0001422E'
+ADCON FOR REG 12
+                   000098  00014170                 DC    XL4'00014170'
+ADCONS FOR PARAMETER LISTS
+                   00009C  000005C8                 DC    XL4'000005C8'                           A
+                   0000A0  00000100                 DC    XL4'00000100'                         LDA
+                   0000A4  000000F8                 DC    XL4'000000F8'                           N
+                                                                                                               PAGE 004
+
+                   0000A8  800002A8                 DC    XL4'800002A8'                           B
+                   0000AC  000005C8                 DC    XL4'000005C8'                           A
+                   0000B0  00000100                 DC    XL4'00000100'                         LDA
+                   0000B4  000000F8                 DC    XL4'000000F8'                           N
+                   0000B8  00000118                 DC    XL4'00000118'                        IPVT
+                   0000BC  80000104                 DC    XL4'80000104'                        INFO
+                   0000C0  000005C8                 DC    XL4'000005C8'                           A
+                   0000C4  00000100                 DC    XL4'00000100'                         LDA
+                   0000C8  000000F8                 DC    XL4'000000F8'                           N
+                   0000CC  00000118                 DC    XL4'00000118'                        IPVT
+                   0000D0  000002A8                 DC    XL4'000002A8'                           B
+                   0000D4  800000E0                 DC    XL4'800000E0'
+TEMPORARIES AND PHASE 20 CONSTANTS
+                   014180  00000008                 DC    XL4'00000008'
+                   014184  00000000                 DC    XL4'00000000'
+                   014188  00000000                 DC    XL4'00000000'
+ADCONS FOR B BLOCK LABELS
+                                                     /     MAIN /     SIZE OF PROGRAM 014250 HEXADECIMAL BYTES PAGE 005
+
+
+      NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.
+          A SFA     R*8  0005C8           B SFA     R*8  0002A8           I SF      I*4  0000F4           N SFA     I*4  0000F8
+          S SF      R*8  000110           X         R*8    N.R.          IR SF      I*4  0000FC         LDA SFA     I*4  000100
+       INFO SFA     I*4  000104        IPVT SFA     I*4  000118        NREP  F      I*4  000108       DGEFA SF  XF  R*4  000000
+      DGESL SF  XF  R*4  000000       RESID         R*8    N.R.      IBCOM#  F  XF  I*4  000000      MATGEN SF  XF  I*4  000000
+
+    LABEL   ADDR                LABEL   ADDR                LABEL   ADDR                LABEL   ADDR           PAGE 006
+
+       50  0141D2                  60  0141F0
+
+*OPTIONS IN EFFECT*      NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+
+*OPTIONS IN EFFECT*      SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+
+*STATISTICS*     SOURCE STATEMENTS =      17 ,PROGRAM SIZE =    82512
+
+*STATISTICS*  NO  DIAGNOSTICS GENERATED
+
+****** END OF COMPILATION ******                                       689K BYTES OF CORE NOT USED
+ LEVEL 21.8 ( JUN 74 )                          OS/360  FORTRAN H                                 DATE  26.285/17.29.19
+
+           COMPILER OPTIONS - NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+                              SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+   ISN 0002           SUBROUTINE MATGEN(A,LDA,N,B)
+   ISN 0003           REAL*8 A(LDA,1),B(1)
+   ISN 0004           INIT=1325
+   ISN 0005           DO 30 J=1,N
+   ISN 0006           DO 20 I=1,N
+   ISN 0007           INIT=MOD(3125*INIT,65536)
+   ISN 0008           A(I,J)=(DFLOAT(INIT)-32768.0D0)/16384.0D0
+   ISN 0009        20 CONTINUE
+   ISN 0010        30 CONTINUE
+   ISN 0011           DO 35 I=1,N
+   ISN 0012        35 B(I)=0.0D0
+   ISN 0013           DO 50 J=1,N
+   ISN 0014           DO 40 I=1,N
+   ISN 0015        40 B(I)=B(I)+A(I,J)
+   ISN 0016        50 CONTINUE
+   ISN 0017           RETURN
+   ISN 0018           END
+                                                                                                               PAGE 002
+
+                   000000  47 F0 F 00C    MATGEN    BC    15,12(0,15)
+                   000004  07                       DC    XL1'07'
+                   000005  D4C1E3C7C5D540           DC    CL7'MATGEN '
+                   00000C  90 EC D 00C              STM   14,12,12(13)
+                   000010  18 4D                    LR    4,13
+                   000014  98 CD F 020              LM    12,13,32(15)
+                   000018  50 40 D 004              ST    4,4(0,13)
+                   00001A  50 D0 4 008              ST    13,8(0,4)
+                   00001E  07 FC                    BCR   15,12
+
+TEMPORARY FOR FLOAT/FIX
+CONSTANTS
+                   000080  00000000                 DC    XL4'00000000'
+                   000084  00000000                 DC    XL4'00000000'
+                   000088  44400000                 DC    XL4'44400000'
+                   00008C  00000000                 DC    XL4'00000000'
+                   000090  44800000                 DC    XL4'44800000'
+                   000094  00000000                 DC    XL4'00000000'
+                   000098  4E000000                 DC    XL4'4E000000'
+                   00009C  00000000                 DC    XL4'00000000'
+                   0000A0  00000001                 DC    XL4'00000001'
+                   0000A4  0000052D                 DC    XL4'0000052D'
+                   0000A8  00000C35                 DC    XL4'00000C35'
+                   0000AC  00010000                 DC    XL4'00010000'
+ADCONS FOR VARIABLES AND CONSTANTS
+ADCONS FOR EXTERNAL REFERENCES
+                   0000C8  00000000                 DC    XL4'00000000'                           A
+                   0000D0  00000000                 DC    XL4'00000000'                           B
+                   000104  58 70 D 0A0      100001  L      7, 160( 0,13)
+                   000108  41 00 0 52D              LA     0,1325( 0, 0)                        52D
+                   00010C  50 00 D 098              ST     0, 152( 0,13)                       INIT
+                   000110  58 20 D 094              L      2, 148( 0,13)                        LDA
+                   000114  89 20 0 003              SLL    2,   3( 0, 0)
+                   000118  50 20 D 0D0              ST     2, 208( 0,13)                       .Q08
+                   00011C  58 30 D 090              L      3, 144( 0,13)                          N
+                   000120  89 30 0 003              SLL    3,   3( 0, 0)
+                   000124  50 30 D 0C4              ST     3, 196( 0,13)                       .Q05
+                   000128  50 30 D 0D8              ST     3, 216( 0,13)                       .Q10
+                   00012C  18 12                    LR     1, 2
+                   00012E  5C 00 D 078              M      0, 120( 0,13)                          1
+                   000132  50 10 D 0D4              ST     1, 212( 0,13)                       .Q09
+                   000136  18 12                    LR     1, 2
+                   000138  5C 00 D 078              M      0, 120( 0,13)                          1
+                   00013C  50 10 D 0B0              ST     1, 176( 0,13)                       .Q01
+                   000140  68 40 D 060              LD     4,  96( 0,13)           4440000000000000
+                   000144  58 B0 D 0B0              L     11, 176( 0,13)                       .Q01
+                   000148  41 A0 0 001              LA    10,   1( 0, 0)                          1
+                   00014C  58 90 D 084              L      9, 132( 0,13)                      10000
+                                                                                                               PAGE 003
+
+                   000150  41 80 0 C35              LA     8,3125( 0, 0)                        C35
+                   000154  41 40 0 008              LA     4,   8( 0, 0)                          8
+                   000158  68 60 D 068              LD     6, 104( 0,13)           4480000000000000
+                   00015C  18 5B            100002  LR     5,11
+                   00015E  5A 50 D 0C4              A      5, 196( 0,13)                       .Q05
+                   000162  18 04                    LR     0, 4
+                   000164  1A 0B                    AR     0,11
+                   000166  50 00 D 0C8              ST     0, 200( 0,13)                       .Q06
+                   00016A  58 60 D 0C8              L      6, 200( 0,13)                       .Q06
+                   00016E  18 38            100003  LR     3, 8
+                   000170  5C 20 D 098              M      2, 152( 0,13)                       INIT
+                   000174  18 03                    LR     0, 3
+                   000176  8E 00 0 020              SRDA   0,  32( 0, 0)
+                   00017A  1D 09                    DR     0, 9
+                   00017C  50 00 D 098              ST     0, 152( 0,13)                       INIT
+                   000180  58 00 D 098              L      0, 152( 0,13)                       INIT
+                   000184  68 20 D 070              LD     2, 112( 0,13)
+                   000188  60 20 D 050              STD    2,  80( 0,13)
+                   00018C  12 00                    LTR    0, 0
+                   00018E  47 40 D 176              BC     4, 374( 0,13)
+                   000192  50 00 D 054              ST     0,  84( 0,13)
+                   000196  6A 20 D 050              AD     2,  80( 0,13)
+                   00019A  47 F0 D 180              BC    15, 384( 0,13)
+                   00019E  10 00                    LPR    0, 0
+                   0001A0  50 00 D 054              ST     0,  84( 0,13)
+                   0001A4  6B 20 D 050              SD     2,  80( 0,13)
+                   0001A8  2B 26                    SDR    2, 6
+                   0001AA  2D 24                    DDR    2, 4
+                   0001AC  60 26 7 000              STD    2,   0( 6, 7)                          A
+                   0001B0  87 64 D 146          20  BXLE   6, 326( 4,13)                      ƒ
+                   0001B4  5A A0 D 078          30  A     10, 120( 0,13)                          1
+                   0001B8  5A B0 D 0D4              A     11, 212( 0,13)                       .Q09
+                   0001BC  59 A0 D 090              C     10, 144( 0,13)                          N
+                   0001C0  47 D0 D 134              BC    13, 308( 0,13)                       ·0
+                   0001C4  68 20 D 058      100005  LD     2,  88( 0,13)                          0
+                   0001C8  41 B0 0 008              LA    11,   8( 0, 0)                          8
+                   0001CC  58 30 D 0C4              L      3, 196( 0,13)                       .Q05
+                   0001D0  41 20 0 008              LA     2,   8( 0, 0)                          8
+                   0001D4  58 60 D 0A8              L      6, 168( 0,13)
+                   0001D8  60 2B 6 000          35  STD    2,   0(11, 6)                          B
+                   0001DC  87 B2 D 1B0              BXLE  11, 432( 2,13)                         35
+                   0001E0  41 10 0 001      100006  LA     1,   1( 0, 0)                          1
+                   0001E4  5C 00 D 0D0              M      0, 208( 0,13)                       .Q08
+                   0001E8  50 10 D 0CC              ST     1, 204( 0,13)                       .Q07
+                   0001EC  41 10 0 001              LA     1,   1( 0, 0)                          1
+                   0001F0  5C 00 D 0D0              M      0, 208( 0,13)                       .Q08
+                   0001F4  50 10 D 0B0              ST     1, 176( 0,13)                       .Q01
+                   0001F8  41 A0 0 001              LA    10,   1( 0, 0)                          1
+                                                                                                               PAGE 004
+
+                   0001FC  58 B0 D 0B0              L     11, 176( 0,13)                       .Q01
+                   000200  41 20 0 008              LA     2,   8( 0, 0)                          8
+                   000204  41 80 0 001              LA     8,   1( 0, 0)                          1
+                   000208  58 90 D 090              L      9, 144( 0,13)                          N
+                   00020C  58 60 D 0A8              L      6, 168( 0,13)
+                   000210  58 30 D 0D8              L      3, 216( 0,13)                       .Q10
+                   000214  18 02            100007  LR     0, 2
+                   000216  1A 0B                    AR     0,11
+                   000218  50 00 D 0C0              ST     0, 192( 0,13)                       .Q04
+                   00021C  18 42                    LR     4, 2
+                   00021E  58 50 D 0C0              L      5, 192( 0,13)                       .Q04
+                   000222  68 24 6 000          40  LD     2,   0( 4, 6)                          B
+                   000226  6A 25 7 000              AD     2,   0( 5, 7)
+                   00022A  60 24 6 000              STD    2,   0( 4, 6)                          B
+                   00022E  1A 52                    AR     5, 2
+                   000230  87 42 D 1FA              BXLE   4, 506( 2,13)                         40
+                   000234  5A B0 D 0CC          50  A     11, 204( 0,13)                       .Q07
+                   000238  87 A8 D 1EC              BXLE  10, 492( 8,13)                       ·
+Ì
+                   00023C  1B FF            100009  SR    15,15
+                   00023E  58 E0 D 000              L     14,   0( 0,13)
+                   000242  07 FE                    BCR   15,14
+ADDRESS OF EPILOGUE
+                   000244  58 80 D 004              L      8,   4( 0,13)
+                   000248  58 E0 8 00C              L     14,  12( 0, 8)
+                   00024C  58 10 8 018              L      1,  24( 0, 8)
+                   000250  18 D8                    LR    13, 8
+                   000252  98 2C D 01C              LM     2,  28(12,13)
+                   000256  92 FF D 00C              MVI   15,  12(15,13)
+                   00025A  07 FE                    BCR   15,14
+ADDRESS OF PROLOGUE
+                   00025C  98 46 1 004              LM     4,   4( 6, 1)
+                   000260  58 20 4 000              L      2,   0( 0, 4)
+                   000264  50 20 D 094              ST     2, 148( 0,13)                        LDA
+                   000268  58 20 5 000              L      2,   0( 0, 5)
+                   00026C  50 20 D 090              ST     2, 144( 0,13)                          N
+                   000270  58 20 1 000              L      2,   0( 0, 1)
+                   000274  41 30 2 000              LA     3,   0( 0, 2)
+                   000278  41 50 0 008              LA     5,   8( 0, 0)
+                   00027C  1B 25                    SR     2, 5
+                   00027E  5C 40 D 094              M      4, 148( 0,13)
+                   000282  1B 25                    SR     2, 5
+                   000284  50 20 D 0A0              ST     2, 160( 0,13)
+                   000288  50 30 D 0A4              ST     3, 164( 0,13)                          A
+                   00028C  58 20 1 00C              L      2,  12( 0, 1)
+                   000290  41 30 2 000              LA     3,   0( 0, 2)
+                   000294  41 50 0 008              LA     5,   8( 0, 0)
+                   000298  1B 25                    SR     2, 5
+                   00029A  50 20 D 0A8              ST     2, 168( 0,13)
+
+                                                                                                               PAGE 005
+
+                   00029E  50 30 D 0AC              ST     3, 172( 0,13)                          B
+                   0002A2  47 F0 D 0DC              BC    15, 220( 0,13)
+ADCON FOR PROLOGUE
+                   000020  0000025C                 DC    XL4'0000025C'
+ADCON FOR SAVE AREA
+                   000024  00000028                 DC    XL4'00000028'
+ADCON FOR EPILOGUE
+                   000028  00000244                 DC    XL4'00000244'
+TEMPORARIES AND PHASE 20 CONSTANTS
+                   0000D8  00000000                 DC    XL4'00000000'
+                   0000DC  00000008                 DC    XL4'00000008'
+                   0000E0  00000000                 DC    XL4'00000000'
+                   0000E4  00000000                 DC    XL4'00000000'
+                   0000E8  00000000                 DC    XL4'00000000'
+                   0000EC  00000000                 DC    XL4'00000000'
+                   0000F0  00000000                 DC    XL4'00000000'
+                   0000F4  00000000                 DC    XL4'00000000'
+                   0000F8  00000000                 DC    XL4'00000000'
+                   0000FC  00000000                 DC    XL4'00000000'
+                   000100  00000000                 DC    XL4'00000000'
+ADCONS FOR B BLOCK LABELS
+                                                     /   MATGEN /     SIZE OF PROGRAM 0002A6 HEXADECIMAL BYTES PAGE 006
+
+
+      NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.
+          A SF  XR  R*8  000000           B SF  XR  R*8  000000           I SF      I*4  0000B0           J SF      I*4  0000B4
+          N  F      I*4  0000B8         LDA         I*4  0000BC        INIT SFA     I*4  0000C0      MATGEN         I*4  0000C4
+
+    LABEL   ADDR                LABEL   ADDR                LABEL   ADDR                LABEL   ADDR           PAGE 007
+
+       20  0001B0                  30  0001B4                  35  0001D8                  40  000222
+       50  000234
+
+*OPTIONS IN EFFECT*      NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+
+*OPTIONS IN EFFECT*      SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+
+*STATISTICS*     SOURCE STATEMENTS =      17 ,PROGRAM SIZE =      678
+
+*STATISTICS*  NO  DIAGNOSTICS GENERATED
+
+****** END OF COMPILATION ******                                       689K BYTES OF CORE NOT USED
+ LEVEL 21.8 ( JUN 74 )                          OS/360  FORTRAN H                                 DATE  26.285/17.29.19
+
+           COMPILER OPTIONS - NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+                              SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+   ISN 0002           SUBROUTINE DGEFA(A,LDA,N,IPVT,INFO)
+   ISN 0003           INTEGER LDA,N,IPVT(1),INFO
+   ISN 0004           REAL*8 A(LDA,1),T
+   ISN 0005           INFO=0
+   ISN 0006           NM1=N-1
+   ISN 0007           IF (NM1 .LT. 1) GO TO 70
+   ISN 0009           DO 60 K=1,NM1
+   ISN 0010           KP1=K+1
+   ISN 0011           L=IDAMAX(N-K+1,A(K,K),1)+K-1
+   ISN 0012           IPVT(K)=L
+   ISN 0013           IF (A(L,K) .EQ. 0.0D0) GO TO 40
+   ISN 0015           IF (L .EQ. K) GO TO 10
+   ISN 0017           T=A(L,K)
+   ISN 0018           A(L,K)=A(K,K)
+   ISN 0019           A(K,K)=T
+   ISN 0020        10 CONTINUE
+   ISN 0021           T=-1.0D0/A(K,K)
+   ISN 0022           CALL DSCAL(N-K,T,A(K+1,K),1)
+   ISN 0023           DO 30 J=KP1,N
+   ISN 0024           T=A(L,J)
+   ISN 0025           IF (L .EQ. K) GO TO 20
+   ISN 0027           A(L,J)=A(K,J)
+   ISN 0028           A(K,J)=T
+   ISN 0029        20 CONTINUE
+   ISN 0030           CALL DAXPY(N-K,T,A(K+1,K),1,A(K+1,J),1)
+   ISN 0031        30 CONTINUE
+   ISN 0032           GO TO 50
+   ISN 0033        40 CONTINUE
+   ISN 0034           INFO=K
+   ISN 0035        50 CONTINUE
+   ISN 0036        60 CONTINUE
+   ISN 0037        70 CONTINUE
+   ISN 0038           IPVT(N)=N
+   ISN 0039           IF (A(N,N) .EQ. 0.0D0) INFO=N
+   ISN 0041           RETURN
+   ISN 0042           END
+
+                                                                                                               PAGE 002
+
+                   000000  47 F0 F 00C    DGEFA     BC    15,12(0,15)
+                   000004  07                       DC    XL1'07'
+                   000005  C4C7C5C6C14040           DC    CL7'DGEFA  '
+                   00000C  90 EC D 00C              STM   14,12,12(13)
+                   000010  18 4D                    LR    4,13
+                   000014  98 CD F 020              LM    12,13,32(15)
+                   000018  50 40 D 004              ST    4,4(0,13)
+                   00001A  50 D0 4 008              ST    13,8(0,4)
+                   00001E  07 FC                    BCR   15,12
+
+CONSTANTS
+                   0000A8  00000000                 DC    XL4'00000000'
+                   0000AC  00000000                 DC    XL4'00000000'
+                   0000B0  41100000                 DC    XL4'41100000'
+                   0000B4  00000000                 DC    XL4'00000000'
+                   0000B8  00000000                 DC    XL4'00000000'
+                   0000BC  00000001                 DC    XL4'00000001'
+ADCONS FOR VARIABLES AND CONSTANTS
+ADCONS FOR EXTERNAL REFERENCES
+                   0000F0  00000000                 DC    XL4'00000000'                           A
+                   0000F8  00000000                 DC    XL4'00000000'                        IPVT
+                   000100  00000000                 DC    XL4'00000000'                       DAXPY
+                   000104  00000000                 DC    XL4'00000000'                       DSCAL
+                   000108  00000000                 DC    XL4'00000000'                      IDAMAX
+                   00015C  58 B0 D 0A4      100001  L     11, 164( 0,13)                          N
+                   000160  41 00 0 000              LA     0,   0( 0, 0)                          0
+                   000164  50 00 D 0B4              ST     0, 180( 0,13)                       INFO
+                   000168  18 3B                    LR     3,11
+                   00016A  5B 30 D 094              S      3, 148( 0,13)                          1
+                   00016E  50 30 D 0B0              ST     3, 176( 0,13)                        NM1
+                   000172  59 30 D 094              C      3, 148( 0,13)                          1
+                   000176  47 40 D 2F2              BC     4, 754( 0,13)                         70
+                   00017A  58 30 D 0AC      100002  L      3, 172( 0,13)                        LDA
+                   00017E  89 30 0 003              SLL    3,   3( 0, 0)
+                   000182  50 30 D 128              ST     3, 296( 0,13)                       .Q17
+                   000186  18 13                    LR     1, 3
+                   000188  5C 00 D 094              M      0, 148( 0,13)                          1
+                   00018C  50 10 D 104              ST     1, 260( 0,13)                       .Q09
+                   000190  58 50 D 0C8              L      5, 200( 0,13)
+                   000194  41 90 0 001              LA     9,   1( 0, 0)                          1
+                   000198  58 60 D 128              L      6, 296( 0,13)                       .Q17
+                   00019C  58 80 D 104              L      8, 260( 0,13)                       .Q09
+                   0001A0  58 00 D 094      100003  L      0, 148( 0,13)                          1
+                   0001A4  1A 09                    AR     0, 9
+                   0001A6  50 00 D 0A8              ST     0, 168( 0,13)                        KP1
+                   0001AA  18 2B                    LR     2,11
+                   0001AC  1B 29                    SR     2, 9
+                   0001AE  50 20 D 120              ST     2, 288( 0,13)                       .Q15
+                                                                                                               PAGE 003
+
+                   0001B2  5A 20 D 094              A      2, 148( 0,13)                          1
+                   0001B6  50 20 D 12C              ST     2, 300( 0,13)                       .T00
+                   0001BA  18 29                    LR     2, 9
+                   0001BC  89 20 0 003              SLL    2,   3( 0, 0)
+                   0001C0  50 20 D 118              ST     2, 280( 0,13)                       .Q13
+                   0001C4  18 19                    LR     1, 9
+                   0001C6  1C 06                    MR     0, 6
+                   0001C8  50 10 D 124              ST     1, 292( 0,13)                       .Q16
+                   0001CC  1A 21                    AR     2, 1
+                   0001CE  50 20 D 11C              ST     2, 284( 0,13)                       .Q14
+                   0001D2  41 02 5 000              LA     0,   0( 2, 5)                          A
+                   0001D6  50 00 D 050              ST     0,  80( 0,13)
+                   0001DA  41 10 D 04C              LA     1,  76( 0,13)
+                   0001DE  58 F0 D 0E0              L     15, 224( 0,13)                     IDAMAX
+                   0001E2  05 EF                    BALR  14,15
+                   0001E4  50 00 D 130              ST     0, 304( 0,13)                       .T01
+                   0001E8  18 49                    LR     4, 9
+                   0001EA  1A 40                    AR     4, 0
+                   0001EC  18 A4                    LR    10, 4
+                   0001EE  5B A0 D 094              S     10, 148( 0,13)                          1
+                   0001F2  18 39                    LR     3, 9
+                   0001F4  89 30 0 002              SLL    3,   2( 0, 0)
+                   0001F8  58 F0 D 0D0              L     15, 208( 0,13)
+                   0001FC  50 A3 F 000              ST    10,   0( 3,15)                       IPVT
+                   000200  18 3A                    LR     3,10
+                   000202  89 30 0 003              SLL    3,   3( 0, 0)
+                   000206  50 30 D 108              ST     3, 264( 0,13)                       .Q10
+                   00020A  5A 30 D 124              A      3, 292( 0,13)                       .Q16
+                   00020E  50 30 D 10C              ST     3, 268( 0,13)                       .Q11
+                   000212  68 23 5 000              LD     2,   0( 3, 5)                          A
+                   000216  60 20 D 110              STD    2, 272( 0,13)                       .Q12
+                   00021A  22 22                    LTDR   2, 2
+                   00021C  47 90 D 2DE              BC     9, 734( 0,13)                         40
+                   000220  19 A9            100004  CR    10, 9
+                   000222  47 90 D 20A              BC     9, 522( 0,13)                         10
+                   000226  68 42 5 000      100005  LD     4,   0( 2, 5)                          A
+                   00022A  60 43 5 000              STD    4,   0( 3, 5)                          A
+                   00022E  60 22 5 000              STD    2,   0( 2, 5)                          A
+                   000232  58 E0 D 11C          10  L     14, 284( 0,13)
+                   000236  68 20 D 088              LD     2, 136( 0,13)           4110000000000000
+                   00023A  6D 2E 5 000              DD     2,   0(14, 5)
+                   00023E  23 22                    LCDR   2, 2
+                   000240  60 20 D 0C0              STD    2, 192( 0,13)                          T
+                   000244  58 40 D 0A8              L      4, 168( 0,13)                        KP1
+                   000248  89 40 0 003              SLL    4,   3( 0, 0)
+                   00024C  58 20 D 124              L      2, 292( 0,13)                       .Q16
+                   000250  1A 24                    AR     2, 4
+                   000252  41 22 5 000              LA     2,   0( 2, 5)                          A
+                                                                                                               PAGE 004
+
+                   000256  50 20 D 060              ST     2,  96( 0,13)
+                   00025A  41 10 D 058              LA     1,  88( 0,13)
+                   00025E  58 F0 D 0DC              L     15, 220( 0,13)                      DSCAL
+                   000262  05 EF                    BALR  14,15
+                   000264  58 00 D 118              L      0, 280( 0,13)                       .Q13
+                   000268  50 00 D 0F4              ST     0, 244( 0,13)                       .Q05
+                   00026C  58 00 D 120              L      0, 288( 0,13)                       .Q15
+                   000270  50 00 D 100              ST     0, 256( 0,13)                       .Q08
+                   000274  50 40 D 0F8              ST     4, 248( 0,13)                       .Q06
+                   000278  18 39                    LR     3, 9
+                   00027A  1C 26                    MR     2, 6
+                   00027C  1A 34                    AR     3, 4
+                   00027E  50 30 D 0FC              ST     3, 252( 0,13)                       .Q07
+                   000282  18 16                    LR     1, 6
+                   000284  5C 00 D 0A8              M      0, 168( 0,13)                        KP1
+                   000288  50 10 D 0EC              ST     1, 236( 0,13)                       .Q03
+                   00028C  18 01                    LR     0, 1
+                   00028E  5A 00 D 108              A      0, 264( 0,13)                       .Q10
+                   000292  50 00 D 0E8              ST     0, 232( 0,13)                       .Q02
+                   000296  18 45                    LR     4, 5
+                   000298  58 50 D 0EC              L      5, 236( 0,13)                       .Q03
+                   00029C  58 60 D 0E8              L      6, 232( 0,13)                       .Q02
+                   0002A0  58 70 D 0A8              L      7, 168( 0,13)                        KP1
+                   0002A4  68 06 4 000      100006  LD     0,   0( 6, 4)                          A
+                   0002A8  60 00 D 0C0              STD    0, 192( 0,13)                          T
+                   0002AC  19 A9                    CR    10, 9
+                   0002AE  47 90 D 2A0              BC     9, 672( 0,13)                         20
+                   0002B2  18 25            100007  LR     2, 5
+                   0002B4  5A 20 D 0F4              A      2, 244( 0,13)                       .Q05
+                   0002B8  68 22 4 000              LD     2,   0( 2, 4)                          A
+                   0002BC  60 26 4 000              STD    2,   0( 6, 4)                          A
+                   0002C0  68 00 D 0C0              LD     0, 192( 0,13)                          T
+                   0002C4  60 02 4 000              STD    0,   0( 2, 4)                          A
+                   0002C8  18 35                20  LR     3, 5
+                   0002CA  5A 30 D 0F8              A      3, 248( 0,13)                       .Q06
+                   0002CE  58 E0 D 0FC              L     14, 252( 0,13)                       .Q07
+                   0002D2  41 0E 4 000              LA     0,   0(14, 4)                          A
+                   0002D6  50 00 D 070              ST     0, 112( 0,13)
+                   0002DA  41 33 4 000              LA     3,   0( 3, 4)                          A
+                   0002DE  50 30 D 078              ST     3, 120( 0,13)
+                   0002E2  41 10 D 068              LA     1, 104( 0,13)
+                   0002E6  58 F0 D 0D8              L     15, 216( 0,13)                      DAXPY
+                   0002EA  05 EF                    BALR  14,15
+                   0002EC  5A 70 D 094          30  A      7, 148( 0,13)                          1
+                   0002F0  1A 58                    AR     5, 8
+                   0002F2  1A 68                    AR     6, 8
+                   0002F4  19 7B                    CR     7,11
+                   0002F6  47 D0 D 27C              BC    13, 636( 0,13)                   ¦   ·Â™
+                                                                                                               PAGE 005
+
+                   0002FA  58 50 D 0C8      100008  L      5, 200( 0,13)
+                   0002FE  58 60 D 128              L      6, 296( 0,13)                       .Q17
+                   000302  47 F0 D 2E2              BC    15, 738( 0,13)                         50
+                   000306  50 90 D 0B4          40  ST     9, 180( 0,13)                       INFO
+                   00030A  58 90 D 0A8          60  L      9, 168( 0,13)                        KP1
+                   00030E  58 00 D 0A8              L      0, 168( 0,13)                        KP1
+                   000312  59 00 D 0B0              C      0, 176( 0,13)                        NM1
+                   000316  47 D0 D 178              BC    13, 376( 0,13)                   ¦  ç ·Àš
+                   00031A  18 3B                70  LR     3,11
+                   00031C  89 30 0 002              SLL    3,   2( 0, 0)
+                   000320  58 F0 D 0D0              L     15, 208( 0,13)
+                   000324  50 B3 F 000              ST    11,   0( 3,15)                       IPVT
+                   000328  18 3B                    LR     3,11
+                   00032A  89 30 0 003              SLL    3,   3( 0, 0)
+                   00032E  58 50 D 0AC              L      5, 172( 0,13)                        LDA
+                   000332  89 50 0 003              SLL    5,   3( 0, 0)
+                   000336  1C 4B                    MR     4,11
+                   000338  1A 53                    AR     5, 3
+                   00033A  58 F0 D 0C8              L     15, 200( 0,13)
+                   00033E  68 25 F 000              LD     2,   0( 5,15)                          A
+                   000342  22 22                    LTDR   2, 2
+                   000344  47 60 D 324              BC     6, 804( 0,13)                      ©
+                   000348  50 B0 D 0B4      100010  ST    11, 180( 0,13)                       INFO
+                   00034C  1B FF            100011  SR    15,15
+                   00034E  58 E0 D 000              L     14,   0( 0,13)
+                   000352  07 FE                    BCR   15,14
+ADDRESS OF EPILOGUE
+                   000354  58 80 D 004              L      8,   4( 0,13)
+                   000358  58 E0 8 00C              L     14,  12( 0, 8)
+                   00035C  58 10 8 018              L      1,  24( 0, 8)
+                   000360  58 30 1 008              L      3,   8( 0, 1)
+                   000364  58 40 D 0A4              L      4, 164( 0,13)                          N
+                   000368  50 40 3 000              ST     4,   0( 0, 3)
+                   00036C  58 30 1 010              L      3,  16( 0, 1)
+                   000370  58 40 D 0B4              L      4, 180( 0,13)                       INFO
+                   000374  50 40 3 000              ST     4,   0( 0, 3)
+                   000378  18 D8                    LR    13, 8
+                   00037A  98 2C D 01C              LM     2,  28(12,13)
+                   00037E  92 FF D 00C              MVI   15,  12(15,13)
+                   000382  07 FE                    BCR   15,14
+ADDRESS OF PROLOGUE
+                   000384  98 47 1 004              LM     4,   4( 7, 1)
+                   000388  58 20 4 000              L      2,   0( 0, 4)
+                   00038C  50 20 D 0AC              ST     2, 172( 0,13)                        LDA
+                   000390  58 20 5 000              L      2,   0( 0, 5)
+                   000394  50 20 D 0A4              ST     2, 164( 0,13)                          N
+                   000398  58 20 7 000              L      2,   0( 0, 7)
+                   00039C  50 20 D 0B4              ST     2, 180( 0,13)                       INFO
+                                                                                                               PAGE 006
+
+                   0003A0  58 20 1 000              L      2,   0( 0, 1)
+                   0003A4  41 30 2 000              LA     3,   0( 0, 2)
+                   0003A8  41 50 0 008              LA     5,   8( 0, 0)
+                   0003AC  1B 25                    SR     2, 5
+                   0003AE  5C 40 D 0AC              M      4, 172( 0,13)
+                   0003B2  1B 25                    SR     2, 5
+                   0003B4  50 20 D 0C8              ST     2, 200( 0,13)
+                   0003B8  50 30 D 0CC              ST     3, 204( 0,13)                          A
+                   0003BC  58 20 1 00C              L      2,  12( 0, 1)
+                   0003C0  41 30 2 000              LA     3,   0( 0, 2)
+                   0003C4  41 50 0 004              LA     5,   4( 0, 0)
+                   0003C8  1B 25                    SR     2, 5
+                   0003CA  50 20 D 0D0              ST     2, 208( 0,13)
+                   0003CE  50 30 D 0D4              ST     3, 212( 0,13)                       IPVT
+                   0003D2  47 F0 D 134              BC    15, 308( 0,13)
+ADCON FOR PROLOGUE
+                   000020  00000384                 DC    XL4'00000384'
+ADCON FOR SAVE AREA
+                   000024  00000028                 DC    XL4'00000028'
+ADCON FOR EPILOGUE
+                   000028  00000354                 DC    XL4'00000354'
+ADCONS FOR PARAMETER LISTS
+                   000074  00000154                 DC    XL4'00000154'                        .T00
+                   00007C  800000BC                 DC    XL4'800000BC'                           1
+                   000080  00000148                 DC    XL4'00000148'                        .Q15
+                   000084  000000E8                 DC    XL4'000000E8'                           T
+                   00008C  800000BC                 DC    XL4'800000BC'                           1
+                   000090  00000128                 DC    XL4'00000128'                        .Q08
+                   000094  000000E8                 DC    XL4'000000E8'                           T
+                   00009C  000000BC                 DC    XL4'000000BC'                           1
+                   0000A4  800000BC                 DC    XL4'800000BC'                           1
+TEMPORARIES AND PHASE 20 CONSTANTS
+                   00010C  00000000                 DC    XL4'00000000'
+                   000110  00000000                 DC    XL4'00000000'
+                   000114  00000000                 DC    XL4'00000000'
+                   000118  00000000                 DC    XL4'00000000'
+                   00011C  00000000                 DC    XL4'00000000'
+                   000120  00000000                 DC    XL4'00000000'
+                   000124  00000000                 DC    XL4'00000000'
+                   000128  00000000                 DC    XL4'00000000'
+                   00012C  00000000                 DC    XL4'00000000'
+                   000130  00000000                 DC    XL4'00000000'
+                   000134  00000000                 DC    XL4'00000000'
+                   000138  00000000                 DC    XL4'00000000'
+                   00013C  00000000                 DC    XL4'00000000'
+                   000140  00000000                 DC    XL4'00000000'
+                   000144  00000000                 DC    XL4'00000000'
+                   000148  00000000                 DC    XL4'00000000'
+                                                                                                               PAGE 007
+
+                   00014C  00000000                 DC    XL4'00000000'
+                   000150  00000000                 DC    XL4'00000000'
+                   000154  00000000                 DC    XL4'00000000'
+                   000158  00000000                 DC    XL4'00000000'
+ADCONS FOR B BLOCK LABELS
+                                                     /    DGEFA /     SIZE OF PROGRAM 0003D6 HEXADECIMAL BYTES PAGE 008
+
+
+      NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.
+          A SFA XR  R*8  000000           J SFA     I*4  0000C0           K SFA     I*4  0000C4           L SF      I*4  0000C8
+          N SFA     I*4  0000CC           T SFA     R*8  0000E8         KP1 SF      I*4  0000D0         LDA         I*4  0000D4
+        NM1 SF      I*4  0000D8        INFO S       I*4  0000DC        IPVT S   XR  I*4  000000       DAXPY SF  XF  R*4  000000
+      DGEFA         R*4  0000E0       DSCAL SF  XF  R*4  000000      IDAMAX  F  XF  I*4  000000
+    LABEL   ADDR                LABEL   ADDR                LABEL   ADDR                LABEL   ADDR           PAGE 009
+
+       10  000232                  20  0002C8                  30  0002EC                  40  000306
+       50  00030A                  60  00030A                  70  00031A
+
+*OPTIONS IN EFFECT*      NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+
+*OPTIONS IN EFFECT*      SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+
+*STATISTICS*     SOURCE STATEMENTS =      41 ,PROGRAM SIZE =      982
+
+*STATISTICS*  NO  DIAGNOSTICS GENERATED
+
+****** END OF COMPILATION ******                                       685K BYTES OF CORE NOT USED
+ LEVEL 21.8 ( JUN 74 )                          OS/360  FORTRAN H                                 DATE  26.285/17.29.19
+
+           COMPILER OPTIONS - NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+                              SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+   ISN 0002           SUBROUTINE DGESL(A,LDA,N,IPVT,B,JOB)
+   ISN 0003           INTEGER LDA,N,IPVT(1),JOB
+   ISN 0004           REAL*8 A(LDA,1),B(1),T
+   ISN 0005           NM1=N-1
+   ISN 0006           IF (NM1 .LT. 1) GO TO 30
+   ISN 0008           DO 20 K=1,NM1
+   ISN 0009           L=IPVT(K)
+   ISN 0010           T=B(L)
+   ISN 0011           IF (L .EQ. K) GO TO 10
+   ISN 0013           B(L)=B(K)
+   ISN 0014           B(K)=T
+   ISN 0015        10 CONTINUE
+   ISN 0016           CALL DAXPY(N-K,T,A(K+1,K),1,B(K+1),1)
+   ISN 0017        20 CONTINUE
+   ISN 0018        30 CONTINUE
+   ISN 0019           DO 40 KB=1,N
+   ISN 0020           K=N+1-KB
+   ISN 0021           B(K)=B(K)/A(K,K)
+   ISN 0022           T=-B(K)
+   ISN 0023           CALL DAXPY(K-1,T,A(1,K),1,B(1),1)
+   ISN 0024        40 CONTINUE
+   ISN 0025           RETURN
+   ISN 0026           END
+                                                                                                               PAGE 002
+
+                   000000  47 F0 F 00C    DGESL     BC    15,12(0,15)
+                   000004  07                       DC    XL1'07'
+                   000005  C4C7C5E2D34040           DC    CL7'DGESL  '
+                   00000C  90 EC D 00C              STM   14,12,12(13)
+                   000010  18 4D                    LR    4,13
+                   000014  98 CD F 020              LM    12,13,32(15)
+                   000018  50 40 D 004              ST    4,4(0,13)
+                   00001A  50 D0 4 008              ST    13,8(0,4)
+                   00001E  07 FC                    BCR   15,12
+
+CONSTANTS
+                   0000A8  00000001                 DC    XL4'00000001'
+ADCONS FOR VARIABLES AND CONSTANTS
+ADCONS FOR EXTERNAL REFERENCES
+                   0000E0  00000000                 DC    XL4'00000000'                           A
+                   0000E8  00000000                 DC    XL4'00000000'                           B
+                   0000F0  00000000                 DC    XL4'00000000'                        IPVT
+                   0000F8  00000000                 DC    XL4'00000000'                       DAXPY
+                   000114  58 30 D 08C      100001  L      3, 140( 0,13)                          N
+                   000118  5B 30 D 080              S      3, 128( 0,13)                          1
+                   00011C  50 30 D 09C              ST     3, 156( 0,13)                        NM1
+                   000120  59 30 D 080              C      3, 128( 0,13)                          1
+                   000124  47 40 D 198              BC     4, 408( 0,13)                         30
+                   000128  58 00 D 098      100002  L      0, 152( 0,13)                        LDA
+                   00012C  89 00 0 003              SLL    0,   3( 0, 0)
+                   000130  50 00 D 0DC              ST     0, 220( 0,13)                       .Q03
+                   000134  58 50 D 0C0              L      5, 192( 0,13)
+                   000138  41 80 0 001              LA     8,   1( 0, 0)                          1
+                   00013C  18 38            100003  LR     3, 8
+                   00013E  89 30 0 002              SLL    3,   2( 0, 0)
+                   000142  58 F0 D 0C8              L     15, 200( 0,13)
+                   000146  58 A3 F 000              L     10,   0( 3,15)                       IPVT
+                   00014A  18 BA                    LR    11,10
+                   00014C  89 B0 0 003              SLL   11,   3( 0, 0)
+                   000150  68 0B 5 000              LD     0,   0(11, 5)                          B
+                   000154  60 00 D 0A8              STD    0, 168( 0,13)                          T
+                   000158  19 A8                    CR    10, 8
+                   00015A  47 90 D 14C              BC     9, 332( 0,13)                         10
+                   00015E  18 28            100004  LR     2, 8
+                   000160  89 20 0 003              SLL    2,   3( 0, 0)
+                   000164  68 22 5 000              LD     2,   0( 2, 5)                          B
+                   000168  60 2B 5 000              STD    2,   0(11, 5)                          B
+                   00016C  68 00 D 0A8              LD     0, 168( 0,13)                          T
+                   000170  60 02 5 000              STD    0,   0( 2, 5)                          B
+                   000174  13 08                10  LCR    0, 8
+                   000176  5A 00 D 08C              A      0, 140( 0,13)                          N
+                   00017A  50 00 D 0E4              ST     0, 228( 0,13)                       .T00
+                   00017E  18 98                    LR     9, 8
+                                                                                                               PAGE 003
+
+                   000180  5A 90 D 080              A      9, 128( 0,13)                          1
+                   000184  18 49                    LR     4, 9
+                   000186  89 40 0 003              SLL    4,   3( 0, 0)
+                   00018A  18 78                    LR     7, 8
+                   00018C  5C 60 D 0DC              M      6, 220( 0,13)                       .Q03
+                   000190  1A 74                    AR     7, 4
+                   000192  18 48                    LR     4, 8
+                   000194  89 40 0 003              SLL    4,   3( 0, 0)
+                   000198  58 F0 D 0B8              L     15, 184( 0,13)
+                   00019C  41 77 F 000              LA     7,   0( 7,15)                          A
+                   0001A0  50 70 D 054              ST     7,  84( 0,13)
+                   0001A4  41 44 5 008              LA     4,   8( 4, 5)                          B
+                   0001A8  50 40 D 05C              ST     4,  92( 0,13)
+                   0001AC  41 10 D 04C              LA     1,  76( 0,13)
+                   0001B0  58 F0 D 0D0              L     15, 208( 0,13)                      DAXPY
+                   0001B4  05 EF                    BALR  14,15
+                   0001B6  18 89                20  LR     8, 9
+                   0001B8  59 90 D 09C              C      9, 156( 0,13)                        NM1
+                   0001BC  47 D0 D 114              BC    13, 276( 0,13)                   ¦   ·½
+                   0001C0  58 00 D 080          30  L      0, 128( 0,13)                          1
+                   0001C4  5A 00 D 08C              A      0, 140( 0,13)                          N
+                   0001C8  50 00 D 0D4              ST     0, 212( 0,13)                       .Q01
+                   0001CC  58 00 D 098              L      0, 152( 0,13)                        LDA
+                   0001D0  89 00 0 003              SLL    0,   3( 0, 0)
+                   0001D4  50 00 D 0D8              ST     0, 216( 0,13)                       .Q02
+                   0001D8  58 80 D 0C0              L      8, 192( 0,13)
+                   0001DC  41 90 0 001              LA     9,   1( 0, 0)                          1
+                   0001E0  58 B0 D 0B8              L     11, 184( 0,13)
+                   0001E4  13 A9            100006  LCR   10, 9
+                   0001E6  5A A0 D 0D4              A     10, 212( 0,13)                       .Q01
+                   0001EA  18 5A                    LR     5,10
+                   0001EC  89 50 0 003              SLL    5,   3( 0, 0)
+                   0001F0  68 25 8 000              LD     2,   0( 5, 8)                          B
+                   0001F4  18 3A                    LR     3,10
+                   0001F6  5C 20 D 0D8              M      2, 216( 0,13)                       .Q02
+                   0001FA  18 73                    LR     7, 3
+                   0001FC  1A 75                    AR     7, 5
+                   0001FE  6D 27 B 000              DD     2,   0( 7,11)
+                   000202  60 25 8 000              STD    2,   0( 5, 8)                          B
+                   000206  68 25 8 000              LD     2,   0( 5, 8)                          B
+                   00020A  23 22                    LCDR   2, 2
+                   00020C  60 20 D 0A8              STD    2, 168( 0,13)                          T
+                   000210  18 4A                    LR     4,10
+                   000212  5B 40 D 080              S      4, 128( 0,13)                          1
+                   000216  50 40 D 0E4              ST     4, 228( 0,13)                       .T00
+                   00021A  5A 30 D 0E0              A      3, 224( 0,13)                          8
+                   00021E  41 33 B 000              LA     3,   0( 3,11)                          A
+                   000222  50 30 D 06C              ST     3, 108( 0,13)
+                                                                                                               PAGE 004
+
+                   000226  41 00 8 008              LA     0,   8( 0, 8)                          B
+                   00022A  50 00 D 074              ST     0, 116( 0,13)
+                   00022E  41 10 D 064              LA     1, 100( 0,13)
+                   000232  58 F0 D 0D0              L     15, 208( 0,13)                      DAXPY
+                   000236  05 EF                    BALR  14,15
+                   000238  5A 90 D 080          40  A      9, 128( 0,13)                          1
+                   00023C  59 90 D 08C              C      9, 140( 0,13)                          N
+                   000240  47 D0 D 1BC              BC    13, 444( 0,13)                      Š
+                   000244  1B FF            100007  SR    15,15
+                   000246  58 E0 D 000              L     14,   0( 0,13)
+                   00024A  07 FE                    BCR   15,14
+ADDRESS OF EPILOGUE
+                   00024C  58 80 D 004              L      8,   4( 0,13)
+                   000250  58 E0 8 00C              L     14,  12( 0, 8)
+                   000254  58 10 8 018              L      1,  24( 0, 8)
+                   000258  58 30 1 008              L      3,   8( 0, 1)
+                   00025C  58 40 D 08C              L      4, 140( 0,13)                          N
+                   000260  50 40 3 000              ST     4,   0( 0, 3)
+                   000264  18 D8                    LR    13, 8
+                   000266  98 2C D 01C              LM     2,  28(12,13)
+                   00026A  92 FF D 00C              MVI   15,  12(15,13)
+                   00026E  07 FE                    BCR   15,14
+ADDRESS OF PROLOGUE
+                   000270  98 48 1 004              LM     4,   4( 8, 1)
+                   000274  58 20 4 000              L      2,   0( 0, 4)
+                   000278  50 20 D 098              ST     2, 152( 0,13)                        LDA
+                   00027C  58 20 5 000              L      2,   0( 0, 5)
+                   000280  50 20 D 08C              ST     2, 140( 0,13)                          N
+                   000284  58 20 8 000              L      2,   0( 0, 8)
+                   000288  50 20 D 094              ST     2, 148( 0,13)                        JOB
+                   00028C  58 20 1 000              L      2,   0( 0, 1)
+                   000290  41 30 2 000              LA     3,   0( 0, 2)
+                   000294  41 50 0 008              LA     5,   8( 0, 0)
+                   000298  1B 25                    SR     2, 5
+                   00029A  5C 40 D 098              M      4, 152( 0,13)
+                   00029E  1B 25                    SR     2, 5
+                   0002A0  50 20 D 0B8              ST     2, 184( 0,13)
+                   0002A4  50 30 D 0BC              ST     3, 188( 0,13)                          A
+                   0002A8  58 20 1 00C              L      2,  12( 0, 1)
+                   0002AC  41 30 2 000              LA     3,   0( 0, 2)
+                   0002B0  41 50 0 004              LA     5,   4( 0, 0)
+                   0002B4  1B 25                    SR     2, 5
+                   0002B6  50 20 D 0C8              ST     2, 200( 0,13)
+                   0002BA  50 30 D 0CC              ST     3, 204( 0,13)                       IPVT
+                   0002BE  58 20 1 010              L      2,  16( 0, 1)
+                   0002C2  41 30 2 000              LA     3,   0( 0, 2)
+                   0002C6  41 50 0 008              LA     5,   8( 0, 0)
+                   0002CA  1B 25                    SR     2, 5
+                                                                                                               PAGE 005
+
+                   0002CC  50 20 D 0C0              ST     2, 192( 0,13)
+                   0002D0  50 30 D 0C4              ST     3, 196( 0,13)                          B
+                   0002D4  47 F0 D 0EC              BC    15, 236( 0,13)
+ADCON FOR PROLOGUE
+                   000020  00000270                 DC    XL4'00000270'
+ADCON FOR SAVE AREA
+                   000024  00000028                 DC    XL4'00000028'
+ADCON FOR EPILOGUE
+                   000028  0000024C                 DC    XL4'0000024C'
+ADCONS FOR PARAMETER LISTS
+                   000074  0000010C                 DC    XL4'0000010C'                        .T00
+                   000078  000000D0                 DC    XL4'000000D0'                           T
+                   000080  000000A8                 DC    XL4'000000A8'                           1
+                   000088  800000A8                 DC    XL4'800000A8'                           1
+                   00008C  0000010C                 DC    XL4'0000010C'                        .T00
+                   000090  000000D0                 DC    XL4'000000D0'                           T
+                   000098  000000A8                 DC    XL4'000000A8'                           1
+                   0000A0  800000A8                 DC    XL4'800000A8'                           1
+TEMPORARIES AND PHASE 20 CONSTANTS
+                   0000FC  00000000                 DC    XL4'00000000'
+                   000100  00000000                 DC    XL4'00000000'
+                   000104  00000000                 DC    XL4'00000000'
+                   000108  00000008                 DC    XL4'00000008'
+                   00010C  00000000                 DC    XL4'00000000'
+                   000110  00000000                 DC    XL4'00000000'
+ADCONS FOR B BLOCK LABELS
+                                                     /    DGESL /     SIZE OF PROGRAM 0002D8 HEXADECIMAL BYTES PAGE 006
+
+
+      NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.
+          A SFA XR  R*8  000000           B SFA XR  R*8  000000           K SFA     I*4  0000AC           L SF      I*4  0000B0
+          N SFA     I*4  0000B4           T SFA     R*8  0000D0          KB SF      I*4  0000B8         JOB         I*4  0000BC
+        LDA         I*4  0000C0         NM1 SF      I*4  0000C4        IPVT  F  XR  I*4  000000       DAXPY SF  XF  R*4  000000
+      DGESL         R*4  0000C8
+    LABEL   ADDR                LABEL   ADDR                LABEL   ADDR                LABEL   ADDR           PAGE 007
+
+       10  000174                  20  0001B6                  30  0001C0                  40  000238
+
+*OPTIONS IN EFFECT*      NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+
+*OPTIONS IN EFFECT*      SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+
+*STATISTICS*     SOURCE STATEMENTS =      25 ,PROGRAM SIZE =      728
+
+*STATISTICS*  NO  DIAGNOSTICS GENERATED
+
+****** END OF COMPILATION ******                                       689K BYTES OF CORE NOT USED
+ LEVEL 21.8 ( JUN 74 )                          OS/360  FORTRAN H                                 DATE  26.285/17.29.19
+
+           COMPILER OPTIONS - NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+                              SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+   ISN 0002           SUBROUTINE DAXPY(N,DA,DX,INCX,DY,INCY)
+   ISN 0003           REAL*8 DX(1),DY(1),DA
+   ISN 0004           IF (N .LE. 0) RETURN
+   ISN 0006           IF (DA .EQ. 0.0D0) RETURN
+   ISN 0008           DO 10 I=1,N
+   ISN 0009           DY(I)=DY(I)+DA*DX(I)
+   ISN 0010        10 CONTINUE
+   ISN 0011           RETURN
+   ISN 0012           END
+                                                                                                               PAGE 002
+
+                   000000  47 F0 F 00C    DAXPY     BC    15,12(0,15)
+                   000004  07                       DC    XL1'07'
+                   000005  C4C1E7D7E84040           DC    CL7'DAXPY  '
+                   00000C  90 EC D 00C              STM   14,12,12(13)
+                   000010  18 4D                    LR    4,13
+                   000014  98 CD F 020              LM    12,13,32(15)
+                   000018  50 40 D 004              ST    4,4(0,13)
+                   00001A  50 D0 4 008              ST    13,8(0,4)
+                   00001E  07 FC                    BCR   15,12
+
+CONSTANTS
+                   000078  00000000                 DC    XL4'00000000'
+                   00007C  00000000                 DC    XL4'00000000'
+                   000080  00000000                 DC    XL4'00000000'
+                   000084  00000001                 DC    XL4'00000001'
+ADCONS FOR VARIABLES AND CONSTANTS
+ADCONS FOR EXTERNAL REFERENCES
+                   0000A8  00000000                 DC    XL4'00000000'                          DX
+                   0000B0  00000000                 DC    XL4'00000000'                          DY
+                   0000C4  58 50 D 088      100001  L      5, 136( 0,13)
+                   0000C8  58 60 D 080              L      6, 128( 0,13)
+                   0000CC  41 20 0 008              LA     2,   8( 0, 0)                          8
+                   0000D0  58 00 D 064              L      0, 100( 0,13)                          N
+                   0000D4  12 00                    LTR    0, 0
+                   0000D6  47 20 D 0BA              BC     2, 186( 0,13)                   ¦  ± ·À¦
+                   0000DA  1B FF            100002  SR    15,15
+                   0000DC  58 E0 D 000              L     14,   0( 0,13)
+                   0000E0  07 FE                    BCR   15,14
+                   0000E2  68 00 D 078      100003  LD     0, 120( 0,13)                         DA
+                   0000E6  22 00                    LTDR   0, 0
+                   0000E8  47 60 D 0CC              BC     6, 204( 0,13)                       ·Á0
+                   0000EC  1B FF            100004  SR    15,15
+                   0000EE  58 E0 D 000              L     14,   0( 0,13)
+                   0000F2  07 FE                    BCR   15,14
+                   0000F4  58 30 D 064      100005  L      3, 100( 0,13)                          N
+                   0000F8  89 30 0 003              SLL    3,   3( 0, 0)
+                   0000FC  68 40 D 078              LD     4, 120( 0,13)                         DA
+                   000100  18 42                    LR     4, 2
+                   000102  68 24 6 000      100006  LD     2,   0( 4, 6)
+                   000106  2C 24                    MDR    2, 4
+                   000108  6A 24 5 000              AD     2,   0( 4, 5)
+                   00010C  60 24 5 000              STD    2,   0( 4, 5)                         DY
+                   000110  87 42 D 0DA          10  BXLE   4, 218( 2,13)                      
+                   000114  1B FF            100007  SR    15,15
+                   000116  58 E0 D 000              L     14,   0( 0,13)
+                   00011A  07 FE                    BCR   15,14
+ADDRESS OF EPILOGUE
+                   00011C  58 80 D 004              L      8,   4( 0,13)
+                                                                                                               PAGE 003
+
+                   000120  58 E0 8 00C              L     14,  12( 0, 8)
+                   000124  58 10 8 018              L      1,  24( 0, 8)
+                   000128  18 D8                    LR    13, 8
+                   00012A  98 2C D 01C              LM     2,  28(12,13)
+                   00012E  92 FF D 00C              MVI   15,  12(15,13)
+                   000132  07 FE                    BCR   15,14
+ADDRESS OF PROLOGUE
+                   000134  98 49 1 000              LM     4,   0( 9, 1)
+                   000138  58 20 4 000              L      2,   0( 0, 4)
+                   00013C  50 20 D 064              ST     2, 100( 0,13)                          N
+                   000140  68 20 5 000              LD     2,   0( 0, 5)
+                   000144  60 20 D 078              STD    2, 120( 0,13)                         DA
+                   000148  58 20 7 000              L      2,   0( 0, 7)
+                   00014C  50 20 D 068              ST     2, 104( 0,13)                       INCX
+                   000150  58 20 9 000              L      2,   0( 0, 9)
+                   000154  50 20 D 06C              ST     2, 108( 0,13)                       INCY
+                   000158  58 20 1 008              L      2,   8( 0, 1)
+                   00015C  41 30 2 000              LA     3,   0( 0, 2)
+                   000160  41 50 0 008              LA     5,   8( 0, 0)
+                   000164  1B 25                    SR     2, 5
+                   000166  50 20 D 080              ST     2, 128( 0,13)
+                   00016A  50 30 D 084              ST     3, 132( 0,13)                         DX
+                   00016E  58 20 1 010              L      2,  16( 0, 1)
+                   000172  41 30 2 000              LA     3,   0( 0, 2)
+                   000176  41 50 0 008              LA     5,   8( 0, 0)
+                   00017A  1B 25                    SR     2, 5
+                   00017C  50 20 D 088              ST     2, 136( 0,13)
+                   000180  50 30 D 08C              ST     3, 140( 0,13)                         DY
+                   000184  47 F0 D 09C              BC    15, 156( 0,13)
+ADCON FOR PROLOGUE
+                   000020  00000134                 DC    XL4'00000134'
+ADCON FOR SAVE AREA
+                   000024  00000028                 DC    XL4'00000028'
+ADCON FOR EPILOGUE
+                   000028  0000011C                 DC    XL4'0000011C'
+TEMPORARIES AND PHASE 20 CONSTANTS
+                   0000B8  00000008                 DC    XL4'00000008'
+                   0000BC  00000000                 DC    XL4'00000000'
+                   0000C0  00000000                 DC    XL4'00000000'
+ADCONS FOR B BLOCK LABELS
+                                                     /    DAXPY /     SIZE OF PROGRAM 000188 HEXADECIMAL BYTES PAGE 004
+
+
+      NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.
+          I SF      I*4  000088           N  F      I*4  00008C          DA  F      R*8  0000A0          DX  F  XR  R*8  000000
+         DY SF  XR  R*8  000000        INCX         I*4  000090        INCY         I*4  000094       DAXPY         R*4  000098
+
+    LABEL   ADDR                LABEL   ADDR                LABEL   ADDR                LABEL   ADDR           PAGE 005
+
+       10  000110
+
+*OPTIONS IN EFFECT*      NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+
+*OPTIONS IN EFFECT*      SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+
+*STATISTICS*     SOURCE STATEMENTS =      11 ,PROGRAM SIZE =      392
+
+*STATISTICS*  NO  DIAGNOSTICS GENERATED
+
+****** END OF COMPILATION ******                                       689K BYTES OF CORE NOT USED
+ LEVEL 21.8 ( JUN 74 )                          OS/360  FORTRAN H                                 DATE  26.285/17.29.19
+
+           COMPILER OPTIONS - NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+                              SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+   ISN 0002           SUBROUTINE DSCAL(N,DA,DX,INCX)
+   ISN 0003           REAL*8 DA,DX(1)
+   ISN 0004           IF (N .LE. 0) RETURN
+   ISN 0006           DO 10 I=1,N
+   ISN 0007           DX(I)=DA*DX(I)
+   ISN 0008        10 CONTINUE
+   ISN 0009           RETURN
+   ISN 0010           END
+                                                                                                               PAGE 002
+
+                   000000  47 F0 F 00C    DSCAL     BC    15,12(0,15)
+                   000004  07                       DC    XL1'07'
+                   000005  C4E2C3C1D34040           DC    CL7'DSCAL  '
+                   00000C  90 EC D 00C              STM   14,12,12(13)
+                   000010  18 4D                    LR    4,13
+                   000014  98 CD F 020              LM    12,13,32(15)
+                   000018  50 40 D 004              ST    4,4(0,13)
+                   00001A  50 D0 4 008              ST    13,8(0,4)
+                   00001E  07 FC                    BCR   15,12
+
+CONSTANTS
+                   000078  00000000                 DC    XL4'00000000'
+                   00007C  00000001                 DC    XL4'00000001'
+ADCONS FOR VARIABLES AND CONSTANTS
+ADCONS FOR EXTERNAL REFERENCES
+                   000098  00000000                 DC    XL4'00000000'                          DX
+                   0000AC  58 50 D 070      100001  L      5, 112( 0,13)
+                   0000B0  41 20 0 008              LA     2,   8( 0, 0)                          8
+                   0000B4  58 00 D 05C              L      0,  92( 0,13)                          N
+                   0000B8  12 00                    LTR    0, 0
+                   0000BA  47 20 D 09E              BC     2, 158( 0,13)                       ·ÁÎ
+                   0000BE  1B FF            100002  SR    15,15
+                   0000C0  58 E0 D 000              L     14,   0( 0,13)
+                   0000C4  07 FE                    BCR   15,14
+                   0000C6  58 30 D 05C      100003  L      3,  92( 0,13)                          N
+                   0000CA  89 30 0 003              SLL    3,   3( 0, 0)
+                   0000CE  68 40 D 068              LD     4, 104( 0,13)                         DA
+                   0000D2  18 42                    LR     4, 2
+                   0000D4  68 24 5 000      100004  LD     2,   0( 4, 5)
+                   0000D8  2C 24                    MDR    2, 4
+                   0000DA  60 24 5 000              STD    2,   0( 4, 5)                         DX
+                   0000DE  87 42 D 0AC          10  BXLE   4, 172( 2,13)                      ±
+                   0000E2  1B FF            100005  SR    15,15
+                   0000E4  58 E0 D 000              L     14,   0( 0,13)
+                   0000E8  07 FE                    BCR   15,14
+ADDRESS OF EPILOGUE
+                   0000EA  58 80 D 004              L      8,   4( 0,13)
+                   0000EE  58 E0 8 00C              L     14,  12( 0, 8)
+                   0000F2  58 10 8 018              L      1,  24( 0, 8)
+                   0000F6  18 D8                    LR    13, 8
+                   0000F8  98 2C D 01C              LM     2,  28(12,13)
+                   0000FC  92 FF D 00C              MVI   15,  12(15,13)
+                   000100  07 FE                    BCR   15,14
+ADDRESS OF PROLOGUE
+                   000102  98 47 1 000              LM     4,   0( 7, 1)
+                   000106  58 20 4 000              L      2,   0( 0, 4)
+                   00010A  50 20 D 05C              ST     2,  92( 0,13)                          N
+                   00010E  68 20 5 000              LD     2,   0( 0, 5)
+                                                                                                               PAGE 003
+
+                   000112  60 20 D 068              STD    2, 104( 0,13)                         DA
+                   000116  58 20 7 000              L      2,   0( 0, 7)
+                   00011A  50 20 D 060              ST     2,  96( 0,13)                       INCX
+                   00011E  58 20 1 008              L      2,   8( 0, 1)
+                   000122  41 30 2 000              LA     3,   0( 0, 2)
+                   000126  41 50 0 008              LA     5,   8( 0, 0)
+                   00012A  1B 25                    SR     2, 5
+                   00012C  50 20 D 070              ST     2, 112( 0,13)
+                   000130  50 30 D 074              ST     3, 116( 0,13)                         DX
+                   000134  47 F0 D 084              BC    15, 132( 0,13)
+ADCON FOR PROLOGUE
+                   000020  00000102                 DC    XL4'00000102'
+ADCON FOR SAVE AREA
+                   000024  00000028                 DC    XL4'00000028'
+ADCON FOR EPILOGUE
+                   000028  000000EA                 DC    XL4'000000EA'
+TEMPORARIES AND PHASE 20 CONSTANTS
+                   0000A0  00000008                 DC    XL4'00000008'
+                   0000A4  00000000                 DC    XL4'00000000'
+                   0000A8  00000000                 DC    XL4'00000000'
+ADCONS FOR B BLOCK LABELS
+                                                     /    DSCAL /     SIZE OF PROGRAM 000138 HEXADECIMAL BYTES PAGE 004
+
+
+      NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.
+          I SF      I*4  000080           N  F      I*4  000084          DA  F      R*8  000090          DX SF  XR  R*8  000000
+       INCX         I*4  000088       DSCAL         R*4  00008C
+
+    LABEL   ADDR                LABEL   ADDR                LABEL   ADDR                LABEL   ADDR           PAGE 005
+
+       10  0000DE
+
+*OPTIONS IN EFFECT*      NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+
+*OPTIONS IN EFFECT*      SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+
+*STATISTICS*     SOURCE STATEMENTS =       9 ,PROGRAM SIZE =      312
+
+*STATISTICS*  NO  DIAGNOSTICS GENERATED
+
+****** END OF COMPILATION ******                                       689K BYTES OF CORE NOT USED
+ LEVEL 21.8 ( JUN 74 )                          OS/360  FORTRAN H                                 DATE  26.285/17.29.19
+
+           COMPILER OPTIONS - NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+                              SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+   ISN 0002           INTEGER FUNCTION IDAMAX(N,DX,INCX)
+   ISN 0003           REAL*8 DX(1),DMAX
+   ISN 0004           IDAMAX=0
+   ISN 0005           IF (N .LT. 1) RETURN
+   ISN 0007           IDAMAX=1
+   ISN 0008           IF (N .EQ. 1) RETURN
+   ISN 0010           DMAX=DABS(DX(1))
+   ISN 0011           DO 30 I=2,N
+   ISN 0012           IF (DABS(DX(I)) .LE. DMAX) GO TO 30
+   ISN 0014           IDAMAX=I
+   ISN 0015           DMAX=DABS(DX(I))
+   ISN 0016        30 CONTINUE
+   ISN 0017           RETURN
+   ISN 0018           END
+                                                                                                               PAGE 002
+
+                   000000  47 F0 F 00C    IDAMAX    BC    15,12(0,15)
+                   000004  07                       DC    XL1'07'
+                   000005  C9C4C1D4C1E740           DC    CL7'IDAMAX '
+                   00000C  90 EC D 00C              STM   14,12,12(13)
+                   000010  18 4D                    LR    4,13
+                   000014  98 CD F 020              LM    12,13,32(15)
+                   000018  50 40 D 004              ST    4,4(0,13)
+                   00001A  50 D0 4 008              ST    13,8(0,4)
+                   00001E  07 FC                    BCR   15,12
+
+CONSTANTS
+                   000078  00000000                 DC    XL4'00000000'
+                   00007C  00000001                 DC    XL4'00000001'
+                   000080  00000002                 DC    XL4'00000002'
+ADCONS FOR VARIABLES AND CONSTANTS
+ADCONS FOR EXTERNAL REFERENCES
+                   0000A8  00000000                 DC    XL4'00000000'                          DX
+                   0000C4  58 60 D 080      100001  L      6, 128( 0,13)
+                   0000C8  41 20 0 001              LA     2,   1( 0, 0)                          1
+                   0000CC  58 30 D 060              L      3,  96( 0,13)                          N
+                   0000D0  41 80 0 002              LA     8,   2( 0, 0)                          2
+                   0000D4  41 90 0 000              LA     9,   0( 0, 0)                          0
+                   0000D8  41 70 0 008              LA     7,   8( 0, 0)                          8
+                   0000DC  41 A0 0 010              LA    10,  16( 0, 0)                         10
+                   0000E0  50 90 D 068              ST     9, 104( 0,13)                     IDAMAX
+                   0000E4  19 32                    CR     3, 2
+                   0000E6  47 B0 D 0CA              BC    11, 202( 0,13)                   ¦  ± ·4
+                   0000EA  1B FF            100002  SR    15,15
+                   0000EC  58 E0 D 000              L     14,   0( 0,13)
+                   0000F0  07 FE                    BCR   15,14
+                   0000F2  50 20 D 068      100003  ST     2, 104( 0,13)                     IDAMAX
+                   0000F6  19 32                    CR     3, 2
+                   0000F8  47 60 D 0DC              BC     6, 220( 0,13)                       ·Þ
+                   0000FC  1B FF            100004  SR    15,15
+                   0000FE  58 E0 D 000              L     14,   0( 0,13)
+                   000102  07 FE                    BCR   15,14
+                   000104  68 20 6 008      100005  LD     2,   8( 0, 6)                         DX
+                   000108  20 22                    LPDR   2, 2
+                   00010A  60 20 D 070              STD    2, 112( 0,13)                       DMAX
+                   00010E  68 60 D 070              LD     6, 112( 0,13)                       DMAX
+                   000112  18 48                    LR     4, 8
+                   000114  18 5A                    LR     5,10
+                   000116  68 25 6 000      100006  LD     2,   0( 5, 6)                         DX
+                   00011A  20 42                    LPDR   4, 2
+                   00011C  29 46                    CDR    4, 6
+                   00011E  47 D0 D 100              BC    13, 256( 0,13)                         30
+                   000122  50 40 D 068      100007  ST     4, 104( 0,13)                     IDAMAX
+                   000126  28 64                    LDR    6, 4
+                                                                                                               PAGE 003
+
+                   000128  1A 57                30  AR     5, 7
+                   00012A  87 42 D 0EE              BXLE   4, 238( 2,13)                   ¦  
+ ·ÁÎ
+                   00012E  1B FF            100008  SR    15,15
+                   000130  58 E0 D 000              L     14,   0( 0,13)
+                   000134  07 FE                    BCR   15,14
+ADDRESS OF EPILOGUE
+                   000136  58 80 D 004              L      8,   4( 0,13)
+                   00013A  58 E0 8 00C              L     14,  12( 0, 8)
+                   00013E  58 10 8 018              L      1,  24( 0, 8)
+                   000142  58 00 D 068              L      0, 104( 0,13)                     IDAMAX
+                   000146  18 D8                    LR    13, 8
+                   000148  98 2C D 01C              LM     2,  28(12,13)
+                   00014C  92 FF D 00C              MVI   15,  12(15,13)
+                   000150  07 FE                    BCR   15,14
+ADDRESS OF PROLOGUE
+                   000152  98 46 1 000              LM     4,   0( 6, 1)
+                   000156  58 20 4 000              L      2,   0( 0, 4)
+                   00015A  50 20 D 060              ST     2,  96( 0,13)                          N
+                   00015E  58 20 6 000              L      2,   0( 0, 6)
+                   000162  50 20 D 064              ST     2, 100( 0,13)                       INCX
+                   000166  58 20 1 004              L      2,   4( 0, 1)
+                   00016A  41 30 2 000              LA     3,   0( 0, 2)
+                   00016E  41 50 0 008              LA     5,   8( 0, 0)
+                   000172  1B 25                    SR     2, 5
+                   000174  50 20 D 080              ST     2, 128( 0,13)
+                   000178  50 30 D 084              ST     3, 132( 0,13)                         DX
+                   00017C  47 F0 D 09C              BC    15, 156( 0,13)
+ADCON FOR PROLOGUE
+                   000020  00000152                 DC    XL4'00000152'
+ADCON FOR SAVE AREA
+                   000024  00000028                 DC    XL4'00000028'
+ADCON FOR EPILOGUE
+                   000028  00000136                 DC    XL4'00000136'
+TEMPORARIES AND PHASE 20 CONSTANTS
+                   0000B0  00000000                 DC    XL4'00000000'
+                   0000B4  00000000                 DC    XL4'00000000'
+                   0000B8  00000008                 DC    XL4'00000008'
+                   0000BC  00000000                 DC    XL4'00000000'
+                   0000C0  00000010                 DC    XL4'00000010'
+ADCONS FOR B BLOCK LABELS
+                                                     /   IDAMAX /     SIZE OF PROGRAM 000180 HEXADECIMAL BYTES PAGE 004
+
+
+      NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.        NAME    TAG   TYPE  ADD.
+          I SFA     I*4  000084           N  F      I*4  000088          DX  FA XR  R*8  000000        DMAX S       R*8  000098
+       INCX         I*4  00008C      IDAMAX S       I*4  000090
+    LABEL   ADDR                LABEL   ADDR                LABEL   ADDR                LABEL   ADDR           PAGE 005
+
+       30  000128
+
+*OPTIONS IN EFFECT*      NAME=  MAIN,OPT=02,LINECNT=50,SIZE=0000K,
+
+*OPTIONS IN EFFECT*      SOURCE,EBCDIC,LIST,NODECK,LOAD,MAP,NOEDIT,NOID,NOXREF
+
+*STATISTICS*     SOURCE STATEMENTS =      17 ,PROGRAM SIZE =      384
+
+*STATISTICS*  NO  DIAGNOSTICS GENERATED
+
+****** END OF COMPILATION ******                                       689K BYTES OF CORE NOT USED
+
+*STATISTICS*  NO  DIAGNOSTICS THIS STEP
+
+
+ F64-LEVEL LINKAGE EDITOR OPTIONS SPECIFIED MAP,LET,LIST
+          DEFAULT OPTION(S) USED -  SIZE=(231424,55296)
+
+
+
+                                                      MODULE MAP
+
+
+  CONTROL SECTION                       ENTRY
+
+    NAME    ORIGIN  LENGTH                NAME   LOCATION     NAME   LOCATION     NAME   LOCATION     NAME   LOCATION
+  MAIN          00   14250
+  MATGEN     14250     2A6
+  DGEFA      144F8     3D6
+  DGESL      148D0     2D8
+  DAXPY      14BA8     188
+  DSCAL      14D30     138
+  IDAMAX     14E68     180
+  IHCECOMH*  14FE8     F61
+                                        IBCOM#     14FE8    FDIOCS#    150A4    INTSWTCH   15F2E
+  IHCCOMH2*  15F50     65D
+                                        SEQDASD    162C8
+  IHCFCVTH*  165B0    11B5
+                                        ADCON#     165B0    FCVAOUTP   1665A    FCVLOUTP   166EA    FCVZOUTP   16842
+                                        FCVIOUTP   16BF6    FCVEOUTP   170F8    FCVCOUTP   17312    INT6SWCH   175FB
+  IHCEFNTH*  17768     542
+                                        ARITH#     17768    ADJSWTCH   17B04
+  IHCEFIOS*  17CB0     F28
+                                        FIOCS#     17CB0    FIOCSBEP   17CB6
+  IHCFIOS2*  18BD8     52E
+  IHCUOPT *  19108     300
+  IHCERRM *  19408     5DC
+                                        ERRMON     19408    IHCERRE    19420
+  IHCUATBL*  199E8     638
+  IHCETRCH*  1A020     28E
+                                        IHCTRCH    1A020    ERRTRA     1A028
+
+ ENTRY ADDRESS       00
+
+ TOTAL LENGTH     1A2B0
+****MAIN      DOES NOT EXIST BUT HAS BEEN ADDED TO DATA SET
+AUTHORIZATION CODE IS         0.
+
+
+
+LINPACK INFO   0 CHECKSUM  0.100000000000001D 03
+
+                 FFFFFFFFFFFF  HH        HH  LL             IIIIIIIIII   NN        NN  PPPPPPPPPPP   KK        KK   2222222222
+                FFFFFFFFFFFF  HH        HH  LL             IIIIIIIIII   NNN       NN  PPPPPPPPPPPP  KK       KK   222222222222
+               FF            HH        HH  LL                 II       NNNN      NN  PP        PP  KK      KK    22        22
+              FF            HH        HH  LL                 II       NN NN     NN  PP        PP  KK     KK               22
+             FF            HH        HH  LL                 II       NN  NN    NN  PP        PP  KK    KK                22
+            FFFFFFFF      HHHHHHHHHHHH  LL                 II       NN   NN   NN  PPPPPPPPPPPP  KKKKKKK                22
+           FFFFFFFF      HHHHHHHHHHHH  LL                 II       NN    NN  NN  PPPPPPPPPPP   KKKKKKK              22
+          FF            HH        HH  LL                 II       NN     NN NN  PP            KK    KK           22
+         FF            HH        HH  LL                 II       NN      NNNN  PP            KK     KK        22
+        FF            HH        HH  LL                 II       NN       NNN  PP            KK      KK     22
+       FF            HH        HH  LLLLLLLLLLLL   IIIIIIIIII   NN        NN  PP            KK       KK   222222222222
+      FF            HH        HH  LLLLLLLLLLLL   IIIIIIIIII   NN         N  PP            KK        KK  222222222222
+
+
+
+                    JJJJJJJJJJ   3333333333   777777777777  555555555555   2222222222                 ZZZZZZZZZZZZ
+                    JJJJJJJJJJ  333333333333  77777777777   555555555555  222222222222                ZZZZZZZZZZZZ
+                        JJ      33        33  77      77    55            22        22                         ZZ
+                        JJ                33         77     55                      22                        ZZ
+                        JJ                33        77      55                      22                       ZZ
+                        JJ             3333        77       555555555              22                    ZZZZZZZ
+                        JJ             3333        77       5555555555           22                      ZZZZZZZ
+                        JJ                33       77                55        22                         ZZ
+                  JJ    JJ                33       77                 55     22                          ZZ
+                  JJ    JJ      33        33       77                 55   22                           ZZ
+                  JJJJJJJJ      333333333333       77       555555555555  222222222222                 ZZZZZZZZZZZ
+                   JJJJJJ        3333333333        77       55555555555   222222222222                ZZZZZZZZZZZZ

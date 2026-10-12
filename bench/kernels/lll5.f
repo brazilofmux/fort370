@@ -1,0 +1,19 @@
+C     LIVERMORE LOOP 5, TRI-DIAGONAL ELIMINATION (A RECURRENCE)
+      REAL*8 X(1001),Y(1001),Z(1001),S
+      DATA NREP/200000/
+      N=1000
+      DO 10 I=1,1001
+      Y(I)=1.0D0+DFLOAT(I)*1.0D-3
+   10 Z(I)=0.5D0
+      X(1)=0.0D0
+      DO 30 IR=1,NREP
+      DO 20 I=2,N
+   20 X(I)=Z(I)*(Y(I)-X(I-1))
+   30 CONTINUE
+      S=0.0D0
+      DO 40 I=1,N
+   40 S=S+X(I)
+      WRITE(6,100) S
+  100 FORMAT(' LLL5 CHECKSUM ',D22.15)
+      STOP
+      END

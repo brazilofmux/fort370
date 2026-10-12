@@ -1,0 +1,22 @@
+C     LIVERMORE LOOP 1, HYDRO FRAGMENT, N=1000, NREP TIMES
+      REAL*8 X(1001),Y(1001),Z(1012),Q,R,T,S
+      DATA NREP/200000/
+      N=1000
+      Q=0.5D0
+      R=0.25D0
+      T=0.125D0
+      DO 10 K=1,1012
+   10 Z(K)=DFLOAT(K)*1.0D-3
+      DO 15 K=1,N
+   15 Y(K)=1.0D0/DFLOAT(K)
+      DO 30 IR=1,NREP
+      DO 20 K=1,N
+   20 X(K)=Q+Y(K)*(R*Z(K+10)+T*Z(K+11))
+   30 CONTINUE
+      S=0.0D0
+      DO 40 K=1,N
+   40 S=S+X(K)
+      WRITE(6,100) S
+  100 FORMAT(' LLL1 CHECKSUM ',D22.15)
+      STOP
+      END
