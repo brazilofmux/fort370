@@ -73,6 +73,9 @@ static void cg_die(char *msg, int inst) {
         fdputs(" ty=", 2); fdputuint(2, (unsigned)h_ty[inst]);
         fdputs(" reg=", 2); fdputuint(2, (unsigned)ra_reg[inst]);
         fdputs(" blk=", 2); fdputuint(2, (unsigned)h_blk[inst]);
+        fdputs(" fold=", 2); fdputuint(2, (unsigned)bg_fold[inst]);
+        fdputs(" licm_map=", 2); fdputuint(2, (unsigned)licm_map[inst]);
+        fdputs(" src1=", 2); fdputuint(2, (unsigned)h_src1[inst]);
         fdputc(')', 2);
     }
     if (s370_emitting >= 0) {
@@ -560,6 +563,10 @@ static char *s370_r(int r) {
 
 /* Materialize an integer value (or address) into register d. */
 static void s370_load_into(int d, int v);
+static char *s370_memop_text(int ld, int s);
+static int s370_bxle_add[HIR_MAX_INST];   /* BRC -> the index-step ADD it performs, or -1 */
+static int s370_bxle_brc[HIR_MAX_INST];   /* ADD -> its BRC, or -1 */
+static int s370_bxle_ok(int brc);
 
 /* Chain folding: a LOAD/STORE/ADDI address through ADDI chains to a
  * register base, when the total displacement is 0..4095.  Mirrors
@@ -572,8 +579,8 @@ static int s370_fold_chain(int addr, int *base, int *off) {
     o = 0;
     lim = 0;
     while (chain >= 0 && lim < 64) {
-        if (h_kind[chain] == HI_COPY) { chain = h_src1[chain]; lim = lim + 1; continue; }
-        if (h_kind[chain] == HI_ADDI) { o = o + h_val[chain]; chain = h_src1[chain]; lim = lim + 1; continue; }
+        if (bg_kind(chain) == HI_COPY) { chain = h_src1[chain]; lim = lim + 1; continue; }
+        if (bg_kind(chain) == HI_ADDI) { o = o + h_val[chain]; chain = h_src1[chain]; lim = lim + 1; continue; }
         break;
     }
     if (chain >= 0 && chain != addr && ra_is_disp(o)) { *base = chain; *off = o; return 1; }
@@ -596,6 +603,7 @@ static int s370_gpr(int v, int s) {
 static int s370_imem(int v, char *out) {
     int c;
     int root;
+    if (v >= 0 && bg_fold[v] && bg_mem_lnt[v] >= 0) { strcpy(out, s370_memop_text(v, 15)); return 1; }
     if (ra_reg[v] >= 0) return 0;
     if (bg_const_imm_inst(v, &c, &root) && hi_inst_remat(root)) {
         strcpy(out, s370_pool_f(c));
@@ -609,6 +617,7 @@ static int s370_imem(int v, char *out) {
 
 /* Storage-operand text for a floating value not in a register. */
 static int s370_fmem(int v, char *out) {
+    if (v >= 0 && bg_fold[v] && bg_mem_lnt[v] >= 0) { strcpy(out, s370_memop_text(v, 15)); return 1; }
     if (ra_reg[v] >= 0) return 0;
     if (h_kind[v] == HI_FCONST) { strcpy(out, s370_pool_fconst(v)); return 1; }
     if (ra_spill_off[v] == 0) cg_die("floating value has neither register nor slot", v);
@@ -626,19 +635,32 @@ static void s370_load_into(int d, int v) {
         if (ra_reg[v] != d) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(ra_reg[v])); asm_ins("LR", s370_line, 2); }
         return;
     }
-    k = h_kind[v];
-    if (bg_const_imm_inst(v, &c, &root) && hi_inst_remat(root)) {
-        if (c >= 0 && c <= 4095) { f_reset(); f_s(s370_r(d)); f_c(','); f_n(c); asm_ins("LA", s370_line, 4); }
-        else if (c >= -32768 && c <= 32767) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_h(c)); asm_ins("LH", s370_line, 4); }
-        else { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_f(c)); asm_ins("L", s370_line, 4); }
-        return;
+    k = bg_kind(v);
+    if (bg_const_imm_inst(v, &c, &root)) {
+        if (hi_inst_remat(root)) {
+            if (c >= 0 && c <= 4095) { f_reset(); f_s(s370_r(d)); f_c(','); f_n(c); asm_ins("LA", s370_line, 4); }
+            else if (c >= -32768 && c <= 32767) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_h(c)); asm_ins("LH", s370_line, 4); }
+            else { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_f(c)); asm_ins("L", s370_line, 4); }
+            return;
+        }
+        if (ra_reg[root] >= 0) {
+            /* a pinned constant in a register, plus the chain's offset */
+            int off;
+            off = c - h_val[root];
+            if (ra_reg[root] != d) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(ra_reg[root])); asm_ins("LR", s370_line, 2); }
+            if (off != 0) {
+                if (off >= -32768 && off <= 32767) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_h(off)); asm_ins("AH", s370_line, 4); }
+                else { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_f(off)); asm_ins("A", s370_line, 4); }
+            }
+            return;
+        }
     }
     if (k == HI_ALLOCA && hi_inst_remat(v)) {
         if (s370_aoff[v] >= 0) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_lab('T', s370_alab[v])); asm_ins("LA", s370_line, 4); }
         else { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_at(s370_alab[v], 0)); asm_ins("L", s370_line, 4); }
         return;
     }
-    if ((k == HI_ADDI) && hi_inst_remat(v) == 0 && ra_spill_off[v] == 0) {
+    if (k == HI_ADDI && ra_spill_off[v] == 0) {
         /* an ADDI chain over a remat address that BURG folded into
          * a parent: materialize base + offset */
         int base;
@@ -691,17 +713,25 @@ static void s370_load_into(int d, int v) {
     cg_die("cannot materialize value", v);
 }
 
-/* Address of a near ALLOCA chain as symbolic text: Tnnnnn+off. */
+/* Address of a near object as symbolic text: Tnnnnn+disp, with an
+ * index register when the chain has one: Tnnnnn+disp(X). */
 static char s370_abuf[40];
 static char *s370_faddr_text(int addr) {
-    int rt;
+    int root;
+    int index;
+    int disp;
     char *save;
-    rt = bg_faddr_root(addr);
+    if (s370_addr_form(addr, BG_FADDR, &root, &index, &disp) != 1) cg_die("not a static address", addr);
     save = fmt_p;
     fmt_p = s370_abuf;
-    f_s(s370_lab('T', s370_alab[rt]));
-    if (bg_foff[addr] > 0) { f_c('+'); f_n(bg_foff[addr]); }
-    else if (bg_foff[addr] < 0) f_n(bg_foff[addr]);
+    f_s(s370_lab('T', s370_alab[root]));
+    if (disp > 0) { f_c('+'); f_n(disp); }
+    else if (disp < 0) f_n(disp);
+    if (index >= 0) {
+        int x;
+        x = s370_gpr(index, 1);
+        f_c('('); f_s(s370_r(x)); f_c(')');
+    }
     fmt_p = save;
     return s370_abuf;
 }
@@ -732,14 +762,37 @@ static char *s370_mem_operand(int addr, int lnt, int s) {
         fmt_p = s370_mbuf; f_s("0(,"); f_s(s370_r(s)); f_c(')'); fmt_p = save;
         return s370_mbuf;
     }
-    if (s370_fold_chain(addr, &base, &off)) {
-        b = s370_gpr(base, s);
-    } else {
-        off = 0;
-        b = s370_gpr(addr, s);
+    {
+        int root;
+        int index;
+        int x;
+        s370_addr_form(addr, lnt, &root, &index, &off);
+        b = s370_gpr(root, s);
+        if (index >= 0) {
+            /* the index's scratch: R15 when the base had R14 and the
+             * caller holds nothing in R15; R1 otherwise (free outside
+             * call sequences and the M/D pair) */
+            x = s370_gpr(index, 1);
+            fmt_p = s370_mbuf; f_n(off); f_c('('); f_s(s370_r(x)); f_c(','); f_s(s370_r(b)); f_c(')'); fmt_p = save;
+            return s370_mbuf;
+        }
     }
     fmt_p = s370_mbuf; f_n(off); f_s("(,"); f_s(s370_r(b)); f_c(')'); fmt_p = save;
     return s370_mbuf;
+}
+
+/* The storage operand of a load folded into its user (bg_memop). */
+static char s370_mbuf2[48];
+static char *s370_memop_text(int ld, int s) {
+    int lnt;
+    char *m;
+    char *save;
+    lnt = bg_mem_lnt[ld];
+    if (lnt < 0) lnt = BG_RADDR;
+    m = s370_mem_operand(h_src1[ld], lnt, s);
+    save = fmt_p;
+    fmt_p = s370_mbuf2; f_s(m); fmt_p = save;
+    return s370_mbuf2;
 }
 
 /* ---------------------------------------------------------------- */
@@ -1013,6 +1066,7 @@ static int s370_cc_mask(int k) {
 static void s370_compare(int k, int a, int b) {
     char mem[40];
     int ra;
+    if (a >= 0 && bg_fold[a] && bg_mem_lnt[a] >= 0) { int t; t = a; a = b; b = t; }   /* commutative kinds only reach here folded left */
     if (k == HI_FEQ || k == HI_FLT || k == HI_FLE) {
         int dbl;
         int fa;
@@ -1050,6 +1104,8 @@ static void s370_binop(int i, char *rr, char *rx, int d) {
     char mem[40];
     s1 = h_src1[i];
     s2 = h_src2[i];
+    if (bg_memop[i] == 1) { s1 = h_src2[i]; s2 = h_src1[i]; }   /* commutative: the load is the storage operand */
+    else if (ra_commutative(h_kind[i]) && s2 >= 0 && ra_reg[s2] == d && ra_reg[s1] != d) { int t; t = s1; s1 = s2; s2 = t; }
     s370_load_into(d, s1);
     if (ra_reg[s2] >= 0) {
         f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(ra_reg[s2])); asm_ins(rr, s370_line, 2);
@@ -1085,20 +1141,26 @@ static void s370_muldiv(int i, int d) {
     int s1;
     int s2;
     char mem[40];
+    int have_mem;
+    int r2;
     k = h_kind[i];
     s1 = h_src1[i];
     s2 = h_src2[i];
+    if (bg_memop[i] == 1) { s1 = h_src2[i]; s2 = h_src1[i]; }
+    /* The second operand first: forming a storage operand may reload
+     * an index into R1, which the pair is about to use. */
+    have_mem = 0;
+    r2 = -1;
+    if (ra_reg[s2] >= 0) r2 = ra_reg[s2];
+    else if (s370_imem(s2, mem)) have_mem = 1;
+    else r2 = s370_gpr(s2, 15);
     /* M multiplies the odd register of the pair; D divides the pair,
      * so the dividend goes in R0 and SRDA spreads it over R0:R1 */
     if (k == HI_MUL) s370_load_into(1, s1);
     else { s370_load_into(0, s1); asm_ins("SRDA", "0,32", 4); }
-    if (ra_reg[s2] >= 0) {
-        f_reset(); f_s("0,"); f_s(s370_r(ra_reg[s2])); asm_ins(k == HI_MUL ? "MR" : "DR", s370_line, 2);
-    } else if (s370_imem(s2, mem)) {
+    if (have_mem) {
         f_reset(); f_s("0,"); f_s(mem); asm_ins(k == HI_MUL ? "M" : "D", s370_line, 4);
     } else {
-        int r2;
-        r2 = s370_gpr(s2, 15);
         f_reset(); f_s("0,"); f_s(s370_r(r2)); asm_ins(k == HI_MUL ? "MR" : "DR", s370_line, 2);
     }
     f_reset(); f_s(s370_r(d)); f_s(k == HI_REM ? ",0" : ",1"); asm_ins("LR", s370_line, 2);
@@ -1112,6 +1174,8 @@ static void s370_fbinop(int i, char *rr, char *rx, int d) {
     char mem[40];
     s1 = h_src1[i];
     s2 = h_src2[i];
+    if (bg_memop[i] == 1) { s1 = h_src2[i]; s2 = h_src1[i]; }
+    else if (ra_commutative(h_kind[i]) && s2 >= 0 && ra_reg[s2] == d && ra_reg[s1] != d) { int t; t = s1; s1 = s2; s2 = t; }
     dbl = ty_is_double(h_ty[i]);
     s370_copy_to_reg(d, 1, s1, dbl);
     if (ra_reg[s2] >= 0) {
@@ -1413,6 +1477,36 @@ static void s370_condbr(int i) {
     then_copies = s370_edge_needs_copies(hcg_cur_blk, then_b);
     else_copies = s370_edge_needs_copies(hcg_cur_blk, else_b);
 
+    if (s370_bxle_ok(i)) {
+        int p1;
+        int idx;
+        int step;
+        char bx[32];
+        p1 = s370_bxle_add[i];
+        idx = (h_src1[p1] >= 0 && h_kind[h_src1[p1]] == HI_PHI) ? h_src1[p1] : h_src2[p1];
+        step = (idx == h_src1[p1]) ? h_src2[p1] : h_src1[p1];
+        if (ra_reg[p1] != ra_reg[idx]) {
+            f_reset(); f_s(s370_r(ra_reg[p1])); f_c(','); f_s(s370_r(ra_reg[idx])); asm_ins("LR", s370_line, 2);
+        }
+        strcpy(bx, s370_r(ra_reg[p1]));
+        strcat(bx, ",");
+        strcat(bx, s370_r(ra_reg[step]));
+        strcat(bx, ",");
+        if (!then_copies) {
+            f_reset(); f_s(bx); f_s(s370_lab('L', hcg_blk_lbl[then_b])); asm_ins("BXLE", s370_line, 4);
+            if (else_copies) s370_phi_copies(hcg_cur_blk, else_b);
+            if (else_b != next_b) s370_branch(15, hcg_blk_lbl[else_b]);
+            return;
+        }
+        lstub = cg_label();
+        f_reset(); f_s(bx); f_s(s370_lab('L', lstub)); asm_ins("BXLE", s370_line, 4);
+        if (else_copies) s370_phi_copies(hcg_cur_blk, else_b);
+        s370_branch(15, hcg_blk_lbl[else_b]);
+        asm_stmt(s370_lab('L', lstub), "DS", "0H");
+        s370_phi_copies(hcg_cur_blk, then_b);
+        s370_branch(15, hcg_blk_lbl[then_b]);
+        return;
+    }
     if (cmp >= 0) {
         s370_compare(hcg_cmp_kind[cmp], h_src1[cmp], h_src2[cmp]);
         mask = s370_cc_mask(hcg_cmp_kind[cmp]);
@@ -1464,6 +1558,7 @@ static void s370_inst(int i) {
     lnt = -1;
     if (pat >= 0) lnt = bg_plnt[pat];
     else if (h_src1[i] >= 0 && h_kind[h_src1[i]] == HI_ALLOCA && s370_aoff[h_src1[i]] >= 0) lnt = BG_FADDR;
+    else if (k == HI_LOAD || k == HI_STORE) lnt = BG_RADDR;
 
     /* A value that nobody reads and that lives nowhere: skip the work,
      * except for calls and stores, which have effects. */
@@ -1583,7 +1678,7 @@ static void s370_inst(int i) {
         {
             int r;
             r = s370_gpr(v, 15);
-            m = s370_mem_operand(h_src1[i], lnt, 14);
+            m = s370_mem_operand(h_src1[i], lnt, 14);     /* base R14, index R1 */
             if ((ty & TY_BASE_MASK) == TY_CHAR) { f_reset(); f_s(s370_r(r)); f_c(','); f_s(m); asm_ins("STC", s370_line, 4); }
             else if ((ty & TY_BASE_MASK) == TY_SHORT) { f_reset(); f_s(s370_r(r)); f_c(','); f_s(m); asm_ins("STH", s370_line, 4); }
             else { f_reset(); f_s(s370_r(r)); f_c(','); f_s(m); asm_ins("ST", s370_line, 4); }
@@ -1629,6 +1724,7 @@ static void s370_inst(int i) {
         return;
     }
 
+    if (k == HI_ADD && s370_bxle_brc[i] >= 0 && s370_bxle_ok(s370_bxle_brc[i])) return;   /* done by the BXLE */
     if (k == HI_ADD || k == HI_SUB || k == HI_AND || k == HI_OR || k == HI_XOR) {
         d = s370_idst(i);
         if (k == HI_ADD) s370_binop(i, "AR", "A", d);
@@ -2101,6 +2197,270 @@ static void s370_mark_strings(void) {
     }
 }
 
+/* ADDI(ADD(base, idx), c) -> ADD(ADDI(base, c), idx) when base is an
+ * address: the constant then belongs to a loop-invariant base (H's
+ * "DY-8" register, or a label with an offset) and the index register
+ * carries nothing but the subscript.  Both instructions are rewritten
+ * in place, which keeps the order right; the ADD must have no other
+ * use. */
+static int s370_use_count[HIR_MAX_INST];
+static void s370_reassoc(void) {
+    int i;
+    int j;
+    int k;
+    int a;
+    int base;
+    int idx;
+    i = 0;
+    while (i < h_ninst) { s370_use_count[i] = 0; i = i + 1; }
+    i = 0;
+    while (i < h_ninst) {
+        k = h_kind[i];
+        if (k == HI_NOP) { i = i + 1; continue; }
+        if (h_src1[i] >= 0) s370_use_count[h_src1[i]] = s370_use_count[h_src1[i]] + 1;
+        if (h_src2[i] >= 0 && ho_src2_is_ref(k)) s370_use_count[h_src2[i]] = s370_use_count[h_src2[i]] + 1;
+        if ((k == HI_CALL || k == HI_CALLP) && h_cbase[i] >= 0) {
+            j = 0;
+            while (j < h_val[i]) { if (h_carg[h_cbase[i] + j] >= 0) s370_use_count[h_carg[h_cbase[i] + j]] = s370_use_count[h_carg[h_cbase[i] + j]] + 1; j = j + 1; }
+        }
+        if (k == HI_PHI && h_pbase[i] >= 0) {
+            j = 0;
+            while (j < h_pcnt[i]) { if (h_pval[h_pbase[i] + j] >= 0) s370_use_count[h_pval[h_pbase[i] + j]] = s370_use_count[h_pval[h_pbase[i] + j]] + 1; j = j + 1; }
+        }
+        i = i + 1;
+    }
+    i = 0;
+    while (i < h_ninst) {
+        if (h_kind[i] == HI_ADDI && h_src1[i] >= 0 && h_kind[h_src1[i]] == HI_ADD &&
+            s370_use_count[h_src1[i]] == 1 && h_blk[h_src1[i]] == h_blk[i]) {
+            a = h_src1[i];
+            if (bg_addrlike(h_src1[a]) && !bg_addrlike(h_src2[a])) { base = h_src1[a]; idx = h_src2[a]; }
+            else if (bg_addrlike(h_src2[a]) && !bg_addrlike(h_src1[a])) { base = h_src2[a]; idx = h_src1[a]; }
+            else { i = i + 1; continue; }
+            /* a := ADDI(base, c); i := ADD(a, idx) */
+            h_kind[a] = HI_ADDI;
+            h_src1[a] = base;
+            h_src2[a] = -1;
+            h_val[a] = h_val[i];
+            h_kind[i] = HI_ADD;
+            h_src1[i] = a;
+            h_src2[i] = idx;
+            h_val[i] = 0;
+        }
+        i = i + 1;
+    }
+}
+
+/* ---------------------------------------------------------------- */
+/* Counted loops: BXLE                                               */
+/* ---------------------------------------------------------------- */
+
+/* A loop whose latch tests a trip count (t' = t-1; continue while
+ * t' > 0) and that steps an index p by a positive constant s (p' = p
+ * + s) can test the index instead: continue while p' <= L, with L =
+ * i0 - s + N*s computed once before the loop.  Then BXLE p',s,top does
+ * the step, the test and the branch in one instruction, as H's loops
+ * do, and the trip count disappears. */
+/* Evaluate a constant expression: ICONST, and ADDI/ADD/SUB/SLL/MUL of
+ * constants (what the strength reducer leaves for a step). */
+static int s370_const_eval(int v, int *out, int depth) {
+    int a;
+    int b;
+    int k;
+    if (v < 0 || depth > 8) return 0;
+    k = bg_kind(v);
+    if (k == HI_ICONST) { *out = h_val[v]; return 1; }
+    if (k == HI_COPY) return s370_const_eval(h_src1[v], out, depth + 1);
+    if (k == HI_ADDI) { if (!s370_const_eval(h_src1[v], &a, depth + 1)) return 0; *out = a + h_val[v]; return 1; }
+    if (k == HI_ADD || k == HI_SUB || k == HI_SLL || k == HI_MUL) {
+        if (!s370_const_eval(h_src1[v], &a, depth + 1) || !s370_const_eval(h_src2[v], &b, depth + 1)) return 0;
+        if (k == HI_ADD) *out = a + b;
+        else if (k == HI_SUB) *out = a - b;
+        else if (k == HI_SLL) *out = (b >= 0 && b < 32) ? (int)((unsigned)a << b) : 0;
+        else *out = a * b;
+        return 1;
+    }
+    return 0;
+}
+
+static int s370_phi_arg_from(int phi, int blk) {
+    int j;
+    j = 0;
+    while (j < h_pcnt[phi]) {
+        if (h_pblk[h_pbase[phi] + j] == blk) return h_pval[h_pbase[phi] + j];
+        j = j + 1;
+    }
+    return -1;
+}
+
+static void s370_loops(void) {
+    int i;
+    int b;
+    int cmp;
+    int t1;
+    int tphi;
+    int zero;
+    int hdr;
+    int pre;
+    int latch;
+    int p;
+    int p1;
+    int step;
+    int n0;
+    int i0;
+    int c;
+    int root;
+    int sh;
+    int m;
+    int a;
+    int lim;
+    int j;
+
+    i = 0;
+    while (i < h_ninst) { s370_bxle_add[i] = -1; s370_bxle_brc[i] = -1; i = i + 1; }
+    /* use counts, for the trip count's other uses */
+    i = 0;
+    while (i < h_ninst) { s370_use_count[i] = 0; i = i + 1; }
+    i = 0;
+    while (i < h_ninst) {
+        int k;
+        k = h_kind[i];
+        if (k == HI_NOP) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 1\n", 2); } i = i + 1; continue; }
+        if (h_src1[i] >= 0) s370_use_count[h_src1[i]] = s370_use_count[h_src1[i]] + 1;
+        if (h_src2[i] >= 0 && ho_src2_is_ref(k)) s370_use_count[h_src2[i]] = s370_use_count[h_src2[i]] + 1;
+        if ((k == HI_CALL || k == HI_CALLP) && h_cbase[i] >= 0) {
+            j = 0;
+            while (j < h_val[i]) { if (h_carg[h_cbase[i] + j] >= 0) s370_use_count[h_carg[h_cbase[i] + j]] = s370_use_count[h_carg[h_cbase[i] + j]] + 1; j = j + 1; }
+        }
+        if (k == HI_PHI && h_pbase[i] >= 0) {
+            j = 0;
+            while (j < h_pcnt[i]) { if (h_pval[h_pbase[i] + j] >= 0) s370_use_count[h_pval[h_pbase[i] + j]] = s370_use_count[h_pval[h_pbase[i] + j]] + 1; j = j + 1; }
+        }
+        i = i + 1;
+    }
+
+    i = 0;
+    while (i < h_ninst) {
+        if (h_kind[i] != HI_BRC) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 2\n", 2); } i = i + 1; continue; }
+        latch = h_blk[i];
+        hdr = h_src2[i];                 /* the taken target: the loop header */
+        cmp = h_src1[i];
+        if (getenv("F77_LOOP_DEBUG")) {
+            fdputs("LOOP brc=", 2); fdputuint(2, (unsigned)i);
+            fdputs(" cmp=", 2); fdputuint(2, (unsigned)cmp);
+            fdputs(" kind=", 2); fdputs(cmp >= 0 ? bg_op_name(h_kind[cmp]) : "-", 2);
+            fdputs(" uses=", 2); fdputuint(2, cmp >= 0 ? (unsigned)s370_use_count[cmp] : 0);
+            fdputc(10, 2);
+        }
+        if (cmp < 0 || h_kind[cmp] != HI_SGT || h_blk[cmp] != latch || s370_use_count[cmp] != 1) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 3\n", 2); } i = i + 1; continue; }
+        t1 = h_src1[cmp];
+        zero = h_src2[cmp];
+        if (t1 < 0 || zero < 0 || h_kind[t1] != HI_ADDI || h_val[t1] != -1 || h_blk[t1] != latch) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 4\n", 2); } i = i + 1; continue; }
+        if (!(bg_const_imm_inst(zero, &c, &root) && c == 0)) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 5\n", 2); } i = i + 1; continue; }
+        tphi = h_src1[t1];
+        if (tphi < 0 || h_kind[tphi] != HI_PHI || h_blk[tphi] != hdr || h_pcnt[tphi] != 2) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 6\n", 2); } i = i + 1; continue; }
+        if (s370_phi_arg_from(tphi, latch) != t1) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 7\n", 2); } i = i + 1; continue; }
+        /* the trip count must be the test's alone: the phi feeds the
+         * decrement, the decrement feeds the phi and the compare */
+        if (s370_use_count[tphi] != 1 || s370_use_count[t1] != 2) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 8\n", 2); } i = i + 1; continue; }
+        pre = -1;
+        j = 0;
+        while (j < 2) { if (h_pblk[h_pbase[tphi] + j] != latch) { pre = h_pblk[h_pbase[tphi] + j]; n0 = h_pval[h_pbase[tphi] + j]; } j = j + 1; }
+        if (pre < 0 || n0 < 0) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 9\n", 2); } i = i + 1; continue; }
+        if (pre != ssa_idom[hdr]) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 10\n", 2); } i = i + 1; continue; }
+
+        /* an index: a header phi stepped by a positive constant */
+        p = ssa_phi_head[hdr];
+        p1 = -1;
+        step = -1;
+        while (p >= 0) {
+            if (h_kind[p] == HI_PHI && p != tphi && h_pcnt[p] == 2 && !ra_is_fpv(p)) {
+                int q;
+                q = s370_phi_arg_from(p, latch);
+                if (q >= 0 && h_kind[q] == HI_ADD && h_blk[q] == latch && s370_use_count[q] == 1) {
+                    int o;
+                    o = -1;
+                    if (h_src1[q] == p) o = h_src2[q];
+                    else if (h_src2[q] == p) o = h_src1[q];
+                    if (o >= 0 && s370_const_eval(o, &c, 0) && c > 0 &&
+                        h_blk[o] != latch && h_blk[o] != hdr) {
+                        p1 = q;
+                        step = o;
+                        break;
+                    }
+                }
+            }
+            p = ssa_phi_next[p];
+        }
+        if (p1 < 0) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 11\n", 2); } i = i + 1; continue; }
+        i0 = s370_phi_arg_from(p, pre);
+        if (i0 < 0) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 12\n", 2); } i = i + 1; continue; }
+        if (h_ninst + 6 >= HIR_MAX_INST) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 13\n", 2); } i = i + 1; continue; }
+
+        /* L = (i0 - s) + N*s, in the preheader's hoist list */
+        s370_const_eval(step, &c, 0);
+        a = sp_new_inst(HI_ADDI, TY_INT, i0, -1, 0 - c, pre);
+        sh = -1;
+        while ((1 << (sh + 1)) <= c) sh = sh + 1;
+        if ((1 << sh) == c) {
+            int k;
+            k = sp_new_inst(HI_ICONST, TY_INT, -1, -1, sh, pre);
+            m = sp_new_inst(HI_SLL, TY_INT, n0, k, 0, pre);
+        } else {
+            int k;
+            k = sp_new_inst(HI_ICONST, TY_INT, -1, -1, c, pre);
+            m = sp_new_inst(HI_MUL, TY_INT, n0, k, 0, pre);
+        }
+        lim = sp_new_inst(HI_ADD, TY_INT, a, m, 0, pre);
+        /* append to the preheader's list */
+        {
+            int q;
+            q = a;
+            while (q <= lim) {
+                if (licm_tail[pre] >= 0) licm_next[licm_tail[pre]] = q;
+                else licm_head[pre] = q;
+                licm_tail[pre] = q;
+                q = q + 1;
+            }
+        }
+        h_no_remat[lim] = 1;
+        h_no_remat[step] = 1;
+        ra_pair_of[step] = lim; ra_pair_lo[step] = 1;
+        ra_pair_of[lim] = step; ra_pair_lo[lim] = 0;
+
+        /* the compare becomes p' <= L; the trip count goes */
+        h_kind[cmp] = HI_SLE;
+        h_src1[cmp] = p1;
+        h_src2[cmp] = lim;
+        h_kind[t1] = HI_NOP;
+        h_kind[tphi] = HI_NOP;
+        s370_bxle_add[i] = p1;
+        s370_bxle_brc[p1] = i;
+        i = i + 1;
+    }
+}
+
+/* Can this BRC be a BXLE, given the registers?  The increment even,
+ * the limit in the register above it, the stepped index in a register. */
+static int s370_bxle_ok(int brc) {
+    int p1;
+    int step;
+    int lim;
+    int cmp;
+    p1 = s370_bxle_add[brc];
+    if (p1 < 0) return 0;
+    cmp = hcg_brc_fuse[brc];
+    if (cmp < 0) return 0;
+    lim = h_src2[cmp];
+    /* the ADD's operands: the index phi, and the step */
+    if (h_src1[p1] >= 0 && h_kind[h_src1[p1]] == HI_PHI) step = h_src2[p1];
+    else step = h_src1[p1];
+    if (ra_reg[p1] < 0 || ra_reg[step] < 0 || ra_reg[lim] < 0) return 0;
+    if (ra_reg[step] & 1) return 0;
+    if (ra_reg[lim] != ra_reg[step] + 1) return 0;
+    return 1;
+}
+
 static void s370_gen_unit(Node *fn) {
     int b;
     int q;
@@ -2111,10 +2471,13 @@ static void s370_gen_unit(Node *fn) {
     s370_unit_is_main = (f77_ukind[fn->unit] == F77_UNIT_PROGRAM);
     hl_func(fn);
 
+    { int z; z = 0; while (z < HIR_MAX_INST) { bg_fold[z] = 0; bg_memop[z] = 0; bg_mem_lnt[z] = -1; z = z + 1; } }
     ssa_split_pairs = 0;
     hir_ssa_construct();
     hir_opt();
+    if (!getenv("F77_NO_REASSOC")) s370_reassoc();
     licm_loopopt = 1;
+    licm_no_ptr_iv = getenv("F77_NO_IDX") ? 0 : 1;
     if (ho_mask & 1024) hir_licm();
 
     s370_npool = 0;
@@ -2128,6 +2491,9 @@ static void s370_gen_unit(Node *fn) {
     s370_mark_strings();
     s370_layout();
     s370_mark_loop_consts();
+    { int z; z = 0; while (z < h_ninst + 16 && z < HIR_MAX_INST) { ra_pair_of[z] = -1; ra_pair_lo[z] = 0; z = z + 1; } }
+    if (!getenv("F77_NO_BXLE")) s370_loops();
+    { int z; z = h_ninst; while (z < HIR_MAX_INST) { ra_pair_of[z] = -1; z = z + 1; } }
     hir_burg();
     hcg_identify_fusions();
 

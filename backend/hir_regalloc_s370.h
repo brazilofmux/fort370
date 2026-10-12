@@ -30,6 +30,7 @@
  */
 
 #define RA_NGPR 10            /* R2..R11 */
+#define GC_MAX_NODE 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 #define RA_NFPR 4             /* FPR 0, 2, 4, 6 */
 #define RA_NCOLORS 10         /* max of the two, for used[] masks */
 
@@ -57,6 +58,15 @@ static int ra_class_k(int cls) { return cls ? RA_NFPR : ra_gpr_avail; }
 
 static int ra_crosses_call[HIR_MAX_INST];
 static int ra_mem_forced[HIR_MAX_INST];   /* iterated-spill victims, and floating values across calls */
+
+/* BXLE wants its increment in an even register and its limit in the
+ * next odd one.  The loop pass marks the two values as partners; the
+ * colouring prefers an aligned pair for them, and the emitter falls
+ * back to AR/C/BC when it could not be had. */
+static int  ra_pair_of[HIR_MAX_INST];     /* partner, or -1 */
+static char ra_pair_lo[HIR_MAX_INST];     /* 1 = wants the even register */
+static int  gc_pin[GC_MAX_NODE];          /* colour the partner asked for, or -1 */
+static int  gc_pair_inst[GC_MAX_NODE];    /* a pair-marked member of the node, or -1: survives coalescing */
 static void ra_dump_signed(int v);
 
 /* --- Output arrays --- */
@@ -83,7 +93,6 @@ static int ra_can_reuse_src1(int k) {
  * IRC data structures
  * ================================================================= */
 
-#define GC_MAX_NODE 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 #define GC_MAX_EDGE 262144   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 #define GC_MAX_MOVE 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 
@@ -276,48 +285,70 @@ static void ra_backprop(int val, int use_blk) {
  * root is reported; the emitter must fold exactly these chains. */
 static int ra_is_disp(int v) { return v >= 0 && v <= 4095; }
 
-static int ra_codegen_fold_base(int inst, int *base_out) {
-    int k;
-    int s1;
+/* The address nonterminal the emitter will use for a LOAD/STORE's
+ * address (or a folded MEM load's): from the selected pattern, or the
+ * fallback the emitter applies when BURS was skipped. */
+static int s370_addr_lnt(int inst) {
     int pat;
-    int lnt;
-    int chain;
-    int ck;
-    int chlim;
-    int off;
-
-    k = h_kind[inst];
-    s1 = h_src1[inst];
+    int s1;
     pat = bg_sel[inst];
-    lnt = -1;
-    if (pat >= 0) lnt = bg_plnt[pat];
-    else if (s1 >= 0 && h_kind[s1] == HI_ALLOCA) lnt = BG_FADDR;
+    if (pat >= 0) return bg_plnt[pat];
+    if (bg_mem_lnt[inst] >= 0) return bg_mem_lnt[inst];
+    s1 = h_src1[inst];
+    if (s1 >= 0 && h_kind[s1] == HI_ALLOCA && s370_aoff[s1] >= 0) return BG_FADDR;
+    return BG_RADDR;
+}
 
-    if (k == HI_LOAD || k == HI_STORE) {
-        if (lnt == BG_FADDR || lnt == BG_SADDR) return 0;
-        chain = s1;
-        off = 0;
-        chlim = 0;
-        while (chain >= 0 && chlim < 64) {
-            ck = h_kind[chain];
-            if (ck == HI_COPY) { chain = h_src1[chain]; chlim = chlim + 1; continue; }
-            if (ck == HI_ADDI) { off = off + h_val[chain]; chain = h_src1[chain]; chlim = chlim + 1; continue; }
-            break;
+/* The registers an instruction reads through the addressing the
+ * emitter folds: for a LOAD/STORE the base and index of its address,
+ * for an operation with a storage operand those of the folded load,
+ * for an ADDI folded into one LA the root of its chain.  The emitter
+ * must fold exactly this. */
+static int s370_mem_regs(int inst, int *out) {
+    int k;
+    int n;
+    int lnt;
+    int root;
+    int index;
+    int disp;
+    int ld;
+    n = 0;
+    k = h_kind[inst];
+    ld = -1;
+    if (k == HI_LOAD || k == HI_STORE) ld = inst;
+    else if (bg_memop[inst] == 1) ld = h_src1[inst];
+    else if (bg_memop[inst] == 2) ld = h_src2[inst];
+    else if (k == HI_BRC && hcg_brc_fuse[inst] >= 0) {
+        int cmp;
+        cmp = hcg_brc_fuse[inst];
+        if (bg_memop[cmp] == 1) ld = h_src1[cmp];
+        else if (bg_memop[cmp] == 2) ld = h_src2[cmp];
+    }
+    if (ld >= 0) {
+        lnt = s370_addr_lnt(ld);
+        if (lnt == BG_SADDR) return 0;
+        if (s370_addr_form(h_src1[ld], lnt, &root, &index, &disp) == 1) {
+            if (index >= 0) { out[n] = index; n = n + 1; }
+            return n;
         }
-        if (chain >= 0 && chain != s1 && ra_is_disp(off)) { *base_out = chain; return 1; }
-        return 0;
+        out[n] = root; n = n + 1;
+        if (index >= 0) { out[n] = index; n = n + 1; }
+        return n;
     }
     if (k == HI_ADDI) {
-        if (lnt == BG_FADDR) return 0;
-        chain = s1;
+        int chain;
+        int off;
+        int chlim;
+        if (s370_addr_lnt(inst) == BG_FADDR) return 0;
+        chain = h_src1[inst];
         off = 0;
         chlim = 0;
-        while (chain >= 0 && h_kind[chain] == HI_ADDI && chlim < 64) {
+        while (chain >= 0 && bg_kind(chain) == HI_ADDI && chlim < 64) {
             off = off + h_val[chain];
             chain = h_src1[chain];
             chlim = chlim + 1;
         }
-        if (chain >= 0 && chain != s1 && ra_is_disp(off + h_val[inst])) { *base_out = chain; return 1; }
+        if (chain >= 0 && chain != h_src1[inst] && ra_is_disp(off + h_val[inst])) { out[0] = chain; return 1; }
     }
     return 0;
 }
@@ -351,9 +382,16 @@ static void ra_compute_ends(void) {
         inst = ra_order[i];
         k = h_kind[inst];
         p = ra_pos[inst];
+        if (k == HI_NOP) { i = i + 1; continue; }
         ra_extend(h_src1[inst], p);
         if (h_src2[inst] >= 0 && ho_src2_is_ref(k)) ra_extend(h_src2[inst], p);
-        if (ra_codegen_fold_base(inst, &src)) ra_extend(src, p);
+        {
+            int mr[2];
+            int nm;
+            nm = s370_mem_regs(inst, mr);
+            j = 0;
+            while (j < nm) { ra_extend(mr[j], p); j = j + 1; }
+        }
         if ((k == HI_CALL || k == HI_CALLP) && h_cbase[inst] >= 0) {
             j = 0;
             while (j < h_val[inst]) { ra_extend(h_carg[h_cbase[inst] + j], p); j = j + 1; }
@@ -378,14 +416,24 @@ static void ra_compute_ends(void) {
     while (i < ra_norder) {
         inst = ra_order[i];
         k = h_kind[inst];
+        if (k == HI_NOP) { i = i + 1; continue; }
         src = h_src1[inst];
         if (src >= 0 && ra_pos[src] >= 0 && h_blk[src] != h_blk[inst]) ra_backprop(src, h_blk[inst]);
         if (h_src2[inst] >= 0 && ho_src2_is_ref(k)) {
             src = h_src2[inst];
             if (ra_pos[src] >= 0 && h_blk[src] != h_blk[inst]) ra_backprop(src, h_blk[inst]);
         }
-        if (ra_codegen_fold_base(inst, &src) && ra_pos[src] >= 0 && h_blk[src] != h_blk[inst])
-            ra_backprop(src, h_blk[inst]);
+        {
+            int mr[2];
+            int nm;
+            nm = s370_mem_regs(inst, mr);
+            j = 0;
+            while (j < nm) {
+                src = mr[j];
+                if (ra_pos[src] >= 0 && h_blk[src] != h_blk[inst]) ra_backprop(src, h_blk[inst]);
+                j = j + 1;
+            }
+        }
         if ((k == HI_CALL || k == HI_CALLP) && h_cbase[inst] >= 0) {
             j = 0;
             while (j < h_val[inst]) {
@@ -558,11 +606,23 @@ static int gc_has_edge(int u, int v) {
 
 /* Only same-class nodes interfere: a general register and a floating
  * register never compete. */
+static int gc_dbg_site;
 static void gc_add_edge(int u, int v) {
     int e1, e2;
     if (u == v) return;
     if (gc_cls[u] != gc_cls[v]) return;
     if (gc_has_edge(u, v)) return;
+    if (getenv("HIR_RA_EDGE")) {
+        int a;
+        int b;
+        a = atoi(getenv("HIR_RA_EDGE"));
+        b = a;
+        if (getenv("HIR_RA_EDGE2")) b = atoi(getenv("HIR_RA_EDGE2"));
+        if ((gc_inst[u] == a && gc_inst[v] == b) || (gc_inst[u] == b && gc_inst[v] == a)) {
+            fdputs("EDGE ", 2); fdputuint(2, (unsigned)gc_inst[u]); fdputc('-', 2); fdputuint(2, (unsigned)gc_inst[v]);
+            fdputs(" site=", 2); fdputuint(2, (unsigned)gc_dbg_site); fdputc(10, 2);
+        }
+    }
     if (gc_nedge + 2 > GC_MAX_EDGE) {
         if (u >= 0 && u < GC_MAX_NODE) gc_force_spill[u] = 1;
         if (v >= 0 && v < GC_MAX_NODE) gc_force_spill[v] = 1;
@@ -677,9 +737,20 @@ static int lv_uses(int inst) {
     int cmp;
     nu = 0;
     k = h_kind[inst];
+    /* A fused compare or a folded load is a NOP by now: its reads are
+     * counted at the branch or the operation that absorbed it.  (The
+     * linearization was made before the NOPing, so they still sit in
+     * ra_order.) */
+    if (k == HI_NOP) return 0;
     if (h_src1[inst] >= 0) { lv_ubuf[nu] = h_src1[inst]; nu = nu + 1; }
     if (h_src2[inst] >= 0 && ho_src2_is_ref(k)) { lv_ubuf[nu] = h_src2[inst]; nu = nu + 1; }
-    if (ra_codegen_fold_base(inst, &a)) { lv_ubuf[nu] = a; nu = nu + 1; }
+    {
+        int mr[2];
+        int nm;
+        nm = s370_mem_regs(inst, mr);
+        j = 0;
+        while (j < nm) { lv_ubuf[nu] = mr[j]; nu = nu + 1; j = j + 1; }
+    }
     if ((k == HI_CALL || k == HI_CALLP) && h_cbase[inst] >= 0) {
         j = 0;
         while (j < h_val[inst] && nu < 120) {
@@ -699,6 +770,31 @@ static int lv_uses(int inst) {
 }
 
 static int lv_is_callkind(int k) { return k == HI_CALL || k == HI_CALLP || k == HI_CALLHI; }
+
+static void lv_debug_uses(void) {
+    int i;
+    int j;
+    int nu;
+    int want;
+    if (!getenv("HIR_RA_USES")) return;
+    want = atoi(getenv("HIR_RA_USES"));
+    i = 0;
+    while (i < ra_norder) {
+        nu = lv_uses(ra_order[i]);
+        j = 0;
+        while (j < nu) {
+            if (lv_ubuf[j] == want) {
+                fdputs("USE of ", 2); fdputuint(2, (unsigned)want);
+                fdputs(" at inst ", 2); fdputuint(2, (unsigned)ra_order[i]);
+                fdputs(" kind ", 2); fdputs(bg_op_name(h_kind[ra_order[i]]), 2);
+                fdputs(" blk ", 2); fdputuint(2, (unsigned)h_blk[ra_order[i]]);
+                fdputc(10, 2);
+            }
+            j = j + 1;
+        }
+        i = i + 1;
+    }
+}
 
 static void lv_transfer(int b) {
     int oi;
@@ -768,6 +864,7 @@ static void lv_prepare(void) {
     int sweeps;
 
     lv_on = 0;
+    lv_debug_uses();
     if (getenv("HIR_LINEAR_LIVE")) return;
     i = 0;
     while (i < h_ninst) { lv_id[i] = -1; i = i + 1; }
@@ -783,6 +880,7 @@ static void lv_prepare(void) {
         }
         i = i + 1;
     }
+    if (getenv("HIR_RA_DEBUG")) { fdputs("LV nid=", 2); fdputuint(2, (unsigned)lv_nid); fdputs(" nblk=", 2); fdputuint(2, (unsigned)bb_nblk); fdputc(10, 2); }
     if (lv_nid > GC_MAX_NODE) return;
     lv_nw = (lv_nid + 31) / 32;
     if (lv_nw == 0) lv_nw = 1;
@@ -835,18 +933,53 @@ static void lv_prepare(void) {
         }
         sweeps = sweeps + 1;
     }
+    if (getenv("HIR_RA_DEBUG")) { fdputs("LV sweeps=", 2); fdputuint(2, (unsigned)sweeps); fdputs(" changed=", 2); fdputuint(2, (unsigned)changed); fdputc(10, 2); }
     if (changed) return;
     lv_on = 1;
+    if (getenv("HIR_RA_LIVE")) {
+        b = 0;
+        while (b < bb_nblk) {
+            int q;
+            fdputs("LIVEIN b=", 2); fdputuint(2, (unsigned)b); fdputs(" [", 2); fdputuint(2, (unsigned)lv_bstart[b]); fdputc(',', 2); fdputuint(2, (unsigned)lv_bend[b]); fdputs(") :", 2);
+            q = 0;
+            while (q < lv_nid) {
+                if (lv_in[(b * lv_w) + (q >> 5)] & (1u << (q & 31))) { fdputc(' ', 2); fdputuint(2, (unsigned)lv_rev[q]); }
+                q = q + 1;
+            }
+            fdputs(" | out:", 2);
+            q = 0;
+            while (q < lv_nid) {
+                if (lv_out[(b * lv_w) + (q >> 5)] & (1u << (q & 31))) { fdputc(' ', 2); fdputuint(2, (unsigned)lv_rev[q]); }
+                q = q + 1;
+            }
+            fdputc(10, 2);
+            b = b + 1;
+        }
+    }
 }
 
-/* May the result share a register with a src1 that dies here?  Yes
- * for the two-address shapes the emitter writes as "LR d,s1 / OP d,s2"
- * or "OP d,s2" when d is s1: the first operand is read before the
- * result is written, and src2 keeps its edge so d is never src2. */
+/* May the result share a register with an operand that dies here?
+ * Yes for the two-address shapes the emitter writes as "OP d,s2" with
+ * d the register operand: src1, or src2 of a commutative operation
+ * (the emitter swaps), or the register operand beside a storage
+ * operand. */
 static int ra_dying_src1_ok(int k) {
     return (k >= HI_ADD && k <= HI_SRL) || k == HI_MULH || k == HI_MULHU ||
            k == HI_ADDI || k == HI_COPY ||
-           (k >= HI_FADD && k <= HI_FDIV) || k == HI_FNEG;
+           (k >= HI_FADD && k <= HI_FDIV) || k == HI_FNEG || k == HI_FABS;
+}
+static int ra_commutative(int k) {
+    return k == HI_ADD || k == HI_AND || k == HI_OR || k == HI_XOR || k == HI_MUL ||
+           k == HI_FADD || k == HI_FMUL;
+}
+static int ra_dying_ok(int inst, int u) {
+    int k;
+    k = h_kind[inst];
+    if (!ra_dying_src1_ok(k)) return 0;
+    if (bg_memop[inst] == 1) return u == h_src2[inst];
+    if (u == h_src1[inst]) return 1;
+    if (ra_commutative(k) && u == h_src2[inst]) return 1;
+    return 0;
 }
 
 static void lv_build_edges(void) {
@@ -889,8 +1022,10 @@ static void lv_build_edges(void) {
                     while (bits != 0 && bit < 32) {
                         if (bits & (1u << bit)) {
                             bits = bits & ~(1u << bit);
-                            if (gc_node[lv_rev[(w << 5) + bit]] >= 0)
+                            if (gc_node[lv_rev[(w << 5) + bit]] >= 0) {
+                                gc_dbg_site = 1000 + inst;
                                 gc_add_edge(ni, gc_node[lv_rev[(w << 5) + bit]]);
+                            }
                         }
                         bit = bit + 1;
                     }
@@ -901,8 +1036,8 @@ static void lv_build_edges(void) {
                 while (j < nu) {
                     u = lv_ubuf[j];
                     if (lv_tracked(u) && !(lv_live[lv_id[u] >> 5] & (1u << (lv_id[u] & 31)))) {
-                        dying_ok = 0;
-                        if (u == h_src1[inst] && ra_dying_src1_ok(k)) dying_ok = 1;
+                        dying_ok = ra_dying_ok(inst, u);
+                        gc_dbg_site = 2;
                         if (!dying_ok && gc_node[u] >= 0) gc_add_edge(ni, gc_node[u]);
                     }
                     j = j + 1;
@@ -937,7 +1072,7 @@ static void lv_build_edges(void) {
             if (h_kind[p1] == HI_PHI && gc_node[p1] >= 0) {
                 p2 = ssa_phi_next[p1];
                 while (p2 >= 0) {
-                    if (h_kind[p2] == HI_PHI && gc_node[p2] >= 0) gc_add_edge(gc_node[p1], gc_node[p2]);
+                    if (h_kind[p2] == HI_PHI && gc_node[p2] >= 0) { gc_dbg_site = 3; gc_add_edge(gc_node[p1], gc_node[p2]); }
                     p2 = ssa_phi_next[p2];
                 }
             }
@@ -971,6 +1106,7 @@ static void gc_build(void) {
                 gc_inst[n] = inst;
                 gc_node[inst] = n;
                 gc_cls[n] = (char)ra_class(inst);
+                gc_pair_inst[n] = (ra_pair_of[inst] >= 0) ? inst : -1;
                 gc_adj_head[n] = -1;
                 gc_degree[n] = 0;
                 gc_alias[n] = n;
@@ -1016,7 +1152,7 @@ static void gc_build(void) {
             skip_node = -1;
             if (ra_dying_src1_ok(h_kind[inst])) {
                 int two_s1;
-                two_s1 = h_src1[inst];
+                two_s1 = (bg_memop[inst] == 1) ? h_src2[inst] : h_src1[inst];
                 if (two_s1 >= 0 && ra_iend[two_s1] <= p) skip_node = gc_node[two_s1];
             }
             j = 0;
@@ -1140,6 +1276,7 @@ static void gc_combine(int u, int v) {
     int e, t;
     gc_wl[v] = GC_WL_COALESCED;
     gc_alias[v] = u;
+    if (gc_pair_inst[u] < 0) gc_pair_inst[u] = gc_pair_inst[v];
     e = gc_nmlist_head[v];
     while (e >= 0) { gc_add_node_move(u, gc_nmlist_mv[e]); e = gc_nmlist_next[e]; }
     e = gc_adj_head[v];
@@ -1161,6 +1298,13 @@ static int gc_coalesce(void) {
         if (gc_mv_status[mv] != GC_MV_WORKLIST) { mv = mv + 1; continue; }
         u = gc_get_alias(gc_mv_a[mv]);
         v = gc_get_alias(gc_mv_b[mv]);
+        if (getenv("HIR_RA_DEBUG")) {
+            fdputs("MV u=", 2); fdputuint(2, (unsigned)gc_inst[u]);
+            fdputs(" v=", 2); fdputuint(2, (unsigned)gc_inst[v]);
+            fdputs(" edge=", 2); fdputuint(2, (unsigned)gc_has_edge(u, v));
+            fdputs(" fs=", 2); fdputuint(2, (unsigned)gc_force_spill[u]); fdputuint(2, (unsigned)gc_force_spill[v]);
+            fdputc(10, 2);
+        }
         if (u == v) {
             gc_mv_status[mv] = GC_MV_COALESCED;
             if (!gc_move_related(u) && gc_degree[u] < gc_k(u) && gc_wl[u] == GC_WL_FREEZE) gc_wl[u] = GC_WL_SIMPLIFY;
@@ -1172,6 +1316,14 @@ static int gc_coalesce(void) {
             if (!gc_move_related(u) && gc_degree[u] < gc_k(u) && gc_wl[u] == GC_WL_FREEZE) gc_wl[u] = GC_WL_SIMPLIFY;
             if (!gc_move_related(v) && gc_degree[v] < gc_k(v) && gc_wl[v] == GC_WL_FREEZE) gc_wl[v] = GC_WL_SIMPLIFY;
             return 1;
+        }
+        if (getenv("HIR_RA_DEBUG")) {
+            fdputs("MOVE u=", 2); fdputuint(2, (unsigned)gc_inst[u]);
+            fdputs(" v=", 2); fdputuint(2, (unsigned)gc_inst[v]);
+            fdputs(" george=", 2); fdputuint(2, (unsigned)gc_george(u, v));
+            fdputs(" briggs=", 2); fdputuint(2, (unsigned)gc_briggs(u, v));
+            fdputs(" deg=", 2); fdputuint(2, (unsigned)gc_degree[u]); fdputc('/', 2); fdputuint(2, (unsigned)gc_degree[v]);
+            fdputc(10, 2);
         }
         if (gc_george(u, v) || gc_briggs(u, v)) {
             gc_mv_status[mv] = GC_MV_COALESCED;
@@ -1324,6 +1476,7 @@ static void gc_select(void) {
         inst = gc_inst[n];
         k = h_kind[inst];
         maxc = gc_k(n);
+        if (gc_color[n] >= 0 && gc_pair_inst[n] >= 0) { i = i - 1; continue; }   /* coloured with its partner */
         c = 0;
         while (c < RA_NCOLORS) { used[c] = 0; c = c + 1; }
         e = gc_adj_head[n];
@@ -1337,7 +1490,68 @@ static void gc_select(void) {
         gc_color[n] = -1;
         if (gc_force_spill[n]) { gc_wl[n] = GC_WL_SPILL; i = i - 1; continue; }
 
-        if (ra_can_reuse_src1(k) || k == HI_COPY) {
+        /* an aligned pair for a BXLE increment/limit */
+        if (gc_cls[n] == 0 && gc_pair_inst[n] >= 0) {
+            int pn;
+            int c2;
+            int pinst;
+            pinst = gc_pair_inst[n];
+            pn = gc_node[ra_pair_of[pinst]];
+            if (pn >= 0) pn = gc_get_alias(pn);
+            if (getenv("HIR_RA_DEBUG")) {
+                fdputs("PAIR inst=", 2); fdputuint(2, (unsigned)pinst);
+                fdputs(" partner=", 2); fdputuint(2, (unsigned)ra_pair_of[pinst]);
+                fdputs(" pn=", 2); ra_dump_signed(pn);
+                fdputs(" pcolor=", 2); ra_dump_signed(pn >= 0 ? gc_color[pn] : -9);
+                fdputs(" pin=", 2); ra_dump_signed(gc_pin[n]);
+                fdputs(" lo=", 2); fdputuint(2, (unsigned)ra_pair_lo[pinst]);
+                fdputc(10, 2);
+            }
+            if (gc_pin[n] >= 0 && gc_pin[n] < maxc && !used[gc_pin[n]]) gc_color[n] = gc_pin[n];
+            else if (pn >= 0 && pn != n && gc_color[pn] >= 0) {
+                c2 = ra_pair_lo[pinst] ? gc_color[pn] - 1 : gc_color[pn] + 1;
+                if (c2 >= 0 && c2 < maxc && !used[c2] && ((c2 & 1) == (ra_pair_lo[pinst] ? 0 : 1))) gc_color[n] = c2;
+            } else {
+                /* a fresh pair: this node's slot free among its own
+                 * neighbours, the partner's among the partner's */
+                int pused[RA_NCOLORS];
+                int cn;
+                int cp;
+                c2 = 0;
+                while (c2 < RA_NCOLORS) { pused[c2] = 0; c2 = c2 + 1; }
+                if (pn >= 0 && pn != n) {
+                    e = gc_adj_head[pn];
+                    while (e >= 0) {
+                        pc = gc_color[gc_get_alias(gc_adj_peer[e])];
+                        if (pc >= 0 && pc < RA_NCOLORS) pused[pc] = 1;
+                        e = gc_adj_next[e];
+                    }
+                }
+                c2 = 0;
+                for (;;) {
+                    if (c2 + 1 >= maxc) break;
+                    cn = ra_pair_lo[pinst] ? c2 : c2 + 1;
+                    cp = ra_pair_lo[pinst] ? c2 + 1 : c2;
+                    if (!used[cn] && !pused[cp]) break;
+                    c2 = c2 + 2;
+                }
+                if (c2 + 1 < maxc) {
+                    gc_color[n] = cn;
+                    /* colour the partner now: a pin could not hold the
+                     * colour against neighbours selected in between */
+                    if (pn >= 0 && pn != n && !gc_force_spill[pn]) gc_color[pn] = cp;
+                }
+            }
+            if (getenv("HIR_RA_DEBUG")) {
+                int q;
+                fdputs("  -> color ", 2); ra_dump_signed(gc_color[n]); fdputs(" used:", 2);
+                q = 0;
+                while (q < maxc) { fdputc(used[q] ? '1' : '0', 2); q = q + 1; }
+                fdputc(10, 2);
+            }
+        }
+
+        if (gc_color[n] < 0 && (ra_can_reuse_src1(k) || k == HI_COPY)) {
             s = h_src1[inst];
             if (s >= 0 && gc_node[s] >= 0) {
                 c = gc_color[gc_get_alias(gc_node[s])];
@@ -1452,6 +1666,7 @@ static void gc_alloc(void) {
     int iter;
     iter = 0;
     for (;;) {
+        { int z; z = 0; while (z < GC_MAX_NODE) { gc_pin[z] = -1; z = z + 1; } }
         gc_build();
         gc_find_moves();
         gc_irc();
@@ -1562,6 +1777,24 @@ static void ra_dump_intervals(char *fname) {
         fdputs(" x=", 2);
         ra_dump_signed(ra_crosses_call[i]);
         fdputc(10, 2);
+        i = i + 1;
+    }
+    i = 0;
+    while (i < h_ninst) {
+        if (h_kind[i] == HI_PHI && h_pbase[i] >= 0) {
+            int q;
+            fdputs("PHIARGS i=", 2);
+            fdputuint(2, (unsigned)i);
+            q = 0;
+            while (q < h_pcnt[i]) {
+                fdputs(" [b", 2);
+                ra_dump_signed(h_pblk[h_pbase[i] + q]);
+                fdputs("]=", 2);
+                ra_dump_signed(h_pval[h_pbase[i] + q]);
+                q = q + 1;
+            }
+            fdputc(10, 2);
+        }
         i = i + 1;
     }
 }

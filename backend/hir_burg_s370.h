@@ -24,10 +24,12 @@
 
 #define BG_REG    0
 #define BG_IMM    1
-#define BG_FADDR  2
+#define BG_FADDR  2   /* static-area label + optional index register + displacement */
 #define BG_SADDR  3
 #define BG_STMT   4
-#define BG_NNT    5
+#define BG_RADDR  5   /* base register + optional index register + displacement */
+#define BG_MEM    6   /* a single-use LOAD used as a storage operand: AD 2,0(4,5) */
+#define BG_NNT    7
 #define BG_INF    999999
 
 #define BG_MAX_PAT 160
@@ -62,6 +64,18 @@ static int bg_uses[HIR_MAX_INST];
 static int bg_foff[HIR_MAX_INST];   /* offset within the ALLOCA's object along an ADDI chain */
 static int bg_ssym[HIR_MAX_INST];
 static int bg_soff[HIR_MAX_INST];
+static int bg_memop[HIR_MAX_INST];    /* 0; 1 = src1 is a folded MEM; 2 = src2 is */
+static int bg_fold_kind[HIR_MAX_INST]; /* a folded instruction's kind before it became a NOP */
+static char bg_need_reg[HIR_MAX_INST];  /* some user reads this value from a register */
+
+/* The kind of an instruction as the address parsers need it: folded
+ * children are NOPs to the emitter but still shape the operand. */
+static int bg_kind(int i) {
+    if (i < 0) return HI_NOP;
+    if (bg_fold[i]) return bg_fold_kind[i];
+    return h_kind[i];
+}
+static int bg_mem_lnt[HIR_MAX_INST];  /* for a folded LOAD: its address nonterminal */
 
 /* Filled by the emitter's layout pass before hir_burg(): for an ALLOCA,
  * its byte offset in the unit's static area, or -1 when it lies past
@@ -96,7 +110,11 @@ static void bg_add_chain(int from, int to, int cost) {
 static void bg_binop_rules(int op, int commutative) {
     bg_add_pat(BG_REG, op, BG_REG, BG_REG, 1);
     bg_add_pat(BG_REG, op, BG_REG, BG_IMM, 1);
-    if (commutative) bg_add_pat(BG_REG, op, BG_IMM, BG_REG, 1);
+    bg_add_pat(BG_REG, op, BG_REG, BG_MEM, 1);
+    if (commutative) {
+        bg_add_pat(BG_REG, op, BG_IMM, BG_REG, 1);
+        bg_add_pat(BG_REG, op, BG_MEM, BG_REG, 1);
+    }
 }
 
 static void bg_init(void) {
@@ -117,13 +135,28 @@ static void bg_init(void) {
     bg_add_pat(BG_REG,   HI_FADDR,  -1, -1, 1);
     bg_add_pat(BG_REG,   HI_PARAM,  -1, -1, 1);
 
+    /* Addresses: a static label with index and displacement (FADDR),
+     * a base register with index and displacement (RADDR).  The ADD
+     * and ADDI rules are guarded by bg_addr_parse: one index at most,
+     * displacement in range. */
+    bg_add_pat(BG_FADDR, HI_ADD, BG_FADDR, BG_REG, 0);
+    bg_add_pat(BG_FADDR, HI_ADD, BG_REG, BG_FADDR, 0);
+    bg_add_pat(BG_RADDR, HI_ADD, BG_REG, BG_REG, 0);
+    bg_add_pat(BG_RADDR, HI_ADDI, BG_RADDR, -1, 0);
+
     /* LOAD / STORE */
     bg_add_pat(BG_REG,  HI_LOAD, BG_FADDR, -1, 1);
     bg_add_pat(BG_REG,  HI_LOAD, BG_SADDR, -1, 2);
-    bg_add_pat(BG_REG,  HI_LOAD, BG_REG,   -1, 1);
+    bg_add_pat(BG_REG,  HI_LOAD, BG_RADDR, -1, 1);
     bg_add_pat(BG_STMT, HI_STORE, BG_FADDR, BG_REG, 1);
     bg_add_pat(BG_STMT, HI_STORE, BG_SADDR, BG_REG, 2);
-    bg_add_pat(BG_STMT, HI_STORE, BG_REG,   BG_REG, 1);
+    bg_add_pat(BG_STMT, HI_STORE, BG_RADDR, BG_REG, 1);
+
+    /* A load as a storage operand (guarded at the user: single use,
+     * same block, nothing stored or called in between, matching width) */
+    bg_add_pat(BG_MEM, HI_LOAD, BG_FADDR, -1, 0);
+    bg_add_pat(BG_MEM, HI_LOAD, BG_RADDR, -1, 0);
+    bg_add_pat(BG_MEM, HI_LOAD, BG_SADDR, -1, 1);
 
     /* ADDI */
     bg_add_pat(BG_IMM,   HI_ADDI, BG_IMM, -1, 0);
@@ -156,14 +189,14 @@ static void bg_init(void) {
     bg_binop_rules(HI_SGEU, 0);
 
     /* Floating */
-    bg_add_pat(BG_REG, HI_FADD, BG_REG, BG_REG, 1);
-    bg_add_pat(BG_REG, HI_FSUB, BG_REG, BG_REG, 1);
-    bg_add_pat(BG_REG, HI_FMUL, BG_REG, BG_REG, 1);
-    bg_add_pat(BG_REG, HI_FDIV, BG_REG, BG_REG, 1);
+    bg_binop_rules(HI_FADD, 1);
+    bg_binop_rules(HI_FSUB, 0);
+    bg_binop_rules(HI_FMUL, 1);
+    bg_binop_rules(HI_FDIV, 0);
     bg_add_pat(BG_REG, HI_FNEG, BG_REG, -1, 1);
-    bg_add_pat(BG_REG, HI_FEQ,  BG_REG, BG_REG, 1);
-    bg_add_pat(BG_REG, HI_FLT,  BG_REG, BG_REG, 1);
-    bg_add_pat(BG_REG, HI_FLE,  BG_REG, BG_REG, 1);
+    bg_binop_rules(HI_FEQ, 1);
+    bg_binop_rules(HI_FLT, 0);
+    bg_binop_rules(HI_FLE, 0);
     bg_add_pat(BG_REG, HI_FCVT_ItoF, BG_REG, -1, 1);
     bg_add_pat(BG_REG, HI_FCVT_FtoI, BG_REG, -1, 1);
     bg_add_pat(BG_REG, HI_FCVT_FtoD, BG_REG, -1, 1);
@@ -190,6 +223,7 @@ static void bg_init(void) {
     bg_add_chain(BG_IMM,   BG_REG, 1);
     bg_add_chain(BG_FADDR, BG_REG, 1);
     bg_add_chain(BG_SADDR, BG_REG, 1);
+    bg_add_chain(BG_REG,   BG_RADDR, 0);
 }
 
 static void bg_build_index(void) {
@@ -223,41 +257,166 @@ static void bg_build_index(void) {
 
 /* --- Helpers --- */
 
-/* The ALLOCA at the root of an ADDI chain, or -1. */
-static int bg_faddr_root(int idx) {
-    int lim;
-    lim = 0;
-    while (idx >= 0 && lim < 64) {
-        if (h_kind[idx] == HI_ALLOCA) return idx;
-        if (h_kind[idx] != HI_ADDI) return -1;
-        idx = h_src1[idx];
-        lim = lim + 1;
-    }
-    return -1;
-}
+static int bg_const_imm_inst(int inst, int *out, int *root_iconst);
 
-/* Offset within the object along the chain (the ALLOCA itself is 0). */
-static int bg_faddr_offset(int idx) {
+/* Does this value name an address: an object, a symbol, a dummy
+ * argument, or an offset from one? */
+static int bg_addrlike(int v) {
+    int lim;
     int k;
-    k = h_kind[idx];
-    if (k == HI_ALLOCA) return 0;
-    if (k == HI_ADDI) return h_val[idx] + bg_faddr_offset(h_src1[idx]);
+    lim = 0;
+    while (v >= 0 && lim < 64) {
+        k = bg_kind(v);
+        if (k == HI_ALLOCA || k == HI_GADDR || k == HI_FADDR || k == HI_SADDR || k == HI_PARAM) return 1;
+        if (k == HI_ADDI || k == HI_COPY) { v = h_src1[v]; lim = lim + 1; continue; }
+        return 0;
+    }
     return 0;
 }
 
-/* D(X,13) can name the object plus offset: the object is near and the
- * final displacement is 0..4095. */
+/* Parse an address expression into base, index and displacement, the
+ * three fields of D(X,B).  Returns 1 for a static-area object (root is
+ * the ALLOCA; the operand is "Tnnnnn+disp(X)"), 2 for a register base
+ * (root is the value whose register is B), 0 if it is not an address
+ * the machine can form in one operand (two indexes, say).  The
+ * displacement is not range-checked here. */
+/* Is v an ADDI/COPY chain down to a near static object?  Such a chain
+ * costs no register wherever it lives: the operand names the label. */
+static int bg_static_chain(int v) {
+    int lim;
+    int k;
+    lim = 0;
+    while (v >= 0 && lim < 64) {
+        k = bg_kind(v);
+        if (k == HI_ALLOCA) return s370_aoff[v] >= 0;
+        if (k == HI_ADDI || k == HI_COPY) { v = h_src1[v]; lim = lim + 1; continue; }
+        return 0;
+    }
+    return 0;
+}
+
+static int bg_addr_parse(int a, int *root, int *index, int *disp) {
+    int lim;
+    int k;
+    int cur;
+    *index = -1;
+    *disp = 0;
+    cur = a;
+    lim = 0;
+    while (cur >= 0 && lim < 64) {
+        k = bg_kind(cur);
+        /* A value computed in another block (an invariant the loop
+         * optimizer hoisted, say) is in a register: it is the base,
+         * unless it is a static chain, which no register holds. */
+        if (cur != a && h_blk[cur] != h_blk[a] && !bg_static_chain(cur) &&
+            (k == HI_ADDI || k == HI_ADD || k == HI_COPY)) {
+            *root = cur;
+            return 2;
+        }
+        if (k == HI_ADDI) { *disp = *disp + h_val[cur]; cur = h_src1[cur]; lim = lim + 1; continue; }
+        if (k == HI_COPY) { cur = h_src1[cur]; lim = lim + 1; continue; }
+        if (k == HI_ADD) {
+            int o1;
+            int o2;
+            int c;
+            int rc;
+            o1 = h_src1[cur];
+            o2 = h_src2[cur];
+            if (o1 < 0 || o2 < 0) return 0;
+            if (*index >= 0) return 0;
+            /* a constant operand folds into the displacement */
+            if (bg_const_imm_inst(o2, &c, &rc) && hi_is_remat(h_kind[rc])) { *disp = *disp + c; cur = o1; lim = lim + 1; continue; }
+            if (bg_const_imm_inst(o1, &c, &rc) && hi_is_remat(h_kind[rc])) { *disp = *disp + c; cur = o2; lim = lim + 1; continue; }
+            if (bg_addrlike(o2) && !bg_addrlike(o1)) { *index = o1; cur = o2; }
+            else { *index = o2; cur = o1; }
+            lim = lim + 1;
+            continue;
+        }
+        if (k == HI_ALLOCA) {
+            *root = cur;
+            if (s370_aoff[cur] >= 0) return 1;
+            return 2;
+        }
+        *root = cur;
+        return 2;
+    }
+    return 0;
+}
+
+/* The operand form the emitter will use for address `addr` matched as
+ * nonterminal `lnt`: 1 = static label (root the ALLOCA) + index +
+ * disp; 2 = base register (root the value whose register is B) +
+ * index + disp.  When the chain cannot be folded the address value
+ * itself is the base, with no index and no displacement.  Liveness
+ * and emission both ask here, so they agree on which registers are
+ * read. */
+static int s370_addr_form(int addr, int lnt, int *root, int *index, int *disp) {
+    int kind;
+    kind = bg_addr_parse(addr, root, index, disp);
+    if (lnt == BG_FADDR && kind == 1) return 1;
+    if (kind == 2 && *disp >= 0 && *disp <= 4095) return 2;
+    *root = addr;
+    *index = -1;
+    *disp = 0;
+    return 2;
+}
+
+/* FADDR: a near object, the final displacement within reach. */
 static int bg_faddr_ok(int idx) {
     int root;
+    int index;
+    int disp;
     int off;
-    root = bg_faddr_root(idx);
-    if (root < 0) return 0;
-    if (s370_aoff[root] < 0) return 0;
-    off = s370_aoff[root] + bg_faddr_offset(idx);
+    if (bg_addr_parse(idx, &root, &index, &disp) != 1) return 0;
+    off = s370_aoff[root] + disp;
     return off >= 0 && off <= 4095;
 }
 
-static int bg_addi_faddr_ok(int idx) { return bg_faddr_ok(idx); }
+/* RADDR: a register base, displacement 0..4095. */
+static int bg_raddr_ok(int idx) {
+    int root;
+    int index;
+    int disp;
+    if (bg_addr_parse(idx, &root, &index, &disp) != 2) return 0;
+    return disp >= 0 && disp <= 4095;
+}
+
+/* The root ALLOCA and offset of a FADDR chain (the old interface). */
+static int bg_faddr_root(int idx) {
+    int root;
+    int index;
+    int disp;
+    if (bg_addr_parse(idx, &root, &index, &disp) != 1) return -1;
+    return root;
+}
+
+/* May the LOAD `ld` serve as a storage operand of `user`?  One use, in
+ * the same block's body, with no store or call between them, and of
+ * the width the operation reads. */
+static int bg_mem_ok(int user, int ld) {
+    int b;
+    int j;
+    int k;
+    int uk;
+    if (ld < 0 || h_kind[ld] != HI_LOAD) return 0;
+    if (getenv("F77_NO_MEM")) return 0;
+    if (bg_uses[ld] != 1) return 0;
+    b = h_blk[user];
+    if (b < 0 || h_blk[ld] != b) return 0;
+    if (ld < bb_start[b] || ld >= bb_end[b] || user < bb_start[b] || user >= bb_end[b]) return 0;
+    if (ld >= user) return 0;
+    uk = h_kind[user];
+    if (uk >= HI_FADD && uk <= HI_FDIV) { if (h_ty[ld] != h_ty[user]) return 0; }
+    else if (uk == HI_FEQ || uk == HI_FLT || uk == HI_FLE) { if (!ty_is_fp(h_ty[ld])) return 0; if (h_ty[ld] != h_ty[h_src1[user] == ld ? h_src2[user] : h_src1[user]]) return 0; }
+    else { if (ty_is_fp(h_ty[ld]) || ty_size(h_ty[ld]) != 4) return 0; }
+    j = ld + 1;
+    while (j < user) {
+        k = h_kind[j];
+        if (k == HI_STORE || k == HI_CALL || k == HI_CALLP) return 0;
+        j = j + 1;
+    }
+    return 1;
+}
 
 static int bg_const_imm_inst(int inst, int *out, int *root_iconst) {
     int k;
@@ -266,7 +425,7 @@ static int bg_const_imm_inst(int inst, int *out, int *root_iconst) {
     acc = 0;
     lim = 0;
     while (inst >= 0 && lim < 64) {
-        k = h_kind[inst];
+        k = bg_kind(inst);
         if (k == HI_ICONST) { *out = acc + h_val[inst]; *root_iconst = inst; return 1; }
         if (k == HI_COPY) { inst = h_src1[inst]; lim = lim + 1; continue; }
         if (k == HI_ADDI) { acc = acc + h_val[inst]; inst = h_src1[inst]; lim = lim + 1; continue; }
@@ -290,6 +449,8 @@ static char *bg_nt_name(int nt) {
     if (nt == BG_FADDR) return "faddr";
     if (nt == BG_SADDR) return "saddr";
     if (nt == BG_STMT) return "stmt";
+    if (nt == BG_RADDR) return "raddr";
+    if (nt == BG_MEM) return "mem";
     return "?";
 }
 
@@ -512,12 +673,14 @@ static void bg_label_one(int start) {
             lnt = bg_plnt[pat];
             rnt = bg_prnt[pat];
             cost = bg_pcost[pat];
-            if (k == HI_ALLOCA && bg_pnt[pat] == BG_FADDR) {
+            if (bg_pnt[pat] == BG_FADDR) {
                 if (!bg_faddr_ok(i)) { pi = pi + 1; continue; }
             }
-            if (k == HI_ADDI && bg_pnt[pat] == BG_FADDR) {
-                if (!bg_addi_faddr_ok(i)) { pi = pi + 1; continue; }
+            if (bg_pnt[pat] == BG_RADDR) {
+                if (!bg_raddr_ok(i)) { pi = pi + 1; continue; }
             }
+            if (lnt == BG_MEM && !bg_mem_ok(i, s1)) { pi = pi + 1; continue; }
+            if (rnt == BG_MEM && !bg_mem_ok(i, s2)) { pi = pi + 1; continue; }
             if (lnt >= 0) {
                 if (s1 < 0 || bg_cost[s1 * BG_NNT + lnt] >= BG_INF) { pi = pi + 1; continue; }
                 cost = cost + bg_cost[s1 * BG_NNT + lnt];
@@ -558,7 +721,7 @@ static void bg_label(void) {
 
 static int bg_foldable(int k) {
     return k == HI_ICONST || k == HI_GADDR || k == HI_SADDR || k == HI_FADDR ||
-           k == HI_ALLOCA || k == HI_ADDI;
+           k == HI_ALLOCA || k == HI_ADDI || k == HI_ADD || k == HI_LOAD;
 }
 
 static void bg_select(void) {
@@ -571,18 +734,60 @@ static void bg_select(void) {
     int s1;
     int s2;
     i = 0;
-    while (i < h_ninst) { bg_sel[i] = -1; bg_fold[i] = 0; i = i + 1; }
+    while (i < h_ninst) { bg_sel[i] = -1; bg_fold[i] = 0; bg_memop[i] = 0; bg_mem_lnt[i] = -1; i = i + 1; }
     i = 0;
     while (i < h_ninst) {
         k = h_kind[i];
         if (k == HI_NOP) { i = i + 1; continue; }
         nt = hi_has_value(k) ? BG_REG : BG_STMT;
         bg_sel[i] = bg_rule[i * BG_NNT + nt];
+        if (bg_sel[i] >= 0) {
+            if (bg_plnt[bg_sel[i]] == BG_MEM) bg_memop[i] = 1;
+            if (bg_prnt[bg_sel[i]] == BG_MEM) bg_memop[i] = 2;
+        }
         i = i + 1;
     }
-    /* Fold single-use, same-block, non-remat children matched as a
-     * non-REG nonterminal into their parent.  (Only ADDI chains ever
-     * qualify: the leaves are rematerializable.) */
+    /* Which values must exist in a register: anything read by a user
+     * whose pattern wants REG there (or that has no pattern), a call
+     * argument, a phi argument, a branch condition, a stored value.
+     * An address expression read only as part of D(X,B) operands never
+     * needs one: each user re-forms the operand from its parts. */
+    i = 0;
+    while (i < h_ninst) { bg_need_reg[i] = 0; i = i + 1; }
+    i = 0;
+    while (i < h_ninst) {
+        int j;
+        int base;
+        int cnt;
+        k = h_kind[i];
+        if (k == HI_NOP) { i = i + 1; continue; }
+        pat = bg_sel[i];
+        s1 = h_src1[i];
+        s2 = h_src2[i];
+        if (s1 >= 0) {
+            if (pat < 0 || bg_plnt[pat] == BG_REG || bg_plnt[pat] < 0) bg_need_reg[s1] = 1;
+        }
+        if (s2 >= 0 && bg_src2_is_ref(k)) {
+            if (pat < 0 || bg_prnt[pat] == BG_REG || bg_prnt[pat] < 0) bg_need_reg[s2] = 1;
+        }
+        if (k == HI_CALL || k == HI_CALLP) {
+            base = h_cbase[i];
+            cnt = h_val[i];
+            j = 0;
+            while (j < cnt) { if (h_carg[base + j] >= 0) bg_need_reg[h_carg[base + j]] = 1; j = j + 1; }
+        }
+        if (k == HI_PHI) {
+            base = h_pbase[i];
+            cnt = h_pcnt[i];
+            j = 0;
+            while (j < cnt) { if (h_pval[base + j] >= 0) bg_need_reg[h_pval[base + j]] = 1; j = j + 1; }
+        }
+        i = i + 1;
+    }
+
+    /* Fold children matched as a non-REG nonterminal into their
+     * parents: a load that became a storage operand (one use, same
+     * block), or an address expression no user reads as a value. */
     i = 0;
     while (i < h_ninst) {
         pat = bg_sel[i];
@@ -590,8 +795,15 @@ static void bg_select(void) {
         lnt = bg_plnt[pat];
         s1 = h_src1[i];
         if (lnt >= 0 && lnt != BG_REG && s1 >= 0 && !bg_fold[s1] && bg_foldable(h_kind[s1])) {
-            if (!hi_is_remat(h_kind[s1]) && bg_uses[s1] == 1 && h_blk[s1] == h_blk[i] &&
-                bg_cost[s1 * BG_NNT + lnt] < BG_INF && h_kind[s1] != HI_NOP) {
+            /* only a child matched by a real rule for that nonterminal
+             * folds; one that reached it through a chain rule (REG ->
+             * RADDR) is computed into a register and used as the base */
+            if (!hi_is_remat(h_kind[s1]) &&
+                (lnt == BG_MEM ? (bg_uses[s1] == 1 && h_blk[s1] == h_blk[i]) : !bg_need_reg[s1]) &&
+                bg_cost[s1 * BG_NNT + lnt] < BG_INF && bg_rule[s1 * BG_NNT + lnt] >= 0 &&
+                h_kind[s1] != HI_NOP) {
+                if (lnt == BG_MEM) bg_mem_lnt[s1] = bg_plnt[bg_rule[s1 * BG_NNT + BG_MEM]];
+                bg_fold_kind[s1] = h_kind[s1];
                 bg_fold[s1] = 1;
                 bg_sel[s1] = -1;
                 h_kind[s1] = HI_NOP;
@@ -600,13 +812,26 @@ static void bg_select(void) {
         rnt = bg_prnt[pat];
         s2 = h_src2[i];
         if (rnt >= 0 && rnt != BG_REG && s2 >= 0 && !bg_fold[s2] && bg_foldable(h_kind[s2])) {
-            if (bg_uses[s2] == 1 && !hi_is_remat(h_kind[s2]) && h_kind[s2] != HI_NOP &&
-                h_blk[s2] == h_blk[i] && bg_cost[s2 * BG_NNT + rnt] < BG_INF) {
+            if ((rnt == BG_MEM ? (bg_uses[s2] == 1 && h_blk[s2] == h_blk[i]) : !bg_need_reg[s2]) &&
+                !hi_is_remat(h_kind[s2]) && h_kind[s2] != HI_NOP &&
+                bg_cost[s2 * BG_NNT + rnt] < BG_INF &&
+                bg_rule[s2 * BG_NNT + rnt] >= 0) {
+                if (rnt == BG_MEM) bg_mem_lnt[s2] = bg_plnt[bg_rule[s2 * BG_NNT + BG_MEM]];
+                bg_fold_kind[s2] = h_kind[s2];
                 bg_fold[s2] = 1;
                 bg_sel[s2] = -1;
                 h_kind[s2] = HI_NOP;
             }
         }
+        i = i + 1;
+    }
+    /* A MEM operand whose load was not folded (another use appeared
+     * through a chain the fold does not see) is still read through its
+     * register: downgrade so the emitter does not look for an operand. */
+    i = 0;
+    while (i < h_ninst) {
+        if (bg_memop[i] == 1 && !bg_fold[h_src1[i]]) bg_memop[i] = 0;
+        if (bg_memop[i] == 2 && !bg_fold[h_src2[i]]) bg_memop[i] = 0;
         i = i + 1;
     }
 }
@@ -624,8 +849,8 @@ static void hir_burg(void) {
         while (i < h_ninst) { bg_sel[i] = -1; bg_fold[i] = 0; i = i + 1; }
         return;
     }
-    bg_label();
     bg_count_uses();
+    bg_label();
     bg_select();
 }
 
@@ -671,8 +896,8 @@ static void hcg_identify_fusions(void) {
         if (!hcg_is_cmp(rk)) { i = i + 1; continue; }
         if (bg_uses[root] != 1) { i = i + 1; continue; }
         if (h_blk[root] != h_blk[i]) { i = i + 1; continue; }
-        if (h_src1[root] >= 0 && h_kind[h_src1[root]] == HI_NOP) { i = i + 1; continue; }
-        if (h_src2[root] >= 0 && h_kind[h_src2[root]] == HI_NOP) { i = i + 1; continue; }
+        if (h_src1[root] >= 0 && h_kind[h_src1[root]] == HI_NOP && bg_memop[root] != 1) { i = i + 1; continue; }
+        if (h_src2[root] >= 0 && h_kind[h_src2[root]] == HI_NOP && bg_memop[root] != 2) { i = i + 1; continue; }
         hcg_brc_fuse[i] = root;
         hcg_cmp_fused[root] = 1;
         hcg_cmp_kind[root] = rk;

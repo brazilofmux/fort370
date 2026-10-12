@@ -28,6 +28,10 @@ static int licm_head[HIR_MAX_BLOCK];  /* first hoisted inst, -1 = none */
  * the passes run only where the target's driver turns them on
  * (hir_codegen.h sets it before calling hir_licm). */
 static int licm_loopopt;
+/* fort370: on S/370 an array reference is base+index+displacement in
+ * one instruction, so ADD(iv, base) must stay an ADD rather than
+ * become a pointer induction variable; set by the S/370 emitter. */
+static int licm_no_ptr_iv;
 static int licm_tail[HIR_MAX_BLOCK];  /* last hoisted inst, for O(1) append */
 static int licm_next[HIR_MAX_INST];   /* next hoisted inst, -1 = end */
 
@@ -1013,7 +1017,7 @@ static void licm_strred(int header, int latch) {
                     } else if (sr_find(o2) >= 0 && sr_invariant(o1)) {
                         r = sr_find(o2); other = o1; knd = 2;
                     }
-                } else if (k == HI_ADD) {
+                } else if (k == HI_ADD && !licm_no_ptr_iv) {
                     if (sr_find(o1) >= 0 && sr_invariant(o2)) {
                         r = sr_find(o1); other = o2; knd = 3;
                     } else if (sr_find(o2) >= 0 && sr_invariant(o1)) {

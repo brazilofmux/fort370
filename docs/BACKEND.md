@@ -224,13 +224,20 @@ labels are `Lnnnn` (blocks), `Tnnnn` (static-area slots), `Cnnnn`
 
 ## Where it stands
 
-2026-10-12: steps 1 to 6 are done. The seven kernels assemble under
-IFOX00, link against FORTLIB and print FORTRAN H's checksums to the
-digit; `bench/results-s370-2026-10-12.txt` has the times, which fall
-between H's OPT=0 and OPT=1 (the optimizer runs, but every operand is
-loaded into a register first and the loops close with C/BC).
-`bench/ab.sh` runs one program through both compilers and compares
-what they print; `tests/s370/` holds such programs.
+2026-10-12: all seven steps have a first version. The kernels
+assemble under IFOX00, link against FORTLIB and print FORTRAN H's
+checksums to the digit. `bench/results-s370-2026-10-12.txt` is the
+register-to-register grammar, between H's OPT=0 and OPT=1;
+`bench/results-s370-2026-10-12b.txt` adds storage operands, index
+registers and BXLE, and DAXPY's loop is then `LDR / MD / AD / STD /
+BXLE`, five instructions like H's, at 4.64 s against H's 4.40. The
+rest of the gap (lll7 at 1.9x, the others 1.3 to 1.4x) is register
+pressure on four floating registers, the inner loops of nested
+subscripts, and calls. `bench/ab.sh` runs one program through both
+compilers and compares what they print; `tests/s370/` holds such
+programs; `F77_NO_MEM`, `F77_NO_BXLE`, `F77_NO_REASSOC` and
+`F77_NO_IDX` switch the step-3 transformations off one at a time,
+which is how the two miscompiles they first brought were found.
 
 ## The order of work
 
