@@ -60,10 +60,12 @@ run-to-run drift):
 The inner loops are H's: daxpy is `LD / MDR / AD / STD / BXLE`, and
 matmul's is five instructions to H's eight; an outer loop that only
 counts is one `BXH`. What H does that this compiler does not yet:
-parameter lists built once in static storage. What is not yet written:
-the compiler's own I/O runtime (`IBCOM#` covers only H's repertoire),
-branches beyond 4K of code, the FCVS run on MVS itself, and the XMIT
-package that would put the compiler on the system. `docs/BACKEND.md`
+parameter lists built once in static storage, and a second base
+register for code beyond 4K (a branch to such a target here loads its
+address from the pool, `L 15,=A(L) / BC m,0(,15)`). What is not yet
+written: the compiler's own I/O runtime (`IBCOM#` covers only H's
+repertoire), the FCVS run on MVS itself, and the XMIT package that
+would put the compiler on the system. `docs/BACKEND.md`
 has the design and the record of the work.
 
 ## The larger aim

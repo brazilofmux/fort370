@@ -43,7 +43,9 @@ static void cg_flush(void) {
     cg_olen = 0;
 }
 
+static int cg_dry;          /* a sizing pass: emit nothing, count bytes */
 static void cg_c(int ch) {
+    if (cg_dry) return;
     if (cg_olen >= CG_MAX_OUT) cg_flush();
     cg_out[cg_olen] = (char)ch;
     cg_olen = cg_olen + 1;
@@ -93,11 +95,32 @@ static int  s370_pc;          /* bytes of code emitted in this CSECT, for alignm
 
 static void s370_scache_clear(void);
 static int s370_scache[16];
+/* Code labels (Lnnnnn) by offset in the CSECT, numbered from the first
+ * label the unit allocated.  A label 4K or more past the code base
+ * (the BALR 12,0) is "far": a branch to it loads its address into R15
+ * from the pool and branches 0(,15).  A sizing pass (cg_dry) finds
+ * them before the real one; see s370_gen_unit. */
+#define S370_MAX_ULBL 32768
+static int  s370_lbl_base;
+static int  s370_lbl_pc[S370_MAX_ULBL];
+static char s370_far[S370_MAX_ULBL];
+static int  s370_code_base;
+static int s370_lbl_far(int lbl) {
+    lbl = lbl - s370_lbl_base;
+    return lbl >= 0 && lbl < S370_MAX_ULBL && s370_far[lbl];
+}
+
 static void asm_stmt(char *label, char *op, char *operands) {
     int col;
     int i;
     char *p;
     if (label && *label) s370_scache_clear();
+    if (label && label[0] == 'L' && label[1] >= '0' && label[1] <= '9') {
+        int n;
+        n = atoi(label + 1) - s370_lbl_base;
+        if (n < 0 || n >= S370_MAX_ULBL) cg_die("too many labels in one unit", -1);
+        s370_lbl_pc[n] = s370_pc;
+    }
     col = 0;
     p = label;
     while (p && *p) { cg_c(*p); p = p + 1; col = col + 1; }
@@ -297,6 +320,7 @@ static int s370_spill_base;
 #define S370_PK_AT    7    /* DC A(Tnnnnn+off): a far object */
 #define S370_PK_AL    8    /* DC A(Lnnnnn): a block label */
 #define S370_PK_AQ    9    /* DC A(Qnnnnn+off): a string */
+#define S370_PK_AB   10    /* DC A(Lnnnnn): a code label, for a far branch */
 static int   s370_pk_kind[S370_MAX_POOL];
 static int   s370_pk_lbl[S370_MAX_POOL];
 static unsigned int s370_pk_v1[S370_MAX_POOL];
@@ -330,6 +354,7 @@ static char *s370_pool_v(char *name) { return s370_lab('C', s370_pool(S370_PK_V,
 static char *s370_pool_a(char *name, int off) { return s370_lab('C', s370_pool(S370_PK_A, (unsigned)off, 0, name)); }
 static char *s370_pool_at(int tlbl, int off) { return s370_lab('C', s370_pool(S370_PK_AT, (unsigned)tlbl, (unsigned)off, 0)); }
 static char *s370_pool_al(int lbl) { return s370_lab('C', s370_pool(S370_PK_AL, (unsigned)lbl, 0, 0)); }
+static char *s370_pool_ab(int lbl) { return s370_lab('C', s370_pool(S370_PK_AB, (unsigned)lbl, 0, 0)); }
 static char *s370_pool_aq(int sidx, int off) { return s370_lab('C', s370_pool(S370_PK_AQ, (unsigned)sidx, (unsigned)off, 0)); }
 
 /* Strings used by this compilation (format texts, character
@@ -879,9 +904,22 @@ static int hcg_cur_blk;
 
 /* Branch to a block label.  Direct for now; the far form (address
  * constant and BCR) comes with the size estimate. */
+/* The branch target operand: the label, or 0(,15) with R15 loaded
+ * from the pool when the label is beyond the code base's 4K. */
+static char *s370_target_fmt(int lbl, int rs) {
+    if (s370_lbl_far(lbl)) {
+        f_reset(); f_s("15,"); f_s(s370_pool_ab(lbl)); asm_ins("L", s370_line, 4);
+        return rs ? "0(15)" : "0(,15)";      /* RS (BXLE) has no index field */
+    }
+    return s370_lab('L', lbl);
+}
+static char *s370_target(int lbl) { return s370_target_fmt(lbl, 0); }
+
 static void s370_branch(int mask, int lbl) {
-    if (mask == 15) { f_reset(); f_s(s370_lab('L', lbl)); asm_ins("B", s370_line, 4); return; }
-    f_reset(); f_n(mask); f_c(','); f_s(s370_lab('L', lbl));
+    char *t;
+    t = s370_target(lbl);
+    if (mask == 15) { f_reset(); f_s(t); asm_ins("B", s370_line, 4); return; }
+    f_reset(); f_n(mask); f_c(','); f_s(t);
     asm_ins("BC", s370_line, 4);
 }
 
@@ -1545,13 +1583,15 @@ static void s370_condbr(int i) {
         strcat(bx, s370_r(ra_reg[step]));
         strcat(bx, ",");
         if (!then_copies) {
-            f_reset(); f_s(bx); f_s(s370_lab('L', hcg_blk_lbl[then_b])); asm_ins(hcg_cmp_kind[cmp] == HI_SGT ? "BXH" : "BXLE", s370_line, 4);
+            { char *t; t = s370_target_fmt(hcg_blk_lbl[then_b], 1); f_reset(); f_s(bx); f_s(t); }
+            asm_ins(hcg_cmp_kind[cmp] == HI_SGT ? "BXH" : "BXLE", s370_line, 4);
             if (else_copies) s370_phi_copies(hcg_cur_blk, else_b);
             if (else_b != next_b) s370_branch(15, hcg_blk_lbl[else_b]);
             return;
         }
         lstub = cg_label();
-        f_reset(); f_s(bx); f_s(s370_lab('L', lstub)); asm_ins(hcg_cmp_kind[cmp] == HI_SGT ? "BXH" : "BXLE", s370_line, 4);
+        { char *t; t = s370_target_fmt(lstub, 1); f_reset(); f_s(bx); f_s(t); }
+        asm_ins(hcg_cmp_kind[cmp] == HI_SGT ? "BXH" : "BXLE", s370_line, 4);
         if (else_copies) s370_phi_copies(hcg_cur_blk, else_b);
         s370_branch(15, hcg_blk_lbl[else_b]);
         asm_stmt(s370_lab('L', lstub), "DS", "0H");
@@ -2052,8 +2092,18 @@ static void s370_layout_blocks(void) {
             k = h_kind[i];
             if (k == HI_BR && !hcg_placed[h_val[i]]) nxt = h_val[i];
             else if (k == HI_BRC) {
-                if (!hcg_placed[h_val[i]]) nxt = h_val[i];        /* the fall-through arm */
-                else if (!hcg_placed[h_src2[i]]) nxt = h_src2[i];
+                int t;
+                int e;
+                t = h_src2[i];
+                e = h_val[i];
+                /* IF (c) statement: the then arm is a block of its own
+                 * that falls into the join; lay it next (the branch
+                 * inverts), as H does, rather than at the unit's end,
+                 * where in a unit of more than 4K it is a far branch */
+                if (!hcg_placed[t] && t >= 0 && t < bb_nblk && ssa_npred[t] == 1 && ssa_nsucc[t] == 1 &&
+                    ssa_succ[ssa_soff[t]] == e) nxt = t;
+                else if (!hcg_placed[e]) nxt = e;        /* the fall-through arm */
+                else if (!hcg_placed[t]) nxt = t;
             }
         }
         if (nxt < 0) {
@@ -2191,6 +2241,7 @@ static void s370_emit_area(void) {
             f_c(')'); asm_stmt(lab, "DC", s370_line);
         }
         else if (k == S370_PK_AL) { f_reset(); f_s("A("); f_s(s370_lab('P', (int)s370_pk_v1[i])); f_c(')'); asm_stmt(lab, "DC", s370_line); }
+        else if (k == S370_PK_AB) { f_reset(); f_s("A("); f_s(s370_lab('L', (int)s370_pk_v1[i])); f_c(')'); asm_stmt(lab, "DC", s370_line); }
         else if (k == S370_PK_AQ) {
             f_reset(); f_s("A("); f_s(s370_lab('Q', s370_str_lbl[(int)s370_pk_v1[i]]));
             if ((int)s370_pk_v2[i] > 0) { f_c('+'); f_n((int)s370_pk_v2[i]); }
@@ -2950,6 +3001,8 @@ static int s370_bxle_ok(int brc) {
     return 1;
 }
 
+static void s370_emit_csect(Node *fn, char *csect);
+static void s370_emit_code(Node *fn, char *csect);
 static void s370_gen_unit(Node *fn) {
     int b;
     int q;
@@ -2977,6 +3030,7 @@ static void s370_gen_unit(Node *fn) {
     s370_npl = 0;
     s370_plist_lbl = -1;
     s370_plist_n = 0;
+    s370_lbl_base = cg_lbl;
     s370_area_lbl = cg_label();
     s370_pc = 0;
     s370_mark_strings();
@@ -3012,8 +3066,72 @@ static void s370_gen_unit(Node *fn) {
     while (b < bb_nblk) { hcg_blk_lbl[b] = cg_label(); b = b + 1; }
     hcg_epilog = cg_label();
 
+    {
+        char csect_name[16];
+        strcpy(csect_name, s370_extname(fn->name));   /* the buffer is reused by callee names */
+        s370_emit_csect(fn, csect_name);
+    }
+    s370_emit_area();
+}
+
+/* The CSECT, in a sizing pass first: branch targets 4K or more past
+ * the code base are far and need the longer form, which moves later
+ * labels further still, so the sizing repeats until no label turns
+ * far; then the real pass.  Everything the emission allocates (labels,
+ * pool entries, temporaries, parameter lists, global labels) is
+ * restored between passes so that every pass numbers alike. */
+static int s370_glbl_save[P_MAX_GLOBALS];
+static void s370_emit_csect(Node *fn, char *csect) {
+    int sv_lbl;
+    int sv_npool;
+    int sv_ntmp;
+    int sv_npl;
+    int sv_plist_lbl;
+    int sv_plist_n;
+    int pass;
+    int l;
+    int changed;
+    sv_lbl = cg_lbl;
+    sv_npool = s370_npool;
+    sv_ntmp = s370_ntmp;
+    sv_npl = s370_npl;
+    sv_plist_lbl = s370_plist_lbl;
+    sv_plist_n = s370_plist_n;
+    memcpy(s370_glbl_save, s370_glbl, sizeof(s370_glbl));
+    l = 0;
+    while (l < S370_MAX_ULBL) { s370_far[l] = 0; l = l + 1; }
+    pass = 0;
+    for (;;) {
+        cg_lbl = sv_lbl;
+        l = sv_npool;
+        while (l < s370_npool) { if (s370_pk_name[l]) free(s370_pk_name[l]); s370_pk_name[l] = 0; l = l + 1; }
+        s370_npool = sv_npool;
+        s370_ntmp = sv_ntmp;
+        s370_npl = sv_npl;
+        s370_plist_lbl = sv_plist_lbl;
+        s370_plist_n = sv_plist_n;
+        memcpy(s370_glbl, s370_glbl_save, sizeof(s370_glbl));
+        s370_pc = 0;
+        l = 0;
+        while (l < S370_MAX_ULBL) { s370_lbl_pc[l] = -1; l = l + 1; }
+        cg_dry = (pass < 16);
+        s370_emit_code(fn, csect);
+        if (!cg_dry) break;
+        changed = 0;
+        l = 0;
+        while (l < cg_lbl - s370_lbl_base && l < S370_MAX_ULBL) {
+            if (s370_lbl_pc[l] >= 0 && s370_lbl_pc[l] - s370_code_base >= 4096 && !s370_far[l]) { s370_far[l] = 1; changed = 1; }
+            l = l + 1;
+        }
+        pass = pass + 1;
+        if (!changed) pass = 16;          /* stable: the next pass is the real one */
+    }
+    cg_dry = 0;
+}
+
+static void s370_emit_code(Node *fn, char *csect) {
+    int q;
     /* --- the CSECT --- */
-    csect = s370_extname(fn->name);
     asm_comment(fn->name);
     asm_stmt(csect, "CSECT", "");
     asm_stmt("", "USING", "*,15");
@@ -3031,6 +3149,7 @@ static void s370_gen_unit(Node *fn) {
     asm_ins("BALR", "12,0", 2);
     asm_stmt("", "USING", "*,12");
     asm_stmt("", "DROP", "15");
+    s370_code_base = s370_pc;
     {
         int lgo;
         int lac;
@@ -3086,8 +3205,6 @@ static void s370_gen_unit(Node *fn) {
     asm_ins("LM", "2,12,28(13)", 4);
     asm_ins("SR", "15,15", 2);
     asm_ins("BR", "14", 2);
-
-    s370_emit_area();
 }
 
 /* ---------------------------------------------------------------- */

@@ -276,7 +276,24 @@ the pass off. Last, a loop with only a trip count -- an outer DO whose
 variable is unused -- counts it down with `BXH`, the -1 and the 0 a
 register pair as a BXLE's step and limit are, so daxpy's outer loop
 is `LA / LH / LA / inner / BXH`. The seven kernels then stand at 0.89
-to 1.00 of H's OPT=2, H measured the same hour. `bench/ab.sh` runs one program through both
+to 1.00 of H's OPT=2, H measured the same hour.
+
+Code beyond 4K of the base: the CSECT is emitted in a sizing pass
+first (`cg_dry`, nothing written, every `Lnnnnn` label's offset
+recorded), and a target 4K or more past the `BALR 12,0` is far: the
+branch becomes `L 15,=A(Lnnnnn)` from the pool and `BC m,0(,15)`, or
+`BXLE r,s,0(15)`. The longer form moves later labels further, so the
+sizing repeats until no label turns far, and everything the emission
+allocates (labels, pool entries, temporaries, parameter lists) is
+restored between passes so that each pass numbers alike. H instead
+reserves more base registers; that costs every loop in the unit a
+register, and a far loop here pays one `L` an iteration instead --
+the better trade for the kernels, open to revisiting for a unit whose
+hot loop sits past 4K. With it, an `IF (c) statement`'s then arm is
+laid next to the test (the branch inverts), as H does, rather than at
+the unit's end. `tests/s370/big.f` is a 7K unit with branches both
+ways across the boundary and a loop nest at the far end, and agrees
+with H. `bench/ab.sh` runs one program through both
 compilers and compares what they print; `tests/s370/` holds such
 programs; `F77_NO_MEM`, `F77_NO_BXLE`, `F77_NO_REASSOC`,
 `F77_NO_IDX`, `F77_NO_HOIST` and `F77_NO_REHOIST` switch the step-3
