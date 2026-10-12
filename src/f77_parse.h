@@ -421,7 +421,14 @@ static int f77_sym(char *nm) {
     f77_styped[f77_nsym] = 0;
     f77_sstored[f77_nsym] = 0;
     { int d; d = 0; while (d < F77_MAX_RANK) { f77_sextsym[f77_nsym][d] = -1; f77_slov[f77_nsym][d] = -1; d = d + 1; } }
-    f77_frame = f77_frame + f77_tysize(f77_sty[f77_nsym]);
+    /* An implicitly typed CHARACTER (IMPLICIT CHARACTER*14 (C)) has its
+     * length now and gets all of it; a declaration re-issues the slot
+     * anyway.  One byte here left CVCOMP*14 overlapping its
+     * neighbours (FCVS FM301, test 18). */
+    if (f77_sty[f77_nsym] == TY_CHAR && f77_slen[f77_nsym] > 1)
+        f77_frame = f77_frame + ((f77_slen[f77_nsym] + 3) & ~3);
+    else
+        f77_frame = f77_frame + f77_tysize(f77_sty[f77_nsym]);
     f77_sval[f77_nsym] = hi_emit(HI_ALLOCA, f77_sty[f77_nsym] == TY_CPLX ? TY_FLOAT : f77_sty[f77_nsym], -1, -1,
                                  0 - f77_frame, NULL);
     hl_ainst[hl_nalloca] = f77_sval[f77_nsym];
