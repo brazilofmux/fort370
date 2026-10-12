@@ -17,6 +17,10 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#ifdef F77_TARGET_S370
+#define F77_NATIVE_F64 1
+#endif
+
 #include "f77_shim.h"
 #include "f77_contract.h"
 
@@ -28,10 +32,20 @@ static void f77_error(char *msg);
 #include "hir_ssa.h"
 #include "hir_opt.h"
 #include "hir_licm.h"
+#ifdef F77_TARGET_S370
+/* fort370: the S/370 back end (docs/BACKEND.md).  s370_hfp.h comes
+ * before the parser, which converts DATA images with it. */
+#include "s370_hfp.h"
+#include "hir_burg_s370.h"
+#include "hir_regalloc_s370.h"
+#include "f77_parse.h"
+#include "hir_codegen_s370.h"
+#else
 #include "hir_burg.h"
 #include "hir_regalloc.h"
 #include "f77_parse.h"
 #include "hir_codegen.h"
+#endif
 
 static int f77_nerr;
 
