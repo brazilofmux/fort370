@@ -1545,13 +1545,13 @@ static void s370_condbr(int i) {
         strcat(bx, s370_r(ra_reg[step]));
         strcat(bx, ",");
         if (!then_copies) {
-            f_reset(); f_s(bx); f_s(s370_lab('L', hcg_blk_lbl[then_b])); asm_ins("BXLE", s370_line, 4);
+            f_reset(); f_s(bx); f_s(s370_lab('L', hcg_blk_lbl[then_b])); asm_ins(hcg_cmp_kind[cmp] == HI_SGT ? "BXH" : "BXLE", s370_line, 4);
             if (else_copies) s370_phi_copies(hcg_cur_blk, else_b);
             if (else_b != next_b) s370_branch(15, hcg_blk_lbl[else_b]);
             return;
         }
         lstub = cg_label();
-        f_reset(); f_s(bx); f_s(s370_lab('L', lstub)); asm_ins("BXLE", s370_line, 4);
+        f_reset(); f_s(bx); f_s(s370_lab('L', lstub)); asm_ins(hcg_cmp_kind[cmp] == HI_SGT ? "BXH" : "BXLE", s370_line, 4);
         if (else_copies) s370_phi_copies(hcg_cur_blk, else_b);
         s370_branch(15, hcg_blk_lbl[else_b]);
         asm_stmt(s370_lab('L', lstub), "DS", "0H");
@@ -2857,7 +2857,31 @@ static void s370_loops(void) {
             }
             p = ssa_phi_next[p];
         }
-        if (p1 < 0) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 11\n", 2); } i = i + 1; continue; }
+        if (p1 < 0) {
+            /* No index, only the trip count: count it down with BXH,
+             * t' = t + (-1), continue while t' > 0, the -1 and the 0 a
+             * register pair as a BXLE's step and limit are.  An outer
+             * loop whose own variable went unused is this shape. */
+            if (h_ninst + 2 >= HIR_MAX_INST) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 11\n", 2); } i = i + 1; continue; }
+            step = sp_new_inst(HI_ICONST, TY_INT, -1, -1, -1, pre);
+            lim = sp_new_inst(HI_ICONST, TY_INT, -1, -1, 0, pre);
+            if (licm_tail[pre] >= 0) licm_next[licm_tail[pre]] = step;
+            else licm_head[pre] = step;
+            licm_next[step] = lim;
+            licm_tail[pre] = lim;
+            h_no_remat[step] = 1;
+            h_no_remat[lim] = 1;
+            ra_pair_of[step] = lim; ra_pair_lo[step] = 1;
+            ra_pair_of[lim] = step; ra_pair_lo[lim] = 0;
+            h_kind[t1] = HI_ADD;
+            h_src2[t1] = step;
+            h_val[t1] = 0;
+            h_src2[cmp] = lim;
+            s370_bxle_add[i] = t1;
+            s370_bxle_brc[t1] = i;
+            i = i + 1;
+            continue;
+        }
         i0 = s370_phi_arg_from(p, pre);
         if (i0 < 0) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 12\n", 2); } i = i + 1; continue; }
         if (h_ninst + 6 >= HIR_MAX_INST) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 13\n", 2); } i = i + 1; continue; }

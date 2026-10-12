@@ -49,18 +49,18 @@ run-to-run drift):
 
 | kernel  | fort370 | FORTRAN H OPT=2 |
 |---------|--------:|----------------:|
-| daxpy   |    4.46 |            4.40 |
+| daxpy   |    4.41 |            4.40 |
 | ddot    |    3.49 |            3.49 |
-| matmul  |    4.59 |            5.04 |
-| lll1    |    9.20 |            9.15 |
-| lll5    |    5.55 |            5.53 |
-| lll7    |   14.98 |           15.14 |
-| linpack |   13.18 |           13.64 |
+| matmul  |    4.50 |            5.04 |
+| lll1    |    9.06 |            9.15 |
+| lll5    |    5.54 |            5.53 |
+| lll7    |   14.80 |           15.14 |
+| linpack |   12.97 |           13.64 |
 
 The inner loops are H's: daxpy is `LD / MDR / AD / STD / BXLE`, and
-matmul's is five instructions to H's eight. What H does that this
-compiler does not yet: parameter lists built once in static storage,
-and an outer loop reduced to a single `BXLE`. What is not yet written:
+matmul's is five instructions to H's eight; an outer loop that only
+counts is one `BXH`. What H does that this compiler does not yet:
+parameter lists built once in static storage. What is not yet written:
 the compiler's own I/O runtime (`IBCOM#` covers only H's repertoire),
 branches beyond 4K of code, the FCVS run on MVS itself, and the XMIT
 package that would put the compiler on the system. `docs/BACKEND.md`

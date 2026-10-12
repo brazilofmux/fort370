@@ -272,7 +272,11 @@ iteration), and a respill victim must be of the failing node's own
 class. And a fused compare is a NOP by allocation time, so its
 operands -- a BXLE's index and limit -- had no weight and DGEFA's
 DSCAL limit was the first thing spilled. `F77_NO_REHOIST` switches
-the pass off. `bench/ab.sh` runs one program through both
+the pass off. Last, a loop with only a trip count -- an outer DO whose
+variable is unused -- counts it down with `BXH`, the -1 and the 0 a
+register pair as a BXLE's step and limit are, so daxpy's outer loop
+is `LA / LH / LA / inner / BXH`. The seven kernels then stand at 0.89
+to 1.00 of H's OPT=2, H measured the same hour. `bench/ab.sh` runs one program through both
 compilers and compares what they print; `tests/s370/` holds such
 programs; `F77_NO_MEM`, `F77_NO_BXLE`, `F77_NO_REASSOC`,
 `F77_NO_IDX`, `F77_NO_HOIST` and `F77_NO_REHOIST` switch the step-3
