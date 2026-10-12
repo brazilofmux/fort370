@@ -34,6 +34,22 @@ unrolling and calls, and it is worth perhaps 10 to 35%, not multiples.
 - **Oracle:** FORTRAN H's own output and timings for the same programs, on
   the same system.
 
+## The larger aim
+
+The back end matters more than the compiler. On SLOW-32 it produces
+tighter code than GCC. Ported to S/370, it could generate code for more
+languages than Fortran on MVS 3.8j. Fortran comes first because FORTRAN H
+gives an honest standard: a back end that holds its own against H on the
+loops has proved itself. A second comparison is C-shaped code against
+cc370, which is GCC 3.4.6 for the 370.
+
+The back end stays separate from the Fortran front end. Only the
+front-end contract crosses between them, so if another language arrives,
+the back end can move out without being untangled. The optimizer,
+instruction selection and register allocation are what carry over. Each
+language's runtime model, such as COBOL's decimal arithmetic or Pascal's
+nested procedures, is still its own work.
+
 ## Layout
 
     docs/FORTRAN-H.md     the measurement, and why it is measured
