@@ -105,6 +105,8 @@ static int  s370_lbl_base;
 static int  s370_lbl_pc[S370_MAX_ULBL];
 static char s370_far[S370_MAX_ULBL];
 static int  s370_code_base;
+static int  s370_sizing_changed;
+static int  s370_area_end_sized;   /* the static area's extent the sizing found */
 static int s370_lbl_far(int lbl) {
     lbl = lbl - s370_lbl_base;
     return lbl >= 0 && lbl < S370_MAX_ULBL && s370_far[lbl];
@@ -861,6 +863,39 @@ static char *s370_mem_operand(int addr, int lnt, int s) {
     }
     fmt_p = s370_mbuf; f_n(off); f_s("(,"); f_s(s370_r(b)); f_c(')'); fmt_p = save;
     return s370_mbuf;
+}
+
+/* The same for an RS-format instruction (ICM, STCM), whose operand has
+ * no index: an indexed address is formed into the scratch first. */
+static char s370_mbuf3[48];
+static char *s370_mem_operand_rs(int addr, int lnt, int s) {
+    char *m;
+    char *save;
+    char *p;
+    int simple;
+    m = s370_mem_operand(addr, lnt, s);
+    /* "D(,B)" becomes "D(B)"; "D(X,B)" needs the LA; a symbolic
+     * operand with no parenthesis is fine as it is */
+    p = m;
+    simple = 1;
+    while (*p && *p != '(') p = p + 1;
+    if (*p == 0) return m;
+    if (p[1] != ',') simple = 0;
+    save = fmt_p;
+    if (simple) {
+        int i;
+        fmt_p = s370_mbuf3;
+        i = 0;
+        while (m[i] != '(') { f_c(m[i]); i = i + 1; }
+        f_c('(');
+        i = i + 2;
+        while (m[i]) { f_c(m[i]); i = i + 1; }
+        fmt_p = save;
+        return s370_mbuf3;
+    }
+    f_reset(); f_s(s370_r(s)); f_c(','); f_s(m); asm_ins("LA", s370_line, 4);
+    fmt_p = s370_mbuf3; f_s("0("); f_s(s370_r(s)); f_c(')'); fmt_p = save;
+    return s370_mbuf3;
 }
 
 /* The storage operand of a load folded into its user (bg_memop). */
@@ -1820,11 +1855,12 @@ static void s370_inst(int i) {
         if (d == 14) s = 15;
         if ((ty & TY_BASE_MASK) == TY_CHAR) {
             char *m;
-            m = s370_mem_operand(h_src1[i], lnt, s);
             if (ty & TY_UNSIGNED) {
+                m = s370_mem_operand(h_src1[i], lnt, s);
                 f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(d)); asm_ins("SR", s370_line, 2);
                 f_reset(); f_s(s370_r(d)); f_c(','); f_s(m); asm_ins("IC", s370_line, 4);
             } else {
+                m = s370_mem_operand_rs(h_src1[i], lnt, s);     /* ICM is RS: no index */
                 f_reset(); f_s(s370_r(d)); f_s(",8,"); f_s(m); asm_ins("ICM", s370_line, 4);
                 f_reset(); f_s(s370_r(d)); f_s(",24"); asm_ins("SRA", s370_line, 4);
             }
@@ -3103,13 +3139,13 @@ static int s370_bxle_ok(int brc) {
     return 1;
 }
 
-static void s370_emit_csect(Node *fn, char *csect);
+static void s370_emit_csect(Node *fn, char *csect, int size_only);
 static void s370_emit_code(Node *fn, char *csect);
+static int s370_area_end(void);
 static void s370_gen_unit(Node *fn) {
     int b;
-    int q;
     int attempt;
-    char *csect;
+    char csect_name[16];
 
     s370_cur_unit = fn->unit;
     s370_unit_is_main = (f77_ukind[fn->unit] == F77_UNIT_PROGRAM);
@@ -3148,13 +3184,24 @@ static void s370_gen_unit(Node *fn) {
 
     /* Register allocation; a spill region past the data bases' reach
      * costs another base and a second try. */
+    s370_layout_blocks();
+    b = 0;
+    while (b < bb_nblk) { hcg_blk_lbl[b] = cg_label(); b = b + 1; }
+    hcg_epilog = cg_label();
+    strcpy(csect_name, s370_extname(fn->name));   /* the buffer is reused by callee names */
+
+    /* Register allocation, then a sizing of the code (which fills the
+     * constant pool: a far branch costs an address constant); a static
+     * area past the data bases' reach costs another base and a second
+     * try. */
     attempt = 0;
     for (;;) {
         int save_ts;
         ra_gpr_avail = RA_NGPR - (s370_nbases - 1);
         save_ts = hl_temp_stack;
         hir_regalloc();
-        if (s370_spill_base + 8 * ra_nslots + 8 * S370_MAX_TMP + 1024 <= s370_near_limit || attempt >= 2 || s370_nbases >= 3) break;
+        s370_emit_csect(fn, csect_name, 1);
+        if (s370_area_end_sized + 256 <= s370_near_limit || attempt >= 2 || s370_nbases >= 3) break;
         s370_nbases = s370_nbases + 1;
         s370_near_limit = 4096 * s370_nbases;
         hl_temp_stack = save_ts;
@@ -3163,27 +3210,18 @@ static void s370_gen_unit(Node *fn) {
 
     if (getenv("F77_DUMP")) ra_dump_intervals(fn->name);
 
-    s370_layout_blocks();
-    b = 0;
-    while (b < bb_nblk) { hcg_blk_lbl[b] = cg_label(); b = b + 1; }
-    hcg_epilog = cg_label();
-
-    {
-        char csect_name[16];
-        strcpy(csect_name, s370_extname(fn->name));   /* the buffer is reused by callee names */
-        s370_emit_csect(fn, csect_name);
-    }
+    s370_emit_csect(fn, csect_name, 0);
     s370_emit_area();
 }
 
 /* The CSECT, in a sizing pass first: branch targets 4K or more past
  * the code base are far and need the longer form, which moves later
  * labels further still, so the sizing repeats until no label turns
- * far; then the real pass.  Everything the emission allocates (labels,
+ * far (a 25K unit took eleven passes); then the real pass.  Everything the emission allocates (labels,
  * pool entries, temporaries, parameter lists, global labels) is
  * restored between passes so that every pass numbers alike. */
 static int s370_glbl_save[P_MAX_GLOBALS];
-static void s370_emit_csect(Node *fn, char *csect) {
+static void s370_emit_csect(Node *fn, char *csect, int size_only) {
     int sv_lbl;
     int sv_npool;
     int sv_ntmp;
@@ -3216,19 +3254,65 @@ static void s370_emit_csect(Node *fn, char *csect) {
         s370_pc = 0;
         l = 0;
         while (l < S370_MAX_ULBL) { s370_lbl_pc[l] = -1; l = l + 1; }
-        cg_dry = (pass < 16);
+        cg_dry = (pass < 256);
         s370_emit_code(fn, csect);
         if (!cg_dry) break;
+        if (size_only && pass > 0 && !s370_sizing_changed) break;   /* the pool is as full as it gets */
         changed = 0;
         l = 0;
         while (l < cg_lbl - s370_lbl_base && l < S370_MAX_ULBL) {
             if (s370_lbl_pc[l] >= 0 && s370_lbl_pc[l] - s370_code_base >= 4096 && !s370_far[l]) { s370_far[l] = 1; changed = 1; }
             l = l + 1;
         }
+        if (getenv("F77_FAR_DEBUG")) {
+            int nf;
+            nf = 0;
+            l = 0;
+            while (l < cg_lbl - s370_lbl_base && l < S370_MAX_ULBL) { if (s370_far[l]) nf = nf + 1; l = l + 1; }
+            fdputs("FAR pass=", 2); fdputuint(2, (unsigned)pass); fdputs(" code=", 2); fdputuint(2, (unsigned)s370_pc);
+            fdputs(" labels=", 2); fdputuint(2, (unsigned)(cg_lbl - s370_lbl_base)); fdputs(" far=", 2); fdputuint(2, (unsigned)nf);
+            fdputs(" changed=", 2); fdputuint(2, (unsigned)changed); fdputc(10, 2);
+        }
+        s370_sizing_changed = changed;
         pass = pass + 1;
-        if (!changed) pass = 16;          /* stable: the next pass is the real one */
+        if (!changed) { if (size_only) break; pass = 256; }   /* stable: the next pass is the real one */
     }
     cg_dry = 0;
+    if (size_only) {
+        /* the measure the caller wants, then everything back as it
+         * was: the real emission numbers its labels from here again */
+        s370_area_end_sized = s370_area_end();
+        cg_lbl = sv_lbl;
+        l = sv_npool;
+        while (l < s370_npool) { if (s370_pk_name[l]) free(s370_pk_name[l]); s370_pk_name[l] = 0; l = l + 1; }
+        s370_npool = sv_npool;
+        s370_ntmp = sv_ntmp;
+        s370_npl = sv_npl;
+        s370_plist_lbl = sv_plist_lbl;
+        s370_plist_n = sv_plist_n;
+        memcpy(s370_glbl, s370_glbl_save, sizeof(s370_glbl));
+    }
+}
+
+/* The static area's extent after the code has been sized: header,
+ * near objects, spill slots, temporaries, parameter list, jump tables
+ * and the constant pool (s370_emit_area lays them out in this order). */
+static int s370_area_end(void) {
+    int off;
+    int i;
+    off = s370_spill_base + 8 * ra_nslots + 8 * s370_ntmp;
+    if (s370_plist_lbl >= 0) off = off + 4 * s370_plist_n;
+    i = 0;
+    while (i < s370_npl) { if (s370_pl_n[i] < 0) off = off + 4 * hjt_span[-s370_pl_n[i] - 1]; else off = off + 4 * s370_pl_n[i]; i = i + 1; }
+    off = (off + 7) & ~7;
+    i = 0;
+    while (i < s370_npool) {
+        int k;
+        k = s370_pk_kind[i];
+        off = off + ((k == S370_PK_D) ? 8 : (k == S370_PK_H) ? 2 : 4);
+        i = i + 1;
+    }
+    return off + 8;
 }
 
 static void s370_emit_code(Node *fn, char *csect) {
@@ -3355,10 +3439,16 @@ static void gen_data(void) {
                 asm_stmt("", "DS", s370_line);
             }
         } else {
-            /* uninitialized: COM, which the linkage editor merges */
-            asm_stmt(nm, "COM", "");
+            /* uninitialized: a CSECT of reserved storage.  COM would be
+             * the assembler's word for it, but as370 has no COM, and
+             * the whole program is compiled at once, so each block is
+             * defined exactly once anyway. */
+            int n;
+            n = ps_gsize[i] > 0 ? ps_gsize[i] : 8;
+            asm_stmt(nm, "CSECT", "");
             asm_stmt("", "DS", "0D");
-            f_reset(); f_s("XL"); f_n(ps_gsize[i] > 0 ? ps_gsize[i] : 8);
+            if (n > 65535) { f_reset(); f_n((n + 7) / 8); f_c('D'); }   /* DS XL stops at 65535 */
+            else { f_reset(); f_s("XL"); f_n(n); }
             asm_stmt("", "DS", s370_line);
         }
         i = i + 1;

@@ -81,7 +81,24 @@ rep('#include <stdlib.h>\n', '#include <stdlib.h>\n#include "f77rt.h"\n#include 
     'static double fio_strtod(const char *text) {\n'
     '    unsigned int hi, lo;\n'
     '    if (hfp_from_text(text, &hi, &lo) < 0) return 0.0;\n'
-    '    return f77_hfp_make(hi, lo);\n}\n')
+    '    return f77_hfp_make(hi, lo);\n}\n'
+    '\n/* OPEN FILE=name: on MVS the name is a DD name (eight characters,\n'
+    ' * upper case), and the job supplies the data set behind it.  A\n'
+    ' * mode of C\'s is passed through; libc370 reads the DCB from the DD. */\n'
+    'static FILE *fio_fopen(const char *name, const char *mode) {\n'
+    '    char dd[16];\n'
+    '    int i;\n'
+    '    int n;\n'
+    '    strcpy(dd, "dd:");\n'
+    '    n = 3;\n'
+    '    for (i = 0; name[i] && n < 11; i++) {\n'
+    '        int c = (unsigned char)name[i];\n'
+    '        if (c == \' \') continue;\n'
+    '        if (c >= \'a\' && c <= \'z\') c = c - \'a\' + \'A\';\n'
+    '        dd[n++] = (char)c;\n'
+    '    }\n'
+    '    dd[n] = 0;\n'
+    '    return fopen(dd, mode);\n}\n')
 rep('''    if (unit > 0 && unit < FIO_MAXUNIT) {
         /* Preconnected unit: the file fort.N in the working directory,
          * created on first use (gfortran's convention). */
@@ -197,6 +214,7 @@ rep('''    num[i] = 0;
     return strtod(num, 0);''', '''    num[i] = 0;
     return fio_strtod(num);''')
 s = re.sub(r'snprintf\(buf, sizeof buf, ', 'sprintf(buf, ', s)
+s = re.sub(r'\bfopen\(nm, ', 'fio_fopen(nm, ', s)
 s = re.sub(r'snprintf\(dig, sizeof dig, ', 'sprintf(dig, ', s)
 s = re.sub(r'snprintf\(nm, sizeof nm, ', 'sprintf(nm, ', s)
 left = [l for l in s.split('\n') if ('snprintf(' in l or 'strtod(' in l) and not l.strip().startswith('*') and 'fio_strtod' not in l]

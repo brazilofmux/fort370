@@ -33,18 +33,31 @@ static int hfp_big_iszero(HfpBig *b) { return b->n == 0; }
 
 /* b = b * m + a, small m and a */
 static void hfp_big_muladd(HfpBig *b, unsigned int m, unsigned int a) {
-    unsigned long long c;
+    /* b = b * m + a, in 32-bit arithmetic only: the runtime's compiler
+     * (cc370) does not get 64-bit multiplies right, and the host would
+     * only have used a wider type for convenience. */
+    unsigned int carry;
     int i;
-    c = a;
+    carry = a;
     for (i = 0; i < b->n; i++) {
-        c = c + (unsigned long long)b->w[i] * m;
-        b->w[i] = (unsigned int)c;
-        c = c >> 32;
+        unsigned int x = b->w[i];
+        unsigned int xl = x & 0xFFFFu, xh = x >> 16;
+        unsigned int ml = m & 0xFFFFu, mh = m >> 16;
+        unsigned int p0 = xl * ml;
+        unsigned int p1 = xl * mh;
+        unsigned int p2 = xh * ml;
+        unsigned int p3 = xh * mh;
+        unsigned int mid = (p0 >> 16) + (p1 & 0xFFFFu) + (p2 & 0xFFFFu);
+        unsigned int lo = (p0 & 0xFFFFu) | (mid << 16);
+        unsigned int hi = p3 + (p1 >> 16) + (p2 >> 16) + (mid >> 16);
+        lo = lo + carry;
+        if (lo < carry) hi = hi + 1;
+        b->w[i] = lo;
+        carry = hi;
     }
-    if (c && b->n < HFP_BIGW) { b->w[b->n] = (unsigned int)c; b->n = b->n + 1; }
+    if (carry && b->n < HFP_BIGW) { b->w[b->n] = carry; b->n = b->n + 1; }
 }
 
-/* b = b << s, s < 32 */
 static void hfp_big_shl(HfpBig *b, int s) {
     unsigned int c;
     unsigned int t;
@@ -70,13 +83,19 @@ static int hfp_big_cmp(HfpBig *x, HfpBig *y) {
 
 /* b = b - y, requires b >= y */
 static void hfp_big_sub(HfpBig *b, HfpBig *y) {
-    long long c;
+    /* b = b - y, b >= y; 32-bit, with an explicit borrow */
+    unsigned int borrow;
     int i;
-    c = 0;
+    borrow = 0;
     for (i = 0; i < b->n; i++) {
-        c = (long long)b->w[i] - (i < y->n ? y->w[i] : 0) + c;
-        if (c < 0) { b->w[i] = (unsigned int)(c + 4294967296LL); c = -1; }
-        else { b->w[i] = (unsigned int)c; c = 0; }
+        unsigned int x = b->w[i];
+        unsigned int v = i < y->n ? y->w[i] : 0;
+        unsigned int d = x - v;
+        unsigned int nb = x < v ? 1u : 0u;
+        if (d < borrow) nb = 1u;
+        d = d - borrow;
+        b->w[i] = d;
+        borrow = nb;
     }
     while (b->n > 0 && b->w[b->n - 1] == 0) b->n = b->n - 1;
 }
@@ -107,7 +126,8 @@ static int hfp_from_text(const char *s, unsigned int *hi, unsigned int *lo) {
     int e;           /* HFP exponent: value in [16^(e-1), 16^e) */
     int i;
     int bits;
-    unsigned long long frac;
+    unsigned int fhi;
+    unsigned int flo;
     int fbits;
     int nb, db;
     int shift;
@@ -190,7 +210,7 @@ have_bits:
         hfp_big_shl(&den, shift);
     }
     /* long division num/den, quotient fits 56 bits: do it bit by bit */
-    frac = 0;
+    fhi = 0; flo = 0;
     fbits = hfp_big_bits(&num) - hfp_big_bits(&den) + 1;
     if (fbits > 57) fbits = 57;
     {
@@ -204,13 +224,12 @@ have_bits:
             hfp_big_shl(&t, j);
             if (hfp_big_cmp(&num, &t) >= 0) {
                 hfp_big_sub(&num, &t);
-                frac = frac | (1ULL << k);
+                if (k >= 32) fhi = fhi | (1u << (k - 32)); else flo = flo | (1u << k);
             }
         }
     }
-    *hi = (unsigned int)((neg ? 0x80000000u : 0) | ((unsigned int)(e + 64) << 24) |
-                         (unsigned int)(frac >> 32));
-    *lo = (unsigned int)(frac & 0xFFFFFFFFu);
+    *hi = (neg ? 0x80000000u : 0) | ((unsigned int)(e + 64) << 24) | fhi;
+    *lo = flo;
     return 0;
 }
 

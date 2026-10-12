@@ -1,8 +1,12 @@
 #!/usr/bin/env python3
 """ship.py -- put host-linked load modules on the MVS guest and run them.
 
-    bench/ship.py [--sysin FILE] [--out FILE] MODULE.xmit ...
+    bench/ship.py [--sysin FILE] [--out FILE] [--dump] MODULE.xmit ...
     bench/ship.py --install HEXIN.xmit
+
+--dump keeps SYSUDUMP (a dump is long, and the printed output of the
+steps after it may not be captured before the runner stops waiting);
+without it an abend reports its code and PSW in the job log only.
 
 Each MODULE.xmit is what cc370 -flinker-output=xmit writes beside a
 linked program: a TSO TRANSMIT image of a PDS holding one member, named
@@ -125,9 +129,11 @@ def main():
     out = 'bench/out/ship.out'
     mods = []
     inst = None
+    dump = False
     while args:
         a = args.pop(0)
-        if a == '--sysin': sysin = args.pop(0)
+        if a == '--dump': dump = True
+        elif a == '--sysin': sysin = args.pop(0)
         elif a == '--out': out = args.pop(0)
         elif a == '--install': inst = args.pop(0)
         else: mods.append(a)
@@ -162,13 +168,22 @@ def main():
                 f"  DATASET('HERC01.FORT370.L{k}') DIR(5) NOPROMPT\n"
                 f"/*\n")
     for k, name in enumerate(names):
-        jcl += (f"//GO{k}      EXEC PGM={name},REGION=4096K\n"
+        jcl += (f"//GO{k}      EXEC PGM={name},REGION=4096K,COND=EVEN,TIME=(0,30)\n"
                 f"//STEPLIB  DD DSN=HERC01.FORT370.L{k},DISP=SHR\n"
                 f"//SYSPRINT DD SYSOUT=Z\n"
                 f"//SYSTERM  DD SYSOUT=Z\n"
                 f"//SYSOUT   DD SYSOUT=Z\n"
-                f"//SYSUDUMP DD SYSOUT=Z\n"
-                f"//FT06F001 DD SYSOUT=Z,DCB=(RECFM=FBA,LRECL=133,BLKSIZE=133)\n")
+                f"//SYSUDUMP DD {'SYSOUT=Z' if dump else 'DUMMY'}\n"
+                f"//FT06F001 DD SYSOUT=Z,DCB=(RECFM=FBA,LRECL=133,BLKSIZE=133)\n"
+                f"//FT07F001 DD SYSOUT=Z,DCB=(RECFM=FB,LRECL=80,BLKSIZE=80)\n")
+        # the FCVS's OPEN FILE= names: a sequential and a direct-access file
+        jcl += ("//CSEQ     DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
+                "//            DCB=(RECFM=VB,LRECL=260,BLKSIZE=2604)\n"
+                "//CDIR     DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
+                "//            DCB=(RECFM=F,LRECL=80,BLKSIZE=80)\n")
+        for u in (1, 2, 3, 4, 8, 9, 10, 11, 12):
+            jcl += (f"//FT{u:02d}F001 DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
+                    f"//            DCB=(RECFM=VB,LRECL=260,BLKSIZE=2604)\n")
         if sysin:
             jcl += "//FT05F001 DD *\n"
             for line in open(sysin).read().split('\n'):
@@ -185,7 +200,8 @@ def main():
         ab = re.search(rf'HERC01S\s+GO{k}\s+-\s+ABEND (\S+)', text)
         cpu = re.search(rf'IEF374I STEP /GO{k}\s+/ STOP\s+\S+ CPU\s+(\d+)MIN (\d+\.\d+)SEC', text)
         c = (int(cpu.group(1)) * 60 + float(cpu.group(2))) if cpu else None
-        print(name, 'cond', m.group(1) if m else ('ABEND ' + ab.group(1) if ab else '?'), 'cpu', c)
+        sk = re.search(rf'IEF272I HERC01S\s+GO{k}\s+-\s+STEP WAS NOT EXECUTED', text)
+        print(name, 'cond', m.group(1) if m else ('ABEND ' + ab.group(1) if ab else ('skipped' if sk else '?')), 'cpu', c)
 
 if __name__ == '__main__':
     main()

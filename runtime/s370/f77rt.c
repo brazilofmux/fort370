@@ -47,6 +47,25 @@ static double fio_strtod(const char *text) {
     return f77_hfp_make(hi, lo);
 }
 
+/* OPEN FILE=name: on MVS the name is a DD name (eight characters,
+ * upper case), and the job supplies the data set behind it.  A
+ * mode of C's is passed through; libc370 reads the DCB from the DD. */
+static FILE *fio_fopen(const char *name, const char *mode) {
+    char dd[16];
+    int i;
+    int n;
+    strcpy(dd, "dd:");
+    n = 3;
+    for (i = 0; name[i] && n < 11; i++) {
+        int c = (unsigned char)name[i];
+        if (c == ' ') continue;
+        if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
+        dd[n++] = (char)c;
+    }
+    dd[n] = 0;
+    return fopen(dd, mode);
+}
+
 #define FIO_MAXFMT   1024
 #define FIO_MAXLINE  1024
 #define FIO_MAXGROUP 16
@@ -134,7 +153,7 @@ static FILE *fio_resolve(int unit, int writing) {
         char nm[FIO_MAXNAME];
         FILE *f;
         sprintf(nm, "dd:FT%02dF001", unit);
-        f = fopen(nm, writing ? "w" : "r");
+        f = fio_fopen(nm, writing ? "w" : "r");
         if (f) {
             fio_ufile[unit] = f;
             strcpy(fio_ufname[unit], nm);
@@ -1790,22 +1809,22 @@ int f77_open(int unit, const char *name, int nlen,
         f = tmpfile();
         if (!f) { if (recoverable) return 2; fprintf(stderr, "f77: OPEN cannot create a scratch file\n"); exit(2); }
     } else if (status && slen > 0 && fio_str_is(status, slen, "OLD")) {
-        f = fopen(nm, "r+");
-        if (!f) f = fopen(nm, "r");
+        f = fio_fopen(nm, "r+");
+        if (!f) f = fio_fopen(nm, "r");
         if (!f) {
             if (recoverable) return 2;
             fprintf(stderr, "f77: OPEN STATUS='OLD': no such file '%s'\n", nm);
             exit(2);
         }
     } else if (status && slen > 0 && fio_str_is(status, slen, "NEW")) {
-        f = fopen(nm, "r");
+        f = fio_fopen(nm, "r");
         if (f) {
             fclose(f);
             if (recoverable) return 2;
             fprintf(stderr, "f77: OPEN STATUS='NEW': '%s' already exists\n", nm);
             exit(2);
         }
-        f = fopen(nm, "w+");
+        f = fio_fopen(nm, "w+");
         if (!f) {
             if (recoverable) return 2;
             fprintf(stderr, "f77: OPEN cannot create '%s'\n", nm);
@@ -1813,8 +1832,8 @@ int f77_open(int unit, const char *name, int nlen,
         }
     } else if (!status || slen <= 0 ||
                fio_str_is(status, slen, "UNKNOWN")) {
-        f = fopen(nm, "r+");
-        if (!f) f = fopen(nm, "w+");
+        f = fio_fopen(nm, "r+");
+        if (!f) f = fio_fopen(nm, "w+");
         if (!f) {
             if (recoverable) return 2;
             fprintf(stderr, "f77: OPEN cannot open '%s'\n", nm);
@@ -1882,7 +1901,7 @@ int f77_inquire(int unit, const char *file, int flen) {
         while (n > 0 && nm[n - 1] == ' ') nm[--n] = 0;
         strcpy(inq_name, nm);
         inq_named = 1;
-        f = fopen(nm, "r");
+        f = fio_fopen(nm, "r");
         if (f) { inq_exist = 1; fclose(f); }
         for (i = 1; i < FIO_MAXUNIT; i++) {
             if (fio_ufile[i] && strcmp(fio_ufname[i], nm) == 0) { inq_opened = 1; inq_unit = i; break; }
