@@ -53,6 +53,7 @@ nested procedures, is still its own work.
 ## Layout
 
     docs/FORTRAN-H.md     the measurement, and why it is measured
+    docs/FITTING.md       the region TK5 grants, and what the compiler needs
     bench/kernels/        the seven kernels, in Fortran IV
     bench/mk.sh           a FORTHCLG deck for one kernel at one OPT level
     bench/run.sh          all of them; RUNNER is the local submit command
