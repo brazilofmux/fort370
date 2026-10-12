@@ -2197,6 +2197,19 @@ static void s370_mark_strings(void) {
     }
 }
 
+/* What LICM may leave in a loop as a leaf to recompute: an object the
+ * data bases reach (its address is a label, no instruction), or a
+ * constant LA can make.  A far object or a symbol costs a load from
+ * the pool at every use; hoist those. */
+static int s370_cheap_operand(int inst) {
+    int k;
+    if (inst < 0) return 1;
+    k = h_kind[inst];
+    if (k == HI_ALLOCA) return s370_aoff[inst] >= 0;
+    if (k == HI_ICONST) return h_val[inst] >= 0 && h_val[inst] <= 4095;
+    return 0;
+}
+
 /* ADDI(ADD(base, idx), c) -> ADD(ADDI(base, c), idx) when base is an
  * address: the constant then belongs to a loop-invariant base (H's
  * "DY-8" register, or a label with an offset) and the index register
@@ -2226,6 +2239,40 @@ static void s370_reassoc(void) {
         if (k == HI_PHI && h_pbase[i] >= 0) {
             j = 0;
             while (j < h_pcnt[i]) { if (h_pval[h_pbase[i] + j] >= 0) s370_use_count[h_pval[h_pbase[i] + j]] = s370_use_count[h_pval[h_pbase[i] + j]] + 1; j = j + 1; }
+        }
+        i = i + 1;
+    }
+    /* SLL(ADD(x, c), k) -> ADDI(SLL(x, k), c<<k), and the same for a
+     * MUL by a constant: a subscript K+j then shares K's index register
+     * and puts 8*j in the displacement, as H's U(K+6) does. */
+    i = 0;
+    while (i < h_ninst) {
+        int c;
+        int root;
+        int m;
+        if ((h_kind[i] == HI_SLL || h_kind[i] == HI_MUL) && h_src1[i] >= 0 && h_src2[i] >= 0 &&
+            bg_const_imm_inst(h_src2[i], &m, &root) && hi_is_remat(h_kind[root]) &&
+            (h_kind[h_src1[i]] == HI_ADD || h_kind[h_src1[i]] == HI_ADDI) &&
+            s370_use_count[h_src1[i]] == 1 && h_blk[h_src1[i]] == h_blk[i]) {
+            int x;
+            int cval;
+            int shifted;
+            a = h_src1[i];
+            if (h_kind[a] == HI_ADDI) { x = h_src1[a]; cval = h_val[a]; }
+            else if (bg_const_imm_inst(h_src2[a], &c, &root) && hi_is_remat(h_kind[root])) { x = h_src1[a]; cval = c; }
+            else if (bg_const_imm_inst(h_src1[a], &c, &root) && hi_is_remat(h_kind[root])) { x = h_src2[a]; cval = c; }
+            else { i = i + 1; continue; }
+            if (h_kind[i] == HI_SLL) { if (m < 0 || m > 20) { i = i + 1; continue; } shifted = cval << m; }
+            else { if (m < -4096 || m > 4096) { i = i + 1; continue; } shifted = cval * m; }
+            /* a := SLL/MUL(x, m); i := ADDI(a, shifted) */
+            h_kind[a] = h_kind[i];
+            h_src1[a] = x;
+            h_src2[a] = h_src2[i];
+            h_val[a] = 0;
+            h_kind[i] = HI_ADDI;
+            h_src1[i] = a;
+            h_src2[i] = -1;
+            h_val[i] = shifted;
         }
         i = i + 1;
     }
@@ -2475,7 +2522,8 @@ static void s370_gen_unit(Node *fn) {
     ssa_split_pairs = 0;
     hir_ssa_construct();
     hir_opt();
-    if (!getenv("F77_NO_REASSOC")) s370_reassoc();
+    if (!getenv("F77_NO_REASSOC")) { s370_reassoc(); hir_opt(); }   /* the second hir_opt merges the shifted indexes */
+    licm_cheap_fn = s370_cheap_operand;
     licm_loopopt = 1;
     licm_no_ptr_iv = getenv("F77_NO_IDX") ? 0 : 1;
     if (ho_mask & 1024) hir_licm();

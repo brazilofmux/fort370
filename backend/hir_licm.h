@@ -243,8 +243,10 @@ static int licm_find_body(int header, int latch) {
  * fits an immediate.  A global address or a wide constant is lui+addi,
  * so a leaf built on one is NOT cheap -- LINPACK's COMMON-array bases
  * hoisted that way are worth their register (pruning them cost 7%). */
+static int (*licm_cheap_fn)(int inst);   /* a target's own notion of a cheap operand (fort370: S/370) */
 static int licm_operand_cheap(int inst) {
     if (inst < 0) return 1;
+    if (licm_cheap_fn) return licm_cheap_fn(inst);
     if (h_kind[inst] == HI_ALLOCA) return 1;
     if (h_kind[inst] == HI_ICONST && h_val[inst] >= -2048 && h_val[inst] <= 2047) return 1;
     return 0;
