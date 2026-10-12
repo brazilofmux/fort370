@@ -508,6 +508,7 @@ static void s370_mark_loop_consts(void) {
 /* ---------------------------------------------------------------- */
 
 static int s370_cur_pos;      /* ra_pos of the instruction being emitted */
+static int s370_r1_intact;    /* R1 still holds the parameter list (entry block, nothing emitted yet) */
 
 /* A general register free at the current position for a spilled
  * result: R14 unless it is in use, then R15. */
@@ -1591,11 +1592,19 @@ static void s370_inst(int i) {
 
     if (k == HI_PARAM) {
         d = s370_idst(i);
-        f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_hdr(S370_HDR_PARM)); asm_ins("L", s370_line, 4);
-        f_reset(); f_s(s370_r(d)); f_c(','); f_n(4 * h_val[i]); f_s("(,"); f_s(s370_r(d)); f_c(')'); asm_ins("L", s370_line, 4);
+        if (s370_r1_intact) {
+            /* still in the entry block before anything touched R1:
+             * the list is where the caller left it */
+            f_reset(); f_s(s370_r(d)); f_c(','); f_n(4 * h_val[i]); f_s("(,1)"); asm_ins("L", s370_line, 4);
+        } else {
+            f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_hdr(S370_HDR_PARM)); asm_ins("L", s370_line, 4);
+            f_reset(); f_s(s370_r(d)); f_c(','); f_n(4 * h_val[i]); f_s("(,"); f_s(s370_r(d)); f_c(')'); asm_ins("L", s370_line, 4);
+        }
         s370_ifinish(i, d);
         return;
     }
+    /* anything else may use R1: the index scratch, the M/D pair, a call */
+    s370_r1_intact = 0;
 
     if (k == HI_LOAD) {
         int ty;
@@ -1945,6 +1954,7 @@ static void s370_block(int b) {
     int term;
     int k;
     hcg_cur_blk = b;
+    if (b != hcg_emit_ord[0]) s370_r1_intact = 0;
     asm_stmt(s370_lab('L', hcg_blk_lbl[b]), "DS", "0H");
     i = split_head[b];
     while (i >= 0) { s370_inst(i); i = licm_next[i]; }
@@ -2424,6 +2434,34 @@ static void s370_hoist_bases(void) {
     }
     i = 0;
     while (i < h_ninst) {
+        if (h_kind[i] == HI_ADDI && h_src1[i] >= 0 && h_kind[h_src1[i]] == HI_ADD &&
+            s370_use_count[h_src1[i]] == 1 && h_blk[h_src1[i]] == h_blk[i] &&
+            h_blk[i] >= 0 && h_blk[i] < bb_nblk && s370_loop_hdr[h_blk[i]] >= 0) {
+            /* ADDI(ADD(b, a), c): the constant joins an invariant b in
+             * the preheader, and the ADDI becomes ADD(n, a) */
+            int ad;
+            ad = h_src1[i];
+            hdr = s370_loop_hdr[h_blk[i]];
+            pre = ssa_idom[hdr];
+            if (pre >= 0 && pre < bb_nblk && s370_loop_hdr[pre] != hdr) {
+                b = -1; a = -1;
+                if (s370_invariant_in(h_src1[ad], hdr) && !s370_invariant_in(h_src2[ad], hdr) && !bg_static_chain(h_src1[ad])) { b = h_src1[ad]; a = h_src2[ad]; }
+                else if (s370_invariant_in(h_src2[ad], hdr) && !s370_invariant_in(h_src1[ad], hdr) && !bg_static_chain(h_src2[ad])) { b = h_src2[ad]; a = h_src1[ad]; }
+                if (b >= 0 && h_ninst + 1 < HIR_MAX_INST) {
+                    n = sp_new_inst(HI_ADDI, h_ty[i], b, -1, h_val[i], pre);
+                    if (licm_tail[pre] >= 0) licm_next[licm_tail[pre]] = n;
+                    else licm_head[pre] = n;
+                    licm_tail[pre] = n;
+                    h_kind[i] = HI_ADD;
+                    h_src1[i] = n;
+                    h_src2[i] = a;
+                    h_val[i] = 0;
+                    h_kind[ad] = HI_NOP;
+                    i = i + 1;
+                    continue;
+                }
+            }
+        }
         if (h_kind[i] != HI_ADD || h_blk[i] < 0 || h_blk[i] >= bb_nblk) { i = i + 1; continue; }
         hdr = s370_loop_hdr[h_blk[i]];
         if (hdr < 0) { i = i + 1; continue; }
@@ -2807,6 +2845,7 @@ static void s370_gen_unit(Node *fn) {
     f_reset(); f_s("1,"); f_s(s370_hdr(S370_HDR_PARM));
     asm_ins("ST", s370_line, 4);
 
+    s370_r1_intact = 1;
     q = 0;
     while (q < bb_nblk) { s370_block(hcg_emit_ord[q]); q = q + 1; }
 
