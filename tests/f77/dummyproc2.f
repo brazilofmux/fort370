@@ -1,0 +1,13 @@
+      PROGRAM DPD
+      DOUBLE PRECISION DF
+      EXTERNAL DF
+      CALL S(DF, 2.0D0)
+      END
+      SUBROUTINE S(F, X)
+      DOUBLE PRECISION F, X
+      WRITE (6, *) F(X)
+      END
+      DOUBLE PRECISION FUNCTION DF(X)
+      DOUBLE PRECISION X
+      DF = X * 3.0D0
+      END

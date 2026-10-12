@@ -1,9 +1,10 @@
 # fort370
 
 A FORTRAN 77 compiler for MVS 3.8j, intended to run on MVS 3.8j itself and
-emit S/370 assembler for the system's own IFOX00 and IEWL. Nothing is built
-yet. This repository starts with a measurement, because the bar is already
-known.
+emit S/370 assembler for the system's own IFOX00 and IEWL. The front end
+and the optimizer are here, copied from slow32-public; the S/370 back
+end is not yet. This repository started with a measurement, because the
+bar was already known.
 
 ## The bar
 
@@ -52,6 +53,12 @@ nested procedures, is still its own work.
 
 ## Layout
 
+    src/                  the FORTRAN 77 front end and the driver, f77.c
+    backend/              the optimizer and (for now) the SLOW-32 code generator
+    runtime/              the formatted-I/O runtime, still in C for SLOW-32
+    tests/f77/            regression programs; tests/oracle.sh runs gfortran
+    build.sh              host build: out/f77
+    PROVENANCE.md         where the copies came from, and how to check them
     docs/FORTRAN-H.md     the measurement, and why it is measured
     docs/FITTING.md       the region TK5 grants, and what the compiler needs
     bench/kernels/        the seven kernels, in Fortran IV
