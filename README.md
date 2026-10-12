@@ -2,9 +2,9 @@
 
 A FORTRAN 77 compiler for MVS 3.8j, intended to run on MVS 3.8j itself and
 emit S/370 assembler for the system's own IFOX00 and IEWL. The front end
-and the optimizer are here, copied from slow32-public; the S/370 back
-end is not yet. This repository started with a measurement, because the
-bar was already known.
+and the optimizer are copied from slow32-public; the S/370 back end is
+new, and its first version is here. This repository started with a
+measurement, because the bar was already known.
 
 ## The bar
 
@@ -35,6 +35,37 @@ unrolling and calls, and it is worth perhaps 10 to 35%, not multiples.
 - **Oracle:** FORTRAN H's own output and timings for the same programs, on
   the same system.
 
+## Where it stands
+
+2026-10-12. `out/f77` compiles a program unit to IFOX00 assembler with
+standard OS linkage, static storage per unit, FORTRAN H's `IBCOM#` for
+formatted output and STOP, and symbolic references the linkage editor
+resolves. All 192 FCVS programs compile; the seven kernels and the
+programs in `tests/s370/` have been assembled, linked and run on TK5,
+and print FORTRAN H's results to the digit. CPU seconds of the GO
+step, against H at OPT=2 on the same system (the last block of
+`bench/results-s370-2026-10-12d.txt`; about 2% of any figure is
+run-to-run drift):
+
+| kernel  | fort370 | FORTRAN H OPT=2 |
+|---------|--------:|----------------:|
+| daxpy   |    4.46 |            4.40 |
+| ddot    |    3.49 |            3.49 |
+| matmul  |    4.59 |            5.04 |
+| lll1    |    9.20 |            9.15 |
+| lll5    |    5.55 |            5.53 |
+| lll7    |   14.98 |           15.14 |
+| linpack |   13.18 |           13.64 |
+
+The inner loops are H's: daxpy is `LD / MDR / AD / STD / BXLE`, and
+matmul's is five instructions to H's eight. What H does that this
+compiler does not yet: parameter lists built once in static storage,
+and an outer loop reduced to a single `BXLE`. What is not yet written:
+the compiler's own I/O runtime (`IBCOM#` covers only H's repertoire),
+branches beyond 4K of code, the FCVS run on MVS itself, and the XMIT
+package that would put the compiler on the system. `docs/BACKEND.md`
+has the design and the record of the work.
+
 ## The larger aim
 
 The back end matters more than the compiler. On SLOW-32 it produces
@@ -54,16 +85,23 @@ nested procedures, is still its own work.
 ## Layout
 
     src/                  the FORTRAN 77 front end and the driver, f77.c
-    backend/              the optimizer and (for now) the SLOW-32 code generator
-    runtime/              the formatted-I/O runtime, still in C for SLOW-32
+    backend/              the optimizer, the S/370 code generator
+                          (hir_*_s370.h, s370_hfp.h) and the SLOW-32 one
+    runtime/              the formatted-I/O runtime, still in C for SLOW-32;
+                          runtime/s370/ holds IPRINT/DPRINT, which write a
+                          value to the job log for debugging on MVS
     tests/f77/            regression programs; tests/oracle.sh runs gfortran
-    build.sh              host build: out/f77
+    tests/s370/           programs run through both H and fort370 on MVS
+    build.sh              host build: out/f77 (S/370) and out/f77-s32
     PROVENANCE.md         where the copies came from, and how to check them
     docs/FORTRAN-H.md     the measurement, and why it is measured
     docs/FITTING.md       the region TK5 grants, and what the compiler needs
+    docs/BACKEND.md       the S/370 back end: design, decisions, record
     bench/kernels/        the seven kernels, in Fortran IV
     bench/mk.sh           a FORTHCLG deck for one kernel at one OPT level
-    bench/run.sh          all of them; RUNNER is the local submit command
+    bench/run.sh          all of them through H; RUNNER is the submit command
+    bench/asmclg.sh       an IFOX00, IEWL and GO deck for one .asm file
+    bench/ab.sh           one program through H and through fort370, compared
     bench/listings/       H's OPT=2 object listings
     bench/results-*.txt   the raw timings
 

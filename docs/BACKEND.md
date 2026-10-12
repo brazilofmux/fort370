@@ -245,7 +245,16 @@ counted, DGEFA's inlined DAXPY loop is `LDR / MD / AD / STD / BXLE`
 and LINPACK is 13.62 to H's 13.64. The seven kernels now stand
 between 0.95 and 1.07 of H's OPT=2, the difference in the slower ones
 being within the run-to-run noise of the measurement (about 2%)
-plus one or two instructions in loop setup. `bench/ab.sh` runs one program through both
+plus one or two instructions in loop setup. Two more findings the same
+night: a local passed to an inlined routine had its slot retyped to an
+address by the callee's declaration of the dummy, which the SSA
+promoter then read as a type pun and left in memory (DGEFA's `T`,
+reloaded in every iteration of DSCAL's loop; LINPACK 13.03); and
+`LDR 0,2 / MD 0,X` against H's `LD 0,X / MDR 0,2` -- the same two
+instructions -- is 5% on daxpy under Hercules, so a commutative
+operation on a surviving register takes H's order. With H re-measured
+the same hour, the seven kernels stand at 0.91 to 1.01 of H's OPT=2
+(the last block of `bench/results-s370-2026-10-12d.txt`). `bench/ab.sh` runs one program through both
 compilers and compares what they print; `tests/s370/` holds such
 programs; `F77_NO_MEM`, `F77_NO_BXLE`, `F77_NO_REASSOC` and
 `F77_NO_IDX` switch the step-3 transformations off one at a time,
