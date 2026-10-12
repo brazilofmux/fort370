@@ -187,12 +187,24 @@ optimizer is done.
 
 The kernels need `WRITE` with `D`, `F` and `I` editing, and `STOP`. For
 step 2 the generated code calls **IBCOM#**, FORTLIB's own I/O routine,
-exactly as H's code does: `BAL 14,4(,15)` with the unit and format
-addresses inline, one `BAL 14,8(,15)` per item with H's four-byte item
-descriptor, `BAL 14,16(,15)` to end. The FORMAT is passed in the form
-IBCOM# expects, which the first experiment establishes from an object
-deck. This gives the kernels H's digits for free and makes the checksum
-comparison exact.
+exactly as H's code does. What an experiment with H's listings
+established (`BAL 14,n(,15)` returns past the inline words):
+
+    L     15,=V(IBCOM#)
+    BAL   14,64(,15)            once, in MAIN, before R13 is switched
+    BAL   14,4(,15)             begin a formatted WRITE
+    DC    F'6'                  the unit
+    DC    AL1(1),AL3(fmt)       the FORMAT text; AL1(0) would mean one
+                                H compiled, AL1(1) an array of text
+    BAL   14,8(,15)             one item
+    DC    AL1(8),AL1(X'60'),S(item)   length, type, base-displacement
+    BAL   14,16(,15)            end
+    BAL   14,52(,15)            STOP
+    DC    AL1(5),CL5'    0'     its message
+
+The item type byte is X'50' for INTEGER*4, X'60' for REAL*8, X'70'
+for REAL*4 and X'30' for LOGICAL*4. This gives the kernels H's digits
+for free and makes the checksum comparison exact.
 
 It is a bootstrap, not the design. IBCOM# knows nothing of CHARACTER,
 list-directed I/O, `OPEN` or internal files, so the Fortran 77 runtime
@@ -209,6 +221,16 @@ table in the emitter (`f77_wr_begin` → `F77WRB`). Compiler-generated
 labels are `Lnnnn` (blocks), `Tnnnn` (static-area slots), `Cnnnn`
 (constants), `Annnn` (address constants), `Vnnnn` (V-constants),
 `PLnnnn` (parameter lists). Blank COMMON is `#BLANK`.
+
+## Where it stands
+
+2026-10-12: steps 1 to 6 are done. The seven kernels assemble under
+IFOX00, link against FORTLIB and print FORTRAN H's checksums to the
+digit; `bench/results-s370-2026-10-12.txt` has the times, which fall
+between H's OPT=0 and OPT=1 (the optimizer runs, but every operand is
+loaded into a register first and the loops close with C/BC).
+`bench/ab.sh` runs one program through both compilers and compares
+what they print; `tests/s370/` holds such programs.
 
 ## The order of work
 

@@ -27,7 +27,13 @@ cat <<'EOF'
 //SYSPRINT DD SYSOUT=Z
 //SYSIN    DD *
 EOF
-cut -c1-72 "$a"
+cut -c1-72 "$a" | grep -v '^         END *$'
+# the debugging routines IPRINT/DPRINT (runtime/s370/f77dbg.asm), for
+# programs under test that want to report through the job log; then
+# the END card the compiler's output ended with
+d="$(dirname "$0")/../runtime/s370/f77dbg.asm"
+[ -r "$d" ] && cut -c1-72 "$d"
+echo "         END"
 cat <<'EOF'
 /*
 //LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST',REGION=1024K,

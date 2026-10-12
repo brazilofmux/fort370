@@ -352,6 +352,7 @@ static char *bg_op_name(int op) {
     if (op == HI_FCVT_FtoD) return "fcvt_ftod";
     if (op == HI_FCVT_DtoF) return "fcvt_dtof";
     if (op == HI_FCONST) return "fconst";
+    if (op == HI_FABS) return "fabs";
     if (op == HI_JMPTAB) return "jmptab";
     return "?";
 }

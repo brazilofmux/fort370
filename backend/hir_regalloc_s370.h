@@ -1541,6 +1541,8 @@ static void ra_dump_intervals(char *fname) {
         fdputuint(2, i);
         fdputs(" k=", 2);
         fdputs(bg_op_name(h_kind[i]), 2);
+        fdputs(" t=", 2);
+        ra_dump_signed(h_ty[i]);
         fdputs(" b=", 2);
         ra_dump_signed(h_blk[i]);
         fdputs(" p=", 2);

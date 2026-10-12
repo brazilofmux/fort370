@@ -115,6 +115,7 @@
  * headers (cobol/src/hir), 2026-10-03. */
 #define HI_MULH     71
 #define HI_MULHU    72
+#define HI_FABS     73  /* fort370: |x| of a native float (S/370 LPDR/LPER); src1 only */
 /* a binary operation over two value operands (the ADD..SGEU range and
  * the two above); the passes that classified by the range ask this */
 static int hi_is_binop(int k) { return (k >= HI_ADD && k <= HI_SGEU) || k == HI_MULH || k == HI_MULHU; }
@@ -413,7 +414,7 @@ static int hi_is_pure(int k) {
      * multiply, negate, convert and compare cannot trap on S/370 with
      * the exponent-overflow mask off; divide can, so it stays put like
      * integer DIV. */
-    if (k == HI_FADD || k == HI_FSUB || k == HI_FMUL || k == HI_FNEG) return 1;
+    if (k == HI_FADD || k == HI_FSUB || k == HI_FMUL || k == HI_FNEG || k == HI_FABS) return 1;
     if (k == HI_FEQ || k == HI_FLT || k == HI_FLE) return 1;
     if (k == HI_FCVT_ItoF || k == HI_FCVT_FtoI || k == HI_FCVT_FtoD || k == HI_FCVT_DtoF) return 1;
     if (k == HI_FCONST) return 1;

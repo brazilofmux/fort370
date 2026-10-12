@@ -1213,9 +1213,17 @@ static void f77_store_at(int addr, int ty, int v, int vty, int vhi) {
  * SLOW-32 has no conditional move, and a branch inside an expression
  * would mean splitting the current block mid-expression, so the mask
  * form is both simpler here and better code. */
+#ifdef F77_NATIVE_F64
+static int f77_select_fp(int cond, int a, int b);
+#endif
 static int f77_select(int cond, int a, int b) {
     int m;
     int x;
+#ifdef F77_NATIVE_F64
+    /* A native floating value is not a bit pattern: choose with a
+     * branch (f77_select_fp, below the block helpers). */
+    if (a >= 0 && ty_is_fp(h_ty[a]) && h_kind[a] != HI_ALLOCA) return f77_select_fp(cond, a, b);
+#endif
     m = hi_emit(HI_NEG, TY_INT, cond, -1, 0, NULL);
     x = hi_emit(HI_XOR, TY_INT, a, b, 0, NULL);
     x = hi_emit(HI_AND, TY_INT, x, m, 0, NULL);
@@ -1353,6 +1361,12 @@ static char *f77_tr_name(int in, int dbl) {
  * branchless (x ^ (x>>31)) - (x>>31). */
 static int f77_abs(int v, int ty, int *hi) {
     int m;
+#ifdef F77_NATIVE_F64
+    if (ty == TY_DOUBLE || ty == TY_FLOAT) {
+        *hi = -1;
+        return hi_emit(HI_FABS, ty, v, -1, 0, NULL);
+    }
+#endif
     if (ty == TY_DOUBLE) {
         *hi = hi_emit(HI_AND, TY_INT, *hi, f77_iconst(0x7fffffff), 0, NULL);
         return v;
@@ -1371,7 +1385,8 @@ static int f77_minmax(int want_max, int a, int ahi, int b, int bhi,
     if (ty == TY_DOUBLE) {
         c = want_max ? f77_fp64_call2("__fp64_lt", b, bhi, a, ahi, NULL)
                      : f77_fp64_call2("__fp64_lt", a, ahi, b, bhi, NULL);
-        *rhi = f77_select(c, ahi, bhi);
+        if (f77_ispair(TY_DOUBLE)) *rhi = f77_select(c, ahi, bhi);
+        else *rhi = -1;
         return f77_select(c, a, b);
     }
     if (ty == TY_FLOAT)
@@ -1885,6 +1900,17 @@ static int f77_primary(void) {
                     /* |a| with the sign of b */
                     int neg;
                     a = f77_abs(a, rty, &ahi);
+#ifdef F77_NATIVE_F64
+                    if (rty == TY_DOUBLE || rty == TY_FLOAT) {
+                        if (rty == TY_DOUBLE)
+                            neg = f77_fp64_call2("__fp64_lt", b, bhi,
+                                                 f77_dconst(0.0, &qzero_hi), qzero_hi, NULL);
+                        else
+                            neg = hi_emit(HI_FLT, TY_INT, b, f77_rconst(0.0), 0, NULL);
+                        a = f77_select(neg, hi_emit(HI_FNEG, rty, a, -1, 0, NULL), a);
+                        ahi = -1;
+                    } else
+#endif
                     if (rty == TY_DOUBLE) {
                         neg = f77_fp64_call2("__fp64_lt", b, bhi,
                                              f77_dconst(0.0, &qzero_hi), qzero_hi, NULL);
@@ -2555,6 +2581,38 @@ static void f77_goto_blk(int b) {
     if (f77_cur_blk_live) hi_emit(HI_BR, TY_VOID, -1, -1, b, NULL);
     f77_cur_blk_live = 0;
 }
+
+#ifdef F77_NATIVE_F64
+/* cond ? a : b for a native floating value: each arm stores its value
+ * to a temporary the join reloads; mem2reg turns that into a phi. */
+static int f77_select_fp(int cond, int a, int b) {
+    int ty;
+    int tmp;
+    int bt;
+    int bf;
+    int bj;
+    ty = h_ty[a];
+    f77_frame = f77_frame + 8;
+    tmp = hi_emit(HI_ALLOCA, ty, -1, -1, 0 - f77_frame, NULL);
+    if (hl_nalloca < HL_MAX_ALLOCA) {
+        hl_ainst[hl_nalloca] = tmp;
+        hl_aoff[hl_nalloca] = 0 - f77_frame;
+        hl_nalloca = hl_nalloca + 1;
+    }
+    bt = hir_new_block();
+    bf = hir_new_block();
+    bj = hir_new_block();
+    hi_emit(HI_BRC, TY_VOID, cond, bt, bf, NULL);
+    f77_begin_blk(bt);
+    hi_emit(HI_STORE, ty, tmp, a, 0, NULL);
+    f77_goto_blk(bj);
+    f77_begin_blk(bf);
+    hi_emit(HI_STORE, ty, tmp, b, 0, NULL);
+    f77_goto_blk(bj);
+    f77_begin_blk(bj);
+    return hi_emit(HI_LOAD, ty, tmp, -1, 0, NULL);
+}
+#endif
 
 static void f77_stmt_assign(void) {
     int s;

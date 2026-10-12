@@ -230,8 +230,9 @@ static char *s370_gname(char *name) {
 #define S370_HDR_ICVT   80    /* DC X'4E000000',F'0': the int-to-float staging doubleword */
 #define S370_HDR_ECVT   88    /* DC D'0': short-to-long staging (only the first word is written) */
 #define S370_HDR_FTMP   96    /* floating scratch, for FPR spills around a def */
-#define S370_HDR_PHIT   104   /* phi-copy cycle temporary */
-#define S370_HDR_SIZE   112
+#define S370_HDR_PHIT   104   /* phi-copy staging: 8 doublewords, the last for cycle breaking */
+#define S370_HDR_NPHIT  8
+#define S370_HDR_SIZE   168
 
 static int s370_area_lbl;     /* Snnnnn, the area */
 static int s370_near_limit;   /* bytes the data bases reach */
@@ -284,7 +285,7 @@ static int s370_pool(int kind, unsigned int v1, unsigned int v2, char *name) {
     s370_pk_kind[i] = kind;
     s370_pk_v1[i] = v1;
     s370_pk_v2[i] = v2;
-    s370_pk_name[i] = name;
+    s370_pk_name[i] = name ? strdup(name) : 0;   /* callers pass static buffers */
     s370_pk_lbl[i] = cg_label();
     s370_npool = s370_npool + 1;
     return s370_pk_lbl[i];
@@ -800,6 +801,8 @@ static void s370_branch(int mask, int lbl) {
 static int ph_phi[S370_MAX_PHI];
 static int ph_src[S370_MAX_PHI];
 static int ph_done[S370_MAX_PHI];
+static int ph_stage[S370_MAX_PHI];   /* staging doubleword index for a done==2 copy */
+static int ph_nstage;
 
 static void s370_copy_to_reg(int dreg, int dfp, int v, int is_double) {
     char mem[40];
@@ -847,12 +850,15 @@ static void s370_phi_copies(int from_blk, int to_blk) {
             ph_phi[n] = i;
             ph_src[n] = ssa_phi_find_arg(i, from_blk);
             ph_done[n] = 0;
-            if (ph_src[n] < 0) cg_die("phi without an argument for this edge", i);
-            n = n + 1;
+            /* A phi with no argument for this edge carries an undefined
+             * value along it (a variable not set on this path): nothing
+             * to copy. */
+            if (ph_src[n] >= 0) n = n + 1;
         }
         i = ssa_phi_next[i];
     }
     if (n == 0) return;
+    ph_nstage = 0;
 
     /* 1. Destinations in memory (or dead): no register is written. */
     i = 0;
@@ -868,15 +874,21 @@ static void s370_phi_copies(int from_blk, int to_blk) {
                 while (j < n) { if (j != i && ph_src[j] == phi && ra_reg[phi] < 0) conflict = 1; j = j + 1; }
                 if (!conflict) s370_copy_to_slot(phi, ph_src[i]);
                 else {
-                    /* stage the new value in PHIT, copy it in at the end */
+                    /* stage the new value in a PHIT doubleword of its
+                     * own, copy it in at the end */
+                    int st;
+                    if (ph_nstage >= S370_HDR_NPHIT - 1) cg_die("too many staged phi copies on one edge", phi);
+                    st = S370_HDR_PHIT + 8 * ph_nstage;
+                    ph_stage[i] = st;
+                    ph_nstage = ph_nstage + 1;
                     ph_done[i] = 2;
                     if (ra_is_fpv(phi)) {
                         char mem[40];
-                        if (ra_reg[ph_src[i]] >= 0) { f_reset(); f_s(s370_r(ra_reg[ph_src[i]])); f_c(','); f_s(s370_hdr(S370_HDR_PHIT)); asm_ins("STD", s370_line, 4); }
-                        else if (s370_fmem(ph_src[i], mem)) { f_reset(); f_s(s370_hdr(S370_HDR_PHIT)); f_s("(8),"); f_s(mem); asm_ins("MVC", s370_line, 6); }
+                        if (ra_reg[ph_src[i]] >= 0) { f_reset(); f_s(s370_r(ra_reg[ph_src[i]])); f_c(','); f_s(s370_hdr(st)); asm_ins("STD", s370_line, 4); }
+                        else if (s370_fmem(ph_src[i], mem)) { f_reset(); f_s(s370_hdr(st)); f_s("(8),"); f_s(mem); asm_ins("MVC", s370_line, 6); }
                     } else {
                         s370_load_into(14, ph_src[i]);
-                        f_reset(); f_s("14,"); f_s(s370_hdr(S370_HDR_PHIT)); asm_ins("ST", s370_line, 4);
+                        f_reset(); f_s("14,"); f_s(s370_hdr(st)); asm_ins("ST", s370_line, 4);
                     }
                     i = i + 1;
                     continue;
@@ -931,7 +943,7 @@ static void s370_phi_copies(int from_blk, int to_blk) {
             phi = ph_phi[parked];
             preg = ra_reg[phi];
             pfp = ra_is_fpv(phi);
-            if (pfp) { f_reset(); f_s(s370_r(preg)); f_c(','); f_s(s370_hdr(S370_HDR_PHIT)); asm_ins("STD", s370_line, 4); }
+            if (pfp) { f_reset(); f_s(s370_r(preg)); f_c(','); f_s(s370_hdr(S370_HDR_PHIT + 8 * (S370_HDR_NPHIT - 1))); asm_ins("STD", s370_line, 4); }
             else { f_reset(); f_s("0,"); f_s(s370_r(preg)); asm_ins("LR", s370_line, 2); }
             /* copies reading preg now read the parked copy */
             j = 0;
@@ -940,7 +952,7 @@ static void s370_phi_copies(int from_blk, int to_blk) {
                     ra_is_fpv(ph_src[j]) == pfp) {
                     int dreg2;
                     dreg2 = ra_reg[ph_phi[j]];
-                    if (pfp) { f_reset(); f_s(s370_r(dreg2)); f_c(','); f_s(s370_hdr(S370_HDR_PHIT)); asm_ins("LD", s370_line, 4); }
+                    if (pfp) { f_reset(); f_s(s370_r(dreg2)); f_c(','); f_s(s370_hdr(S370_HDR_PHIT + 8 * (S370_HDR_NPHIT - 1))); asm_ins("LD", s370_line, 4); }
                     else { f_reset(); f_s(s370_r(dreg2)); f_s(",0"); asm_ins("LR", s370_line, 2); }
                     ph_done[j] = 1;
                 }
@@ -953,8 +965,8 @@ static void s370_phi_copies(int from_blk, int to_blk) {
     while (i < n) {
         if (ph_done[i] == 2) {
             phi = ph_phi[i];
-            if (ra_is_fpv(phi)) { f_reset(); f_s(s370_slot(phi)); f_s("(8),"); f_s(s370_hdr(S370_HDR_PHIT)); asm_ins("MVC", s370_line, 6); }
-            else { f_reset(); f_s(s370_slot(phi)); f_s("(4),"); f_s(s370_hdr(S370_HDR_PHIT)); asm_ins("MVC", s370_line, 6); }
+            if (ra_is_fpv(phi)) { f_reset(); f_s(s370_slot(phi)); f_s("(8),"); f_s(s370_hdr(ph_stage[i])); asm_ins("MVC", s370_line, 6); }
+            else { f_reset(); f_s(s370_slot(phi)); f_s("(4),"); f_s(s370_hdr(ph_stage[i])); asm_ins("MVC", s370_line, 6); }
         }
         i = i + 1;
     }
@@ -969,7 +981,7 @@ static int s370_edge_needs_copies(int from_blk, int to_blk) {
     while (i >= 0) {
         if (h_kind[i] == HI_PHI) {
             v = ssa_phi_find_arg(i, from_blk);
-            if (v < 0) return 1;
+            if (v < 0) { i = ssa_phi_next[i]; continue; }
             if (ra_reg[i] < 0 && ra_spill_off[i] == 0) { i = ssa_phi_next[i]; continue; }
             if (ra_reg[i] < 0 || ra_reg[v] != ra_reg[i] || ra_is_fpv(v) != ra_is_fpv(i)) return 1;
         }
@@ -1076,8 +1088,10 @@ static void s370_muldiv(int i, int d) {
     k = h_kind[i];
     s1 = h_src1[i];
     s2 = h_src2[i];
-    s370_load_into(1, s1);
-    if (k == HI_DIV || k == HI_REM) asm_ins("SRDA", "0,32", 4);
+    /* M multiplies the odd register of the pair; D divides the pair,
+     * so the dividend goes in R0 and SRDA spreads it over R0:R1 */
+    if (k == HI_MUL) s370_load_into(1, s1);
+    else { s370_load_into(0, s1); asm_ins("SRDA", "0,32", 4); }
     if (ra_reg[s2] >= 0) {
         f_reset(); f_s("0,"); f_s(s370_r(ra_reg[s2])); asm_ins(k == HI_MUL ? "MR" : "DR", s370_line, 2);
     } else if (s370_imem(s2, mem)) {
@@ -1129,19 +1143,23 @@ static int s370_byval_mask(char *name) {
     return 0;
 }
 
-static int s370_tmp_lbl;   /* a 16-byte temporary in the header? no: per call, from the pool of temps */
+/* Call temporaries (a by-value argument stored so its address can be
+ * passed; a WRITE item): doublewords Wnnnnn in the static area.  A
+ * temporary is read by the callee during the call and not after, so
+ * every call starts again at the first one; the unit's area holds as
+ * many as its biggest call needed. */
 #define S370_MAX_TMP 64
-static int s370_ntmp;      /* call-argument temporaries used in this unit (each a doubleword) */
-static int s370_tmp_base;  /* offset of the first in the area, assigned at emission */
-
-/* The static area is emitted after the code, so temporaries can be
- * allocated as calls are emitted: their labels are Wnnnnn. */
+static int s370_ntmp;        /* temporaries the unit's area must hold */
+static int s370_tmp_next;    /* next free for the call being emitted */
 static int s370_tmp_labels[S370_MAX_TMP];
+static void s370_tmp_reset(void) { s370_tmp_next = 0; }
 static int s370_new_tmp(void) {
-    if (s370_ntmp >= S370_MAX_TMP) cg_die("too many call temporaries", -1);
-    s370_tmp_labels[s370_ntmp] = cg_label();
-    s370_ntmp = s370_ntmp + 1;
-    return s370_tmp_labels[s370_ntmp - 1];
+    int k;
+    if (s370_tmp_next >= S370_MAX_TMP) cg_die("too many temporaries in one call", -1);
+    k = s370_tmp_next;
+    s370_tmp_next = s370_tmp_next + 1;
+    if (k >= s370_ntmp) { s370_tmp_labels[k] = cg_label(); s370_ntmp = k + 1; }
+    return s370_tmp_labels[k];
 }
 
 /* Store value v (any type) into the doubleword temporary tl. */
@@ -1159,11 +1177,16 @@ static void s370_store_tmp(int tl, int v) {
     }
 }
 
-/* Parameter lists: Pnnnnn DS nF, filled before the call. */
+/* Parameter lists: one list per unit, Pnnnnn DS nF, as long as the
+ * unit's longest call needs; filled before each call.  Arguments are
+ * values computed before the call, so no nested call can disturb it.
+ * The same table also records jump tables (n < 0). */
 #define S370_MAX_PL 256
 static int s370_pl_lbl[S370_MAX_PL];
 static int s370_pl_n[S370_MAX_PL];
 static int s370_npl;
+static int s370_plist_lbl;   /* the unit's parameter list */
+static int s370_plist_n;     /* its length in words */
 
 static void s370_call_result(int i) {
     if (bg_uses[i] == 0) return;
@@ -1198,10 +1221,12 @@ static void s370_ibcom_load(void) {
     asm_ins("L", s370_line, 4);
 }
 
-/* Align the location counter to a fullword with a harmless LR 0,0, as
- * H does before inline arguments. */
+/* Align the location counter to a fullword before inline arguments:
+ * CNOP pads with no-ops, so the count of bytes emitted so far need
+ * not be trusted. */
 static void s370_align4(void) {
-    if (s370_pc & 2) asm_ins("LR", "0,0", 2);
+    asm_stmt("", "CNOP", "0,4");
+    s370_pc = (s370_pc + 3) & ~3;
 }
 
 /* WRITE through IBCOM#: the front end's f77_wr_begin(unit, fmt),
@@ -1222,17 +1247,34 @@ static int s370_io_runtime(int i) {
         unit = h_carg[base];
         fmt = h_carg[base + 1];
         sidx = s370_saddr_string(fmt);
-        if (sidx < 0) cg_die("WRITE with a non-constant format is not supported yet", i);
-        s370_ibcom_load();
-        s370_align4();
-        asm_ins("BAL", "14,4(,15)", 4);
-        if (bg_const_imm_inst(unit, &c, &root)) {
-            f_reset(); f_s("F'"); f_n(c); f_c('\''); asm_stmt("", "DC", s370_line); s370_pc = s370_pc + 4;
-        } else cg_die("WRITE with a non-constant unit is not supported yet", i);
-        /* AL1(1): the format is text, as an array format is; a
-         * compiled one would carry 0 (seen in H's listing) */
-        f_reset(); f_s("AL1(1),AL3("); f_s(s370_lab('Q', s370_str_lbl[sidx])); f_c(')');
-        asm_stmt("", "DC", s370_line); s370_pc = s370_pc + 4;
+        s370_tmp_reset();
+        /* The unit number and the format address go inline after the
+         * BAL; a value not known at compile time is stored into its
+         * word first (the code is writable).  AL1(1) marks the format
+         * as text, as an array format is; a compiled one carries 0. */
+        {
+            int lu;
+            int lf;
+            lu = cg_label();
+            lf = cg_label();
+            if (!bg_const_imm_inst(unit, &c, &root)) {
+                s370_load_into(14, unit);
+                f_reset(); f_s("14,"); f_s(s370_lab('L', lu)); asm_ins("ST", s370_line, 4);
+            }
+            if (sidx < 0) {
+                s370_load_into(14, fmt);
+                f_reset(); f_s("14,"); f_s(s370_lab('L', lf)); asm_ins("ST", s370_line, 4);
+                f_reset(); f_s(s370_lab('L', lf)); f_s(",X'01'"); asm_ins("MVI", s370_line, 4);
+            }
+            s370_ibcom_load();
+            s370_align4();
+            asm_ins("BAL", "14,4(,15)", 4);
+            f_reset(); f_s("F'"); f_n(bg_const_imm_inst(unit, &c, &root) ? c : 0); f_c('\'');
+            asm_stmt(s370_lab('L', lu), "DC", s370_line); s370_pc = s370_pc + 4;
+            if (sidx >= 0) { f_reset(); f_s("AL1(1),AL3("); f_s(s370_lab('Q', s370_str_lbl[sidx])); f_c(')'); }
+            else { f_reset(); f_s("A(0)"); }
+            asm_stmt(s370_lab('L', lf), "DC", s370_line); s370_pc = s370_pc + 4;
+        }
         return 1;
     }
     if (strcmp(nm, "f77_wr_end") == 0) {
@@ -1247,6 +1289,7 @@ static int s370_io_runtime(int i) {
         int len;
         int ty;
         v = h_carg[base];
+        s370_tmp_reset();
         tl = s370_new_tmp();
         s370_store_tmp(tl, v);
         if (nm[7] == 'd') { len = 8; ty = 0x60; }
@@ -1300,12 +1343,11 @@ static void s370_call(int i) {
     ext = callp ? 0 : s370_extname(h_name[i]);
     bymask = (callp || !h_name[i]) ? 0 : s370_byval_mask(h_name[i]);
 
+    s370_tmp_reset();
     if (n > 0) {
-        if (s370_npl >= S370_MAX_PL) cg_die("too many parameter lists", i);
-        pl = cg_label();
-        s370_pl_lbl[s370_npl] = pl;
-        s370_pl_n[s370_npl] = n;
-        s370_npl = s370_npl + 1;
+        if (s370_plist_lbl < 0) s370_plist_lbl = cg_label();
+        pl = s370_plist_lbl;
+        if (n > s370_plist_n) s370_plist_n = n;
         j = 0;
         while (j < n) {
             int v;
@@ -1387,13 +1429,22 @@ static void s370_condbr(int i) {
         s370_branch(15, hcg_blk_lbl[else_b]);
         return;
     }
-    /* copies on an edge: branch to a stub for the taken side */
+    /* Copies on an edge.  If only the else edge needs them, branch
+     * on the condition to the then block and run them in line; else
+     * branch to a stub for the then side, and the else path must jump
+     * over the stub even when its block is laid out next. */
+    if (!then_copies) {
+        s370_branch(mask, hcg_blk_lbl[then_b]);
+        s370_phi_copies(hcg_cur_blk, else_b);
+        if (else_b != next_b) s370_branch(15, hcg_blk_lbl[else_b]);
+        return;
+    }
     lstub = cg_label();
     s370_branch(mask, lstub);
     if (else_copies) s370_phi_copies(hcg_cur_blk, else_b);
-    if (else_b != next_b || else_copies) s370_branch(15, hcg_blk_lbl[else_b]);
+    s370_branch(15, hcg_blk_lbl[else_b]);
     asm_stmt(s370_lab('L', lstub), "DS", "0H");
-    if (then_copies) s370_phi_copies(hcg_cur_blk, then_b);
+    s370_phi_copies(hcg_cur_blk, then_b);
     s370_branch(15, hcg_blk_lbl[then_b]);
 }
 
@@ -1496,6 +1547,7 @@ static void s370_inst(int i) {
         char *m;
         ty = h_ty[i];
         v = h_src2[i];
+        if (ty_is_fp(ty) && !ra_is_fpv(v)) ty = TY_INT;   /* an address stored through a typed temp */
         if (ty_is_fp(ty)) {
             int dbl;
             dbl = ty_is_double(ty);
@@ -1544,21 +1596,21 @@ static void s370_inst(int i) {
         if (lnt == BG_FADDR) {
             f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_faddr_text(i)); asm_ins("LA", s370_line, 4);
         } else {
+            /* An integer add: AH/A, never LA, which would keep 24 bits
+             * of a value that may be negative or large.  The chain is
+             * folded so one add covers ADDI(ADDI(x, a), b). */
             int c;
             int base;
             int off;
-            c = h_val[i];
-            if (s370_fold_chain(i, &base, &off) && off >= 0) {
-                /* LA folds the whole chain; it is an address, so the
-                 * 24-bit result is right */
-                int b;
-                b = s370_gpr(base, d);
-                f_reset(); f_s(s370_r(d)); f_c(','); f_n(off); f_s("(,"); f_s(s370_r(b)); f_c(')'); asm_ins("LA", s370_line, 4);
+            if (s370_fold_chain(i, &base, &off)) {
+                c = off;
+                s370_load_into(d, base);
             } else {
+                c = h_val[i];
                 s370_load_into(d, h_src1[i]);
-                if (c >= -32768 && c <= 32767) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_h(c)); asm_ins("AH", s370_line, 4); }
-                else { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_f(c)); asm_ins("A", s370_line, 4); }
             }
+            if (c >= -32768 && c <= 32767) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_h(c)); asm_ins("AH", s370_line, 4); }
+            else { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_pool_f(c)); asm_ins("A", s370_line, 4); }
         }
         s370_ifinish(i, d);
         return;
@@ -1646,12 +1698,14 @@ static void s370_inst(int i) {
         s370_ffinish(i, d);
         return;
     }
-    if (k == HI_FNEG) {
+    if (k == HI_FNEG || k == HI_FABS) {
         int dbl;
         dbl = ty_is_double(h_ty[i]);
         d = s370_fdst(i);
         s370_copy_to_reg(d, 1, h_src1[i], dbl);
-        f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(d)); asm_ins(dbl ? "LCDR" : "LCER", s370_line, 2);
+        f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(d));
+        if (k == HI_FNEG) asm_ins(dbl ? "LCDR" : "LCER", s370_line, 2);
+        else asm_ins(dbl ? "LPDR" : "LPER", s370_line, 2);
         s370_ffinish(i, d);
         return;
     }
@@ -1747,16 +1801,14 @@ static void s370_inst(int i) {
         int next_b;
         int q;
         v = h_src1[i];
-        if (v >= 0 && h_ty[i] != TY_INT) {
-            /* a FUNCTION result (ty stays 0 for a typed result) */
+        if (v >= 0 && !s370_unit_is_main && f77_ukind[s370_cur_unit] == F77_UNIT_FUNC) {
+            /* a FUNCTION result: FPR0 (and FPR2 for COMPLEX) or R0 */
             if (ra_is_fpv(v)) {
                 s370_copy_to_reg(0, 1, v, ty_is_double(h_ty[v]));
                 if (h_src2[i] >= 0) s370_copy_to_reg(2, 1, h_src2[i], ty_is_double(h_ty[h_src2[i]]));
             } else {
                 s370_load_into(0, v);
             }
-        } else if (v >= 0 && s370_unit_is_main == 0 && f77_ukind[s370_cur_unit] == F77_UNIT_FUNC) {
-            s370_load_into(0, v);
         }
         next_b = -1;
         q = 0;
@@ -1783,7 +1835,12 @@ static void s370_inst(int i) {
         (void)q;
         return;
     }
-    if (k == HI_CALLHI) cg_die("CALLHI in native mode", i);
+    if (k == HI_CALLHI) {
+        /* the imaginary part of a COMPLEX function result, FPR2 */
+        if (ra_reg[i] >= 0) { if (ra_reg[i] != 2) { f_reset(); f_s(s370_r(ra_reg[i])); f_s(",2"); asm_ins("LER", s370_line, 2); } }
+        else if (ra_spill_off[i] != 0) { f_reset(); f_s("2,"); f_s(s370_slot(i)); asm_ins("STE", s370_line, 4); }
+        return;
+    }
     cg_die("unhandled instruction kind", i);
 }
 
@@ -1898,7 +1955,7 @@ static void s370_emit_area(void) {
     asm_stmt("", "DC", "X'4E000000',F'0'");          /* 80: ICVT */
     asm_stmt("", "DC", "D'0'");                      /* 88: ECVT */
     asm_stmt("", "DS", "D");                         /* 96: FTMP */
-    asm_stmt("", "DS", "D");                         /* 104: PHIT */
+    asm_stmt("", "DS", "8D");                        /* 104: PHIT x 8 */
     off = S370_HDR_SIZE;
     /* near objects, in layout order */
     i = 0;
@@ -1919,13 +1976,16 @@ static void s370_emit_area(void) {
     /* call temporaries */
     i = 0;
     while (i < s370_ntmp) { asm_stmt(s370_lab('W', s370_tmp_labels[i]), "DS", "D"); off = off + 8; i = i + 1; }
-    /* parameter lists and jump tables */
+    /* the parameter list, and jump tables */
+    if (s370_plist_lbl >= 0) {
+        f_reset(); f_n(s370_plist_n); f_c('F');
+        asm_stmt(s370_lab('P', s370_plist_lbl), "DS", s370_line);
+        off = off + 4 * s370_plist_n;
+    }
     i = 0;
     while (i < s370_npl) {
         if (s370_pl_n[i] > 0) {
-            f_reset(); f_n(s370_pl_n[i]); f_c('F');
-            asm_stmt(s370_lab('P', s370_pl_lbl[i]), "DS", s370_line);
-            off = off + 4 * s370_pl_n[i];
+            cg_die("stale parameter list entry", -1);
         } else {
             int ji;
             int q;
@@ -2003,9 +2063,21 @@ static void s370_emit_area(void) {
     while (i < s370_nobj) {
         k = s370_order[i];
         if (s370_obj_off[k] < 0) {
+            /* a length modifier stops at 65535; a doubleword count
+             * reaches eight times as far, and beyond that several */
+            int n;
+            int first;
+            n = (s370_obj_size[k] + 7) / 8;
+            first = 1;
             asm_stmt("", "DS", "0D");
-            f_reset(); f_s("XL"); f_n(s370_obj_size[k]);
-            asm_stmt(s370_lab('T', s370_obj_lbl[k]), "DS", s370_line);
+            while (n > 0) {
+                int c;
+                c = n > 65535 ? 65535 : n;
+                f_reset(); f_n(c); f_c('D');
+                asm_stmt(first ? s370_lab('T', s370_obj_lbl[k]) : "", "DS", s370_line);
+                n = n - c;
+                first = 0;
+            }
         }
         i = i + 1;
     }
@@ -2047,7 +2119,10 @@ static void s370_gen_unit(Node *fn) {
 
     s370_npool = 0;
     s370_ntmp = 0;
+    s370_tmp_next = 0;
     s370_npl = 0;
+    s370_plist_lbl = -1;
+    s370_plist_n = 0;
     s370_area_lbl = cg_label();
     s370_pc = 0;
     s370_mark_strings();
