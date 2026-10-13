@@ -41,7 +41,7 @@ jobs:
       - name: every test program compiles to its committed assembler
         run: make check-asm
       - name: host checks
-        run: make test
+        run: make test CC=gcc
       - name: package
         if: startsWith(github.ref, 'refs/tags/v')
         run: |

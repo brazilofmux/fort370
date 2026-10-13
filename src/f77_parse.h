@@ -6762,7 +6762,17 @@ static void f77_statement(void) {
         hi_emit(HI_BRC, TY_VOID, c_neg, f77_label_blk(l1), b_mid, NULL);
         f77_cur_blk_live = 0;
         f77_begin_blk(b_mid);
-        hi_emit(HI_BRC, TY_VOID, c_eq, f77_label_blk(l2), f77_label_blk(l3), NULL);
+        {
+            /* one at a time: f77_label_blk makes a label's block on first
+             * sight, and C leaves the order of a call's arguments open,
+             * so as arguments the two blocks came out numbered one way
+             * by gcc on x86_64 and the other by gcc on arm64 and clang */
+            int b2;
+            int b3;
+            b2 = f77_label_blk(l2);
+            b3 = f77_label_blk(l3);
+            hi_emit(HI_BRC, TY_VOID, c_eq, b2, b3, NULL);
+        }
         f77_cur_blk_live = 0;
         goto done;
     }

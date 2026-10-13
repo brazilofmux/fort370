@@ -37,7 +37,7 @@ asm: out/f77
 	@sh tests/check-asm.sh --update
 
 test: out/f77
-	@sh tests/host/dtoa.sh
+	@CC="$(CC)" sh tests/host/dtoa.sh
 	@sh tests/host/rtnames.sh
 	@sh tests/host/port.sh
 

@@ -5,7 +5,7 @@
 # the digits printed are exactly those of the HFP value the words hold.
 set -e
 cd "$(dirname "$0")/../.."
-cc -O1 -o out/dtoa_test tests/host/dtoa_test.c runtime/s370/f77dtoa.c
+${CC:-cc} -O1 -o out/dtoa_test tests/host/dtoa_test.c runtime/s370/f77dtoa.c
 out/dtoa_test 0.1 1.0E-6 100099.999999737 0.666666666666666667 1.0E20 123456789.0 0.0 -5.0E-3 \
     500.404006199570 847.610420053770 1.0E75 5.4E-79 1.0 16.0 0.0625 2.5 3.14159265358979 \
     -0.000123456789 999999999999999.9 0.99999999999999999 > out/dtoa.txt
