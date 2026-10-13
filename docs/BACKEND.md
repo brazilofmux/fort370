@@ -226,7 +226,20 @@ program needs is fort370's own, and it is the SLOW-32 one
   intrinsics call libc370's `SQRT`, `EXP`, ... with the C convention
   rather than FORTLIB's `DSQRT`.
 - The 64-bit millicode cc370 emits calls to (`@@MULDI3`, `@@NEGDI2`) is
-  cobc370's `mvs370-millicode.c`, copied.
+  cobc370's `mvs370-millicode.c`, copied -- but the runtime avoids
+  64-bit arithmetic altogether (`s370_hfp.h` is 32-bit only now): a
+  conversion that was right on the host came out wrong on the guest.
+  The runtime is built at -O1, as cobc370 is: at -O2 cc370 scheduled a
+  double argument's store past the call that read it.
+- The mathematical intrinsics are the runtime's own, `f77math.c`:
+  libc370's `sqrt` took an operation exception in a plain C program,
+  and FORTLIB is on the guest, out of a host link's reach. They are
+  written against the HFP format (scaling by powers of two through the
+  exponent field, constants from their hexadecimal digits, a
+  three-part pi/2 for the reduction) under libm's external names, which
+  the compiler emits; `tests/s370/math.sh` checks 85 values against
+  mpmath, all within a few units in the last place. A REAL result is
+  the long one's first word, truncated.
 
 A program is linked **on the host**: `bench/mkload.sh prog.f` runs the
 compiler, `as370`, and `cc370` as the linker (crt0, the runtime
@@ -241,7 +254,13 @@ program installed once by tape, `ship.py --install`), which writes the
 image back as the FB/80 data set it was; RECEIVE makes a load library
 of it and the GO step runs it with `FT06F001` on the printer. A tape
 file per module was the first version, and MVS asked for the volume to
-be mounted again at every one.
+be mounted again at every one. `bench/fcvs.sh` puts the whole FCVS
+through this: build, ship in batches, one report per program, and a
+summary of what each program said of itself (the audit routines count
+their own PASS, FAIL and DELETED tests; FM001's test 2 fails by
+design). `bench/abc.sh` is `ab.sh` for this path. One job at a time on
+the guest: two concurrent runs share the printer, and the runner then
+captures the wrong job's output.
 
 ## Names
 

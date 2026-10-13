@@ -37,35 +37,4 @@ while [ $# -gt 0 ]; do
   else python3 "$B/ship.py" --out "$O/fcvs/batch$k.out" $batch; fi
 done
 # the reports, one file per program, and the summary
-python3 - "$O/fcvs" <<'EOF'
-import glob, re, sys, os
-d = sys.argv[1]
-rows = {}
-for f in sorted(glob.glob(os.path.join(d, 'batch*.out'))):
-    t = open(f, 'rb').read().decode('latin-1')
-    # a program's report runs from its first heading to END OF PROGRAM
-    for m in re.finditer(r'END OF PROGRAM\s+(FM\d+)', t):
-        name = m.group(1)
-        start = t.rfind('FORTRAN COMPILER VALIDATION SYSTEM', 0, m.start())
-        if start < 0: start = max(0, m.start() - 20000)
-        seg = t[start:m.end() + 2500]
-        open(os.path.join(d, name + '.txt'), 'w').write(seg)
-        p = re.search(r'(\d+)\s+TESTS PASSED', seg); fl = re.search(r'(\d+)\s+TESTS FAILED', seg); dl = re.search(r'(\d+)\s+TESTS DELETED', seg)
-        rows[name] = (int(p.group(1)) if p else 0, int(fl.group(1)) if fl else 0, int(dl.group(1)) if dl else 0)
-    for m in re.finditer(r'HERC01S\s+GO\d+\s+-\s+ABEND (\S+)', t):
-        pass
-    for m in re.finditer(r'Stepname: GO(\d+)\s+Program name: (FM\d+)', t):
-        name = m.group(2)
-        if name not in rows:
-            ab = re.search(rf'HERC01S\s+GO{m.group(1)}\s+-\s+ABEND (\S+)', t)
-            rows[name] = ('ABEND ' + ab.group(1)) if ab else 'no report'
-tot_p = tot_f = 0
-for name in sorted(rows):
-    r = rows[name]
-    if isinstance(r, tuple):
-        tot_p += r[0]; tot_f += r[1]
-        print('%s pass %3d fail %3d deleted %3d%s' % (name, r[0], r[1], r[2], '' if r[1] == 0 or name == 'FM001' else '   <--'))
-    else:
-        print('%s %s   <--' % (name, r))
-print('%d programs, %d tests passed, %d failed' % (len(rows), tot_p, tot_f))
-EOF
+python3 "$B/fcvs_summary.py" "$O/fcvs"

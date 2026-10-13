@@ -70,19 +70,28 @@ def run_deck(deck, out):
     job = m.group(1)
     head = text[:200].split(b'\n')[0]
     trailer = re.compile(rb'\*\*\*\*Z\s+END\s+JOB\s+' + job + rb'\s')
+    # JES2 prints a job's output in groups, each with its own trailer,
+    # and the step reports can follow the job log's group by seconds:
+    # wait until the printer file has been still for a while, then take
+    # everything from the job's first line through its last trailer
     deadline = time.time() + 300
+    last = -1
+    still = 0
     while time.time() < deadline:
-        prt = open(PRT, 'rb').read()
-        start = prt.rfind(head)
-        if start >= 0:
-            tail = prt[start:]
-            ends = [mm.end() for mm in trailer.finditer(tail)]
-            if ends:
-                # the trailer repeats on the banner page; take through the last one, then the rest of its line
-                e = ends[-1]
-                nl = tail.find(b'\n', e)
-                open(out, 'wb').write(tail[:nl + 1 if nl >= 0 else len(tail)])
-                return
+        size = os.path.getsize(PRT)
+        if size == last: still += 1
+        else: still = 0; last = size
+        if still >= 3:
+            prt = open(PRT, 'rb').read()
+            start = prt.rfind(head)
+            if start >= 0:
+                tail = prt[start:]
+                ends = [mm.end() for mm in trailer.finditer(tail)]
+                if ends:
+                    e = ends[-1]
+                    nl = tail.find(b'\n', e)
+                    open(out, 'wb').write(tail[:nl + 1 if nl >= 0 else len(tail)])
+            return
         time.sleep(2)
 
 def mount_watcher(aws, stop):
