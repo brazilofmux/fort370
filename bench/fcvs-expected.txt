@@ -1,0 +1,32 @@
+# fcvs-expected.txt -- what the FCVS programs that do not end in a clean
+# pass must print, so that bench/fcvs_summary.py can tell the expected
+# from a regression.  NIST's files are run as distributed; nothing here
+# changes them.  One program per line:
+#
+#   NAME  <the summary line fcvs_summary.py prints for it>
+#   NAME  expect <text that must appear in its report>
+#
+# The summary line is matched exactly; every expect line must be found
+# (blanks collapsed).  A program listed here that prints anything else,
+# or one not listed that is not a clean pass, is a deviation.
+
+# FM001's test 2 fails by design: the FCVS checking its own reporting.
+FM001 pass   1 fail   0 deleted   1
+
+# Inspection programs: they print values for a person to read, no counts.
+FM005 inspection (no counts)
+FM109 inspection (no counts)
+
+# FM257 STOPs in its test 6 by design (STOP n with each form of n).
+FM257 ends after test 5
+
+# FM923: NIST deleted test CT022 from the program (the sequence numbers
+# jump from 05950923 to 06130923, the comment headers from CT021 to
+# CT023, and B6VK and CVNY06 are declared and never used) but left its
+# two cards in FM923.DAT: 'ABCDEF', and a string continued from the end
+# of one card onto the next ('UVW / XYZ').  Tests 22 and 23 therefore
+# read the deleted test's cards and fail.  gfortran prints exactly these
+# lines from the same files.
+FM923 pass  25 fail   2 deleted   0
+FM923 expect 22 FAIL COMPUTED= ABCDEF CORRECT= CAN'T, AND/OR WON'T
+FM923 expect 23 FAIL COMPUTED: XYZ' CAN'T, A 123456789 CORRECT: 1234567890 12345678 123456789

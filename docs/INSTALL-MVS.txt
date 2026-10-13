@@ -1,0 +1,156 @@
+fort370 for MVS 3.8j -- installing the compiler
+===============================================
+
+Two files make the MVS package:
+
+  FORT370.xmit   one load module, FORT370: the FORTRAN 77 compiler,
+                 which runs on the guest and writes S/370 assembler
+  F77RT.obj      the fort370 runtime as object decks, for IEWL to link
+                 a compiled program with: fort370's runtime and the
+                 libc370 members it calls, about 290K in a program
+
+Nothing here needs a C compiler on MVS.  Both were cross-built on a
+host with mvslovers' cc370 and libc370, and these are the results.
+
+These instructions do not go stale, but the figures below describe one
+particular build.  Check them against whatever you actually downloaded
+rather than against this file.
+
+  FORT370.xmit  SHA256 ef22abf9405d9423c91487859d84e8b39bcdbe4f74e15cd7e61a2167a3533fb3
+                496000 bytes, FB80 when it lands on the guest
+  F77RT.obj     SHA256 378de5218fd62d7ec40d03bdb5585655a1b4bcf2171fed9ceba756545ed10a13
+                569840 bytes, FB80
+  built         from fort370 887e804 with mvslovers/cc370 and libc370
+                as installed 2026-09-22
+  tested        all 192 FCVS programs and 62 test programs compiled
+                on the guest by this module, the assembler byte for
+                byte the host compiler's (bench/port-sweep.py);
+                compile, assemble, link and go on the guest
+                (bench/clg-test.py)
+
+
+1.  Get the two files onto the guest
+------------------------------------
+
+Each must arrive as a physical-sequential FB/80 data set, unchanged.
+Both are binary: do not let anything translate them to EBCDIC or strip
+trailing blanks.  Any route works -- FTP in binary with a pre-allocated
+target, IND$FILE, or an emulated tape.  For tape, wrap the file in AWS
+blocks and IEBGENER it in, as for any XMIT.
+
+    //GEN      EXEC PGM=IEBGENER
+    //SYSUT1   DD UNIT=480,VOL=SER=FORT01,LABEL=(1,NL),DISP=(OLD,KEEP),
+    //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+    //SYSUT2   DD DSN=your.FORT370.XMIT,DISP=(NEW,CATLG),UNIT=SYSDA,
+    //            SPACE=(CYL,(10,5)),
+    //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+    //SYSPRINT DD SYSOUT=*
+    //SYSIN    DD DUMMY
+
+F77RT.obj lands the same way, as your.FORT370.F77RT, and is used as it
+is: it is the runtime's object decks end to end, read by IEWL as part of
+SYSLIN (section 4).
+
+
+2.  RECEIVE the compiler into a load library
+--------------------------------------------
+
+On TK5 the NJE38 RECEIVE is the one that works; it takes the whole
+command on one line.
+
+    //RECV     EXEC PGM=IKJEFT01,DYNAMNBR=60
+    //SYSTSPRT DD SYSOUT=*
+    //SYSPRINT DD SYSOUT=*
+    //SYSTSIN  DD *
+    RECEIVE INDATASET('your.FORT370.XMIT') -
+      DATASET('your.FORT370.LOAD') DIR(5) NOPROMPT
+    /*
+
+
+3.  Run it
+----------
+
+    //FORT     EXEC PGM=FORT370,REGION=8192K
+    //STEPLIB  DD DSN=your.FORT370.LOAD,DISP=SHR
+    //SYSPRINT DD SYSOUT=*
+    //SYSTERM  DD SYSOUT=*
+    //SYSIN    DD DSN=your.SOURCE.PDS(PROGRAM),DISP=SHR
+    //SYSPUNCH DD DSN=&&ASM,DISP=(NEW,PASS),UNIT=SYSDA,
+    //            SPACE=(CYL,(2,2)),
+    //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+
+  REGION=8192K is not optional.  The compiler's tables are about 6MB
+  and it will not start in less.
+
+  SYSIN is the source: fixed-form FORTRAN 77, any number of program
+  units, columns 1-72 (73-80 are ignored).  It may be a data set or
+  DD * -- the compiler reads it as libc370's standard input.
+
+  SYSPUNCH receives the S/370 assembler, one CSECT per program unit
+  and one per COMMON block.  Feed it to IFOX00 with PARM='OBJ,NODECK'
+  -- without OBJ it assembles cleanly and produces nothing.
+
+  Errors go to SYSTERM with the line number and the statement, and the
+  step ends with return code 1; SYSPUNCH is then incomplete.
+
+
+4.  Link and run a program
+--------------------------
+
+The program's object deck is linked with F77RT by concatenation: F77RT
+ends in the control statement ENTRY @@CRT0, libc370's entry, which
+calls the Fortran main program (CSECT F77MAIN).
+
+    //LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST,NCAL',REGION=2048K
+    //SYSLIN   DD DSN=&&OBJ,DISP=(OLD,DELETE)
+    //         DD DSN=your.FORT370.F77RT,DISP=SHR
+    //SYSLMOD  DD DSN=&&LOAD(GO),DISP=(NEW,PASS),UNIT=SYSDA,
+    //            SPACE=(TRK,(30,10,5))
+    //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
+    //SYSPRINT DD SYSOUT=*
+
+  Every byte of F77RT's sections is text, zeros included.  IEWL fills
+  storage no text record covers from its own buffers, and C assumes
+  its static storage starts as zeros; without the zeros a program
+  abends in libc370's stdio at its first WRITE.  A program's own
+  storage follows FORTRAN's rule instead: undefined until assigned or
+  given by DATA, as with IBM's compilers.
+
+F77CLG.jcl beside this file is a cataloged procedure that chains the
+whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
+
+When the program runs, a Fortran unit n is the DD FTnnF001: unit 6 is
+FT06F001 (SYSPRINT when there is no FT06F001), unit 5 FT05F001 (SYSIN
+when there is none).  OPEN FILE='NAME' names a DD.  A direct-access
+file is a DASD data set of fixed blocks, RECL bytes each; a new one is
+formatted as it is written.  STOP ends the program with its code as
+the step's return code.
+
+
+Rebuilding it yourself
+----------------------
+
+You need mvslovers' cc370 toolchain and libc370 installed, and then,
+from a fort370 checkout:
+
+    make mvs
+
+which builds out/mvs/FORT370.xmit (the compiler, with cc370) and
+out/mvs/F77RT.obj (the runtime and the libc370 members it calls,
+bench/mkrtlib.py).  The assembler's and linker's clock is pinned
+(MVSDATE, MVSTIME in the Makefile), since as370 and ld370 stamp the
+date and time into what they write; two builds of the same source are
+then the same bytes, and the SHA256 above reproduces.
+
+  --sparse-text leaves the compiler's zeroed tables out of the module:
+  program fetch hands over storage no text record covers as zeros.
+  That is how MVS 3.8j behaves rather than something it promises; it
+  is what cobc370 relies on too.
+
+  -O1 because cc370's backend documents -O2 and above as unsafe on this
+  target (the runtime was miscompiled at -O2: a double argument's store
+  scheduled past the call).
+
+bench/port-sweep.py is the proof that the compiler on MVS is the
+compiler on the host: it compiles every FCVS program and every test on
+the guest and diffs the assembler, byte for byte, with the host's.

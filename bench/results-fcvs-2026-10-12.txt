@@ -1,37 +1,39 @@
 The FCVS on MVS 3.8j through fort370's own runtime, 2026-10-12 (the
-eighth run of the night; bench/fcvs.sh, reports read by
-bench/fcvs_summary.py).  Each FCVS program counts its own tests; this is
-what each said of itself.  192 programs built, shipped and ran:
-3318 tests passed, 2 failed.
+ninth run; bench/fcvs.sh, reports read by bench/fcvs_summary.py).  Each
+FCVS program counts its own tests; this is what each said of itself.
+192 programs built, shipped and ran: 3346 tests passed, 2 failed.
 
-Every row that is not a clean pass is accounted for:
+Every row that is not a clean pass is accounted for, and each must
+print what bench/fcvs-expected.txt says it prints (the summary marks it
+"expected"; anything else is a deviation):
   FM001  test 2 fails by design (the FCVS's own check of its reporting)
   FM257  STOPs in its test 6 by design, so the report ends after test 5
-  FM005, FM109, FM500  print for inspection, without counts
+  FM005, FM109  print for inspection, without counts
   FM910  runs 5 of its 6 tests: test 1 is optional, reading a direct
          file as an unformatted sequential one, and INQUIRE answers
          SEQUENTIAL='NO' (direct records carry no length words)
-  FM923  tests 22-23 read two cards of the 1997 FM923.DAT that the
-         program never lists ('ABCDEF' and a quoted string spanning two
-         cards); with those two cards removed, 27 of 27 pass
+  FM923  tests 22-23 fail as NIST distributes it: test CT022 was
+         deleted from the program (its sequence numbers jump from
+         05950923 to 06130923) but its two cards were left in
+         FM923.DAT, so tests 22 and 23 read them; gfortran prints the
+         same two failures.  The files are run as distributed and the
+         failing lines are pinned in bench/fcvs-expected.txt
 
-The seventh run had 3227 passed and 24 failed.  Between them, the
-runtime's records (runtime/s370/f77rec.c): direct access by BSAM and
-BDAM, unformatted sequential files positioned by record count, and
-INQUIRE's NEXTREC kept by the unit.  FM407, FM411, FM413, FM910, FM912,
-FM916, FM917 and FM921 went from abends or failures to clean passes.
-The seventh run's own fixes before that (commits dff7085, bef68f9):
-CHARACTER DATA laid down in ASCII; a COMPLEX function result whose parts
-sat in each other's register; a spilled result's borrowed FPR parked
-while an operand lived in it; list-directed complex constants with
-blanks inside; a negative sign on a value that rounds to zero under F
-editing.
+The record so far:
+  run 7   3227 passed, 24 failed   direct access and unformatted gaps
+  run 8   3318 passed,  2 failed   the runtime's records (f77rec.c)
+  run 9   3346 passed,  2 failed   FM500 counts its 28 passes: its pass
+                                   counter had printed as ***** in I5,
+                                   corrupted by the SSA rename overrun
+                                   (fixed 8747604); and floating DATA
+                                   and PARAMETER constants converted
+                                   from their text (06090b4)
 
-FM001 pass   1 fail   0 deleted   1
+FM001 pass   1 fail   0 deleted   1   (expected)
 FM002 pass   9 fail   0 deleted   0
 FM003 pass   8 fail   0 deleted   0
 FM004 pass  12 fail   0 deleted   0
-FM005 inspection (no counts)
+FM005 inspection (no counts)   (expected)
 FM006 pass  30 fail   0 deleted   0
 FM007 pass  20 fail   0 deleted   0
 FM008 pass  35 fail   0 deleted   0
@@ -87,7 +89,7 @@ FM105 pass   8 fail   0 deleted   0
 FM106 pass  11 fail   0 deleted   0
 FM107 pass  11 fail   0 deleted   0
 FM108 pass  31 fail   0 deleted   0
-FM109 inspection (no counts)
+FM109 inspection (no counts)   (expected)
 FM110 pass   0 fail   0 deleted   0
 FM111 pass   0 fail   0 deleted   0
 FM200 pass  13 fail   0 deleted   0
@@ -102,7 +104,7 @@ FM253 pass  28 fail   0 deleted   0
 FM254 pass  12 fail   0 deleted   0
 FM255 pass  16 fail   0 deleted   0
 FM256 pass  24 fail   0 deleted   0
-FM257 ends after test 5
+FM257 ends after test 5   (expected)
 FM258 pass   0 fail   0 deleted   0
 FM259 pass   0 fail   0 deleted   0
 FM260 pass   0 fail   0 deleted   0
@@ -150,7 +152,7 @@ FM406 pass  12 fail   0 deleted   0
 FM407 pass   4 fail   0 deleted   0
 FM411 pass  35 fail   0 deleted   0
 FM413 pass  34 fail   0 deleted   0
-FM500 inspection (counts withheld)
+FM500 pass  28 fail   0 deleted   0
 FM503 pass   8 fail   0 deleted   0
 FM506 pass   4 fail   0 deleted   0
 FM509 pass  16 fail   0 deleted   0
@@ -218,8 +220,8 @@ FM919 pass   1 fail   0 deleted   0
 FM920 pass   3 fail   0 deleted   0
 FM921 pass   3 fail   0 deleted   0
 FM922 pass   1 fail   0 deleted   0
-FM923 pass  25 fail   2 deleted   0   <--
-192 programs, 3318 tests passed, 2 failed
+FM923 pass  25 fail   2 deleted   0   (expected)
+192 programs, 3346 tests passed, 2 failed; 5 as expected, 0 deviations
 
 The seven kernels through the same runtime, the same hour, CPU seconds
 of the GO step against FORTRAN H OPT=2 (every checksum H's):

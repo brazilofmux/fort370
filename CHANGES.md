@@ -7,9 +7,12 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
-## Unreleased
+## 2026-10-12
 
-The first release, everything to date (2026-10-12):
+The first release.  Built from `887e804`: FORT370.xmit SHA256
+`ef22abf9405d9423…`, 496,000 bytes; F77RT.obj SHA256
+`378de5218fd62d7e…`, 569,840 bytes.  All 192 FCVS programs and 62
+tests compile on the guest to the host's assembler, byte for byte.
 
 - **The compiler.** The FORTRAN 77 front end and SSA optimizer of
   [slow32-public/fortran](https://github.com/brazilofmux/slow32-public/tree/main/fortran),
@@ -17,21 +20,33 @@ The first release, everything to date (2026-10-12):
   instruction selection with storage operands and index registers,
   iterated register coalescing with even/odd pairs for `BXLE`, a static
   area per unit, far branches past the code base's 4K, and IFOX00
-  assembler out with standard OS linkage. All 192 FCVS programs compile.
+  assembler out with standard OS linkage.  All 192 FCVS programs
+  compile.
+- **On MVS itself.** FORT370, the same C built with cc370, runs in
+  REGION=8192K (its tables brought from 9.7MB to 6.4MB) and writes, byte
+  for byte, what the host compiler writes; F77RT, the runtime as object
+  decks, lets IFOX00 and IEWL on the guest make a running program
+  (`docs/INSTALL-MVS.txt`, `jcl/F77CLG.jcl`).  SYSIN may be `DD *`.  On a
+  host the tables have four times the room.
 - **Measured against FORTRAN H.** Seven kernels (daxpy, ddot, matmul,
   three Livermore loops, LINPACK) print FORTRAN H's checksums to the
-  digit and run at 0.89 to 1.00 of H's CPU time at OPT=2, H measured
-  the same hour (`bench/results-s370-2026-10-12d.txt`).
-- **The runtime.** fort370's own, in C for libc370
-  (`runtime/s370`): formatted, list-directed, unformatted and internal
-  I/O, OPEN, CLOSE and INQUIRE in MVS terms (units are DD names
-  `FTnnF001`), its own HFP-aware mathematical library, exact decimal
-  conversion, and records -- direct access by BSAM and BDAM, as IBM's
-  FORTRAN did it, and unformatted sequential files positioned by record
-  count, since QSAM cannot seek.
-- **The FCVS on MVS 3.8j**, through that runtime: 192 programs, 3318
-  tests passed, 2 failed, the two being cards in the 1997 data file
-  that their program never lists (`bench/results-fcvs-2026-10-12.txt`).
+  digit and run at 0.89 to 1.00 of H's CPU time at OPT=2, H measured the
+  same hour (`bench/results-s370-2026-10-12d.txt`).
+- **The runtime.** fort370's own, in C for libc370 (`runtime/s370`):
+  formatted, list-directed, unformatted and internal I/O; OPEN, CLOSE
+  and INQUIRE in MVS terms (units are DD names `FTnnF001`); its own
+  HFP-aware mathematical library; exact decimal conversion; direct
+  access by BSAM and BDAM, as IBM's FORTRAN did it, and unformatted
+  sequential files positioned by record count; LGE and its kin in
+  ASCII's collating sequence, as the standard asks.
+- **The FCVS on MVS 3.8j**, through that runtime: 192 programs, 3346
+  tests passed, 2 failed, both expected: NIST deleted FM923's test CT022
+  but left its two cards in FM923.DAT, so tests 22 and 23 read them, as
+  they do under gfortran.  The files run as distributed, and what every
+  program that is not a clean pass must print is pinned in
+  `bench/fcvs-expected.txt` (`bench/results-fcvs-2026-10-12.txt`).
 - **Host build and CI.** `make`, `make check-asm` (62 programs to their
-  committed assembler, byte-identical on every platform) and `make test`
-  on Linux, macOS and Windows; a date tag publishes the binaries.
+  committed assembler, byte-identical on Linux, macOS and Windows) and
+  `make test`; a date tag publishes the host binaries, and the MVS
+  package is attached, built by `make mvs` with its clock pinned so that
+  the SHA256s above reproduce.

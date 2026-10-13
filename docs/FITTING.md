@@ -109,8 +109,44 @@ possible; the ceilings must be chosen, not inherited.
 
 ## What this does not say
 
-The compiler has not run on MVS. It has been built for it and linked.
-EBCDIC, the `dd:` I/O, hexadecimal floating point and an S/370 code
-generator are all still to do. What this measurement settles is only
-that the machine has room for the compiler as designed, provided the
-tables are sized for one Fortran unit rather than for SQLite.
+This section once said the compiler had not run on MVS. It has now
+(2026-10-13), and the rest of this file is the record of how it got
+there.
+
+## In the region, and running
+
+The day's work the previous section predicted, done: the tables are
+6.4MB with the code, against 9.7MB, and the compiler runs on TK5 in
+REGION=8192K with room for libc370's 256K stack and its heap.
+
+| | before | after |
+|---|---:|---:|
+| interference edges | two int arrays, 2MB | peer and next in one word, 1MB |
+| output buffer | 256K | 32K, flushed when full |
+| liveness sets | two 256K pools, static | allocated at a unit's size |
+| SSA rename stacks | 128K, overrun past 32 variables | threaded through the push log |
+| dominator-tree children, rename walk | 256K, 192K | one per block |
+| labels, globals, names | 32K labels, 8K globals, 64-byte names | 8K, 2K, 32 bytes |
+| kinds, types, flags | int arrays | bytes and halfwords |
+
+Every FCVS program and test compiled to the same assembler before and
+after each step, except where a step fixed something: the SSA stacks
+had been cut from 16MB to 128K with their indexing kept, so a unit with
+more than 32 promoted variables wrote past the table, and four FCVS
+programs had compiled differently because of it.
+
+On a host the ceilings are four times as large (`F77_ROOM`, src/f77.c;
+the interference graph sixteen), since memory is not the constraint
+there. A unit that fits the guest compiles to the same bytes on both;
+`make out/f77-guest` is a host build with the guest's ceilings, which is
+what the port sweep compares against. The one test too large for the
+guest's tables is `tests/s370/big.f`, which needs more than twice its
+262,144 interference edges: the guest spills where the host keeps a
+register.
+
+`bench/port-sweep.py` compiles every FCVS program and test on the guest
+and diffs the assembler with the host's: 254 of 254 identical (the
+printer's display of three CP037 characters normalized). What it took
+besides room is in docs/BACKEND.md: stdio for the driver, EBCDIC in the
+scanner and the front end, and floating constants always converted from
+their decimal text rather than through a host double and printf.

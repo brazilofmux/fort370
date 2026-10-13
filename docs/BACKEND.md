@@ -286,6 +286,49 @@ design). `bench/abc.sh` is `ab.sh` for this path. One job at a time on
 the guest: two concurrent runs share the printer, and the runner then
 captures the wrong job's output.
 
+## The compiler on MVS
+
+The same C builds with cc370 into FORT370, a load module that runs on
+MVS 3.8j in REGION=8192K (`make mvs`; docs/INSTALL-MVS.txt installs it;
+docs/FITTING.md has how the tables were brought into the region). What
+it took besides room:
+
+- **I/O.** The S/370 driver uses stdio. On MVS the source is SYSIN,
+  read as libc370's standard input (so it may be `DD *`: a second open
+  of instream data is refused, S013-C0), and the assembler goes to
+  SYSPUNCH.
+- **EBCDIC.** Ragel bakes character classes into the scanner as ASCII
+  values, which recompiling does not change; on MVS the scanner reads
+  each byte through a CP037-to-ASCII table (Ragel's `getkey`) while its
+  pointers stay in the EBCDIC statement, which the parser compares with
+  its own, EBCDIC, literals. Elsewhere: ctype for letters (EBCDIC's
+  have gaps), IMPLICIT tables spanning `'A'..'Z'` in the execution set
+  (41 entries there), `toupper` rather than `- 32`, `isprint` for
+  `C'...'`, and DATA text not translated a second time.
+- **Constants from text.** s370_hfp.h converts a floating constant from
+  its decimal text, exactly and truncating as H does. PARAMETER values,
+  DATA values and the zeros the compiler makes up had gone through a
+  host double and `printf("%.17g")` -- exact for an IEEE double, not
+  for an HFP one with libc370's printf. The constant evaluator now
+  carries each literal's text beside its value; on MVS the lexer's
+  double comes from the same conversion, not from libc370's `strtod`.
+- **The runtime for programs compiled there** is F77RT, object decks
+  for IEWL (`bench/mkrtlib.py`): crt0, fort370's runtime and the 172
+  libc370 members it calls, in ld370's autocall order, every section's
+  storage covered by text. IEWL fills storage no text record covers
+  from its own buffers -- it read back as code -- and C assumes zeros;
+  without them a program abended S0C4 in libc370's `@@FPUTC`. The
+  library ends in `ENTRY @@CRT0`, so a link's SYSLIN is the program's
+  object and F77RT concatenated (`jcl/F77CLG.jcl`, since a cataloged
+  procedure cannot carry `DD *` on MVS 3.8j).
+
+`bench/port-sweep.py` is the proof of the first three: every FCVS
+program and test compiled on the guest is byte for byte the host's
+(against `out/f77-guest`, the host build with the guest's table
+ceilings). `bench/clg-test.py` is the proof of the last: it installs the
+package and runs `F77CLG` on programs given as `DD *`, with no host in
+the loop but to submit the job.
+
 ## Names
 
 External names are at most eight characters, upper case. Fortran names
@@ -351,13 +394,19 @@ register pair as a BXLE's step and limit are, so daxpy's outer loop
 is `LA / LH / LA / inner / BXH`. The seven kernels then stand at 0.89
 to 1.00 of H's OPT=2, H measured the same hour.
 
-Then the runtime, and the FCVS on MVS itself (`bench/fcvs.sh`; eight
-runs the same night, `bench/results-fcvs-2026-10-12.txt` is the last):
-192 programs build, ship and run, and their reports count 3318 tests
-passed and 2 failed. FM923's two read two cards of the 1997 data file
-that the program never lists (with them removed, 27 of 27); FM001's
-test 2 and FM257's STOP in its test 6 are by design; FM005, FM109 and
-FM500 print for inspection; FM910 skips its optional test 1, since a
+Then the runtime, and the FCVS on MVS itself (`bench/fcvs.sh`; nine
+runs, `bench/results-fcvs-2026-10-12.txt` is the last): 192 programs
+build, ship and run, and their reports count 3346 tests passed and 2
+failed. The two are FM923's: NIST deleted its test CT022 (the sequence
+numbers jump from 05950923 to 06130923) but left the test's two cards
+in FM923.DAT, so tests 22 and 23 read them, under gfortran too. The
+files run as distributed, and `bench/fcvs-expected.txt` pins what each
+program that is not a clean pass must print, FM923's failing lines
+included, so that `bench/fcvs_summary.py` tells the expected from a
+deviation -- applied to the eighth run, it flags FM500, whose pass count
+had printed as `*****`: the SSA rename overrun (8747604). FM001's
+test 2 and FM257's STOP in its test 6 are by design; FM005 and FM109
+print for inspection; FM910 skips its optional test 1, since a
 direct-access file is not readable as an unformatted sequential one
 here. The seventh run had 3227 and 24: direct access abended in
 `fseek` on a QSAM data set (FM407, FM413, FM910, FM912), INQUIRE about
