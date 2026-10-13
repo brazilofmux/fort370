@@ -86,6 +86,34 @@ instruction selection and register allocation are what carry over. Each
 language's runtime model, such as COBOL's decimal arithmetic or Pascal's
 nested procedures, is still its own work.
 
+## Building and using it
+
+Each dated release carries host binaries for Linux, macOS and Windows,
+built and checked by CI on their own platforms; the binary is
+`fort370`. The Linux and Windows ones are static. The macOS one is
+unsigned: if it came through a browser, `xattr -d
+com.apple.quarantine fort370` lets it run. To build from source:
+
+    make
+
+No dependencies beyond a C compiler. `make check-asm` compiles every
+test program and compares it with the assembler committed beside it,
+which is what CI does on each platform; `make test` runs the host
+checks (Python 3).
+
+    out/f77 program.f program.asm
+
+compiles a file of program units to one assembler source with
+standard OS linkage, which assembles with IFOX00 on the guest or with
+mvslovers' as370 on a host. A program needs fort370's runtime
+(`runtime/s370`, C for libc370): `make runtime` builds its objects
+with [cc370](https://github.com/mvslovers/cc370), and
+`bench/mkload.sh program.f` shows the whole host path, from Fortran
+to a load module and its XMIT. The main program's CSECT is `F77MAIN`;
+libc370's startup calls it through the runtime's `main`. Units are the
+DD names `FTnnF001` (6 falls back to SYSPRINT, 5 to SYSIN), and a
+direct-access file is a DASD data set of fixed blocks, RECL bytes each.
+
 ## Layout
 
     src/                  the FORTRAN 77 front end and the driver, f77.c
@@ -96,7 +124,8 @@ nested procedures, is still its own work.
                           port.py, with its own libm and exact conversion
     tests/f77/            regression programs; tests/oracle.sh runs gfortran
     tests/s370/           programs run through both H and fort370 on MVS
-    build.sh              host build: out/f77 (S/370) and out/f77-s32
+    Makefile              make: out/f77; make check-asm, make test, make runtime
+    CHANGES.md            what each release brought
     PROVENANCE.md         where the copies came from, and how to check them
     docs/FORTRAN-H.md     the measurement, and why it is measured
     docs/FITTING.md       the region TK5 grants, and what the compiler needs

@@ -1,0 +1,86 @@
+# The host side of fort370: the compiler builds, every test program
+# compiles to exactly the assembler committed beside it, and the host
+# checks pass, on each platform a release ships for.  The guest side --
+# running the programs on MVS 3.8j, the FCVS and the comparison with
+# FORTRAN H -- needs TK5 and stays in bench/.
+#
+# A tag v* also publishes a release: the binaries that passed those
+# checks, each built on its own platform, with the tag's message as the
+# notes.  Nothing is released that was not tested here first.  The
+# binary is named fort370 (f77 would shadow gfortran's alias on a PATH).
+name: host tests
+on:
+  push:
+  pull_request:
+jobs:
+  host:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-24.04,     plat: linux-x86_64,  ldflags: -static }
+          - { os: ubuntu-24.04-arm, plat: linux-arm64,   ldflags: -static }
+          - { os: macos-15,         plat: macos-arm64 }
+          - { os: macos-15-intel,   plat: macos-x86_64 }
+          - { os: windows-latest,   plat: windows-x86_64, ldflags: -static }
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: ${{ startsWith(matrix.os, 'windows') && 'msys2 {0}' || 'bash' }}
+    env:
+      MACOSX_DEPLOYMENT_TARGET: '11.0'
+    steps:
+      - uses: actions/checkout@v4
+      - if: startsWith(matrix.os, 'windows')
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          install: make diffutils zip mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-python
+      - name: build
+        run: make out/f77 LDFLAGS='${{ matrix.ldflags }}'
+      - name: every test program compiles to its committed assembler
+        run: make check-asm
+      - name: host checks
+        run: make test
+      - name: package
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          d=fort370-${GITHUB_REF_NAME}-${{ matrix.plat }}
+          mkdir $d
+          if [ -f out/f77.exe ]; then cp out/f77.exe $d/fort370.exe; else cp out/f77 $d/fort370; fi
+          cp LICENSE README.md CHANGES.md $d/
+          case ${{ matrix.plat }} in
+            windows-*) zip -qr $d.zip $d ;;
+            *) tar czf $d.tar.gz $d ;;
+          esac
+      - if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.plat }}
+          path: |
+            fort370-*.tar.gz
+            fort370-*.zip
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: host
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          git for-each-ref "refs/tags/$GITHUB_REF_NAME" --format='%(contents)' > notes.txt
+          (cd dist && sha256sum * > SHA256SUMS)
+          # A tag with -test in its name makes a draft, seen only by the
+          # owner: a dry run of this job that publishes nothing.
+          draft=; case $GITHUB_REF_NAME in *-test*) draft=--draft ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --verify-tag $draft \
+            --title "fort370 $GITHUB_REF_NAME" --notes-file notes.txt

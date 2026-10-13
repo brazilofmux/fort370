@@ -17,6 +17,12 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+/* Windows opens files in text mode unless told; the output must be the
+ * same bytes on every host. */
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 #ifdef F77_TARGET_S370
 #define F77_NATIVE_F64 1
 #endif
@@ -415,7 +421,7 @@ int main(int argc, char **argv) {
         return 1;
     }
 
-    fd = open(argv[1], 0);
+    fd = open(argv[1], O_RDONLY | O_BINARY);
     if (fd < 0) {
         fdputs("f77: cannot open ", 2);
         fdputs(argv[1], 2);
@@ -453,7 +459,7 @@ int main(int argc, char **argv) {
     /* The output is opened before code generation: the emitter flushes
      * its buffer to it whenever the buffer fills (a full buffer used to
      * be a silent drop). */
-    fd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC, 0644);
+    fd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
     if (fd < 0) {
         fdputs("f77: cannot open output\n", 2);
         return 1;
