@@ -76,6 +76,15 @@ address from the pool, `L 15,=A(L) / BC m,0(,15)`). The MVS package
 is FORT370.xmit and F77RT.obj, built by `make mvs`. `docs/BACKEND.md` has the design and the record of the
 work.
 
+How large a program unit each compiler takes
+(`bench/results-limits-2026-10-13.txt`): on MVS a fort370 unit holds
+8192 instructions in 1024 blocks, which comes to about 900 statements
+of straight-line array code, 500 logical IFs, 1000 labelled statements
+or 2700 scalar variables. H at OPT=2 takes fewer IFs and labels (450
+and 900) but far more straight-line code and variables (at least 8000
+and 16000). On a host the ceilings are four times as large. A source
+file may hold any number of units.
+
 ## The larger aim
 
 The back end matters more than the compiler. On SLOW-32 it produces

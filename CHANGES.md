@@ -1,13 +1,23 @@
 # Changes
 
 One entry per release, newest first. A release is named by its date and
-tagged `vYYYY.MM.DD`; the tag's message carries what it brought and, once
-the compiler runs on the guest, the SHA256 of its MVS package. Each entry
+tagged `vYYYY.MM.DD` (a second the same day `vYYYY.MM.DD.1`); the tag's
+message carries what it brought and, once the compiler runs on the
+guest, the SHA256 of its MVS package. Each entry
 names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
-## Unreleased
+## 2026-10-13.1
+
+The day's second release, tagged `v2026.10.13.1`.  Built from
+`8bac2de`: FORT370.xmit SHA256 `4ff22c51662f95fd…`, 510,560 bytes;
+F77RT.obj unchanged from 2026-10-13, SHA256 `a41062cd214f7998…`,
+569,840 bytes.  All 192 FCVS programs, 62 tests, the 600K source, the
+85-deep nesting test and a unit at each size limit compile on the guest
+to the host's assembler, byte for byte, in REGION=7168K.  This release
+is about how large a unit the compiler takes, measured against FORTRAN
+H in `bench/results-limits-2026-10-13.txt`.
 
 - Larger units: 4096 symbols and 4096 statement labels in a unit, from
   1024 and 512 (four times that on a host, where the labels had not
