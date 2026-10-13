@@ -96,7 +96,7 @@ static int s370_scache[16];
  * (the BALR 12,0) is "far": a branch to it loads its address into R15
  * from the pool and branches 0(,15).  A sizing pass (cg_dry) finds
  * them before the real one; see s370_gen_unit. */
-#define S370_MAX_ULBL 8192    /* fort370: labels in one unit; a unit past it is refused */
+#define S370_MAX_ULBL (8192 * F77_ROOM)    /* fort370: labels in one unit; a unit past it is refused */
 static int  s370_lbl_base;
 static int  s370_lbl_pc[S370_MAX_ULBL];
 static char s370_far[S370_MAX_ULBL];

@@ -18,12 +18,12 @@
  * count / HL_JT_MAX_SPAN).  4096 (the old 2-per-block bound) could be
  * exhausted by one large switch plus ordinary control flow, so allow ample
  * headroom; ssa_build_cfg still range-checks and aborts cleanly on overflow. */
-#define SSA_SUCC_SZ 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define SSA_SUCC_SZ (4096 * F77_ROOM)
 static int ssa_succ[SSA_SUCC_SZ];
 static int ssa_nsucc[HIR_MAX_BLOCK];
 static int ssa_soff[HIR_MAX_BLOCK];
 
-#define SSA_MAX_PRED 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define SSA_MAX_PRED (4096 * F77_ROOM)
 static int ssa_pred[SSA_MAX_PRED];
 static int ssa_pbase[HIR_MAX_BLOCK];
 static int ssa_npred[HIR_MAX_BLOCK];
@@ -49,7 +49,7 @@ static int ssa_idom[HIR_MAX_BLOCK];
  * phi and silently produce a wrong reaching definition, so stopping is
  * right -- the ceiling just has to be big enough. */
 #define SSA_DF_W 64
-#define SSA_DF_SZ 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define SSA_DF_SZ (HIR_MAX_BLOCK * SSA_DF_W)
 static short ssa_df[SSA_DF_SZ];   /* fort370: block numbers */
 static int ssa_dfc[HIR_MAX_BLOCK];
 
@@ -119,7 +119,7 @@ static int ssa_rci[SSA_DFS];
 static int ssa_rmark[SSA_DFS];
 
 /* --- Rename: push log for backtracking --- */
-#define SSA_PLOG 16384   /* fort370: pushes live along one path of the dominator tree */
+#define SSA_PLOG (16384 * F77_ROOM)   /* fort370: pushes live along one path of the dominator tree */
 static int ssa_plog[SSA_PLOG];
 static int ssa_pval[SSA_PLOG];
 static int ssa_pprev[SSA_PLOG];

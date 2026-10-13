@@ -30,6 +30,23 @@
 #define F77_NATIVE_F64 1
 #endif
 
+/* fort370: how much room the tables have.  On MVS the compiler and its
+ * tables share a TK5 region of 7.4MB with libc370's stack, so every
+ * ceiling is the one docs/FITTING.md chose: one Fortran unit as large
+ * as the largest FCVS program, with headroom.  On a host memory is not
+ * the constraint, and the ceilings are four times as large (the
+ * interference graph sixteen).  A unit that fits the guest compiles to
+ * the same bytes on both; a larger one compiles on the host, and the
+ * guest refuses it or, where a table only limits optimization, codes
+ * it more plainly. */
+#ifndef F77_ROOM                     /* -DF77_ROOM=1: a host build with the guest's ceilings */
+#ifdef __MVS__
+#define F77_ROOM 1
+#else
+#define F77_ROOM 4
+#endif
+#endif
+
 #include "f77_shim.h"
 #include "f77_contract.h"
 
@@ -415,7 +432,7 @@ static void hl_func(Node *fn) {
 }
 
 int main(int argc, char **argv) {
-    static char src[1 << 18];   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+    static char src[(1 << 18) * F77_ROOM];   /* the source file, whole */
     int n;
 #ifdef F77_TARGET_S370
     /* stdio, which every host and libc370 have.  On MVS the source is
@@ -455,7 +472,7 @@ int main(int argc, char **argv) {
         n = n + (int)k;
     }
     if (n >= (int)sizeof(src) - 1 && fgetc(fin) != EOF) {
-        fdputs("f77: source longer than 256K\n", 2);
+        fdputs("f77: source file too long\n", 2);
         return 1;
     }
     src[n] = 0;

@@ -30,7 +30,7 @@
  */
 
 #define RA_NGPR 10            /* R2..R11 */
-#define GC_MAX_NODE 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define GC_MAX_NODE (4096 * F77_ROOM)   /* fort370: see F77_ROOM in f77.c */
 #define RA_NFPR 4             /* FPR 0, 2, 4, 6 */
 #define RA_NCOLORS 10         /* max of the two, for used[] masks */
 
@@ -93,8 +93,8 @@ static int ra_can_reuse_src1(int k) {
  * IRC data structures
  * ================================================================= */
 
-#define GC_MAX_EDGE 262144   /* fort370: one unit in an 8MB region, docs/FITTING.md */
-#define GC_MAX_MOVE 4096   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define GC_MAX_EDGE (262144 * F77_ROOM * F77_ROOM)
+#define GC_MAX_MOVE (4096 * F77_ROOM)
 
 static int gc_nnode;
 static int gc_inst[GC_MAX_NODE];
@@ -103,12 +103,21 @@ static char gc_cls[GC_MAX_NODE];
 
 static int gc_adj_head[GC_MAX_NODE];
 /* An edge's peer node and the next edge of its list, in one word: the
- * peer in the low 12 bits (GC_MAX_NODE is 4096), the next edge plus one
- * above them (0 ends a list).  Two int arrays were 2MB of the region. */
-static unsigned int gc_adj[GC_MAX_EDGE];
-#define GC_PEER(e) ((int)(gc_adj[e] & 0xFFFu))
-#define GC_NEXT(e) ((int)(gc_adj[e] >> 12) - 1)
-#define GC_SETE(e, peer, next) (gc_adj[e] = ((unsigned)((next) + 1) << 12) | (unsigned)(peer))
+ * peer in the low GC_NODE_BITS, the next edge plus one above them (0
+ * ends a list).  Two int arrays were 2MB of the region.  On MVS a 32-bit
+ * word holds 4,096 nodes and 2^20 edges; a host's larger ceilings take a
+ * 64-bit word. */
+#ifdef __MVS__
+typedef unsigned int gc_word;
+#define GC_NODE_BITS 12
+#else
+typedef unsigned long long gc_word;
+#define GC_NODE_BITS 20
+#endif
+static gc_word gc_adj[GC_MAX_EDGE];
+#define GC_PEER(e) ((int)(gc_adj[e] & (((gc_word)1 << GC_NODE_BITS) - 1)))
+#define GC_NEXT(e) ((int)(gc_adj[e] >> GC_NODE_BITS) - 1)
+#define GC_SETE(e, peer, next) (gc_adj[e] = ((gc_word)((next) + 1) << GC_NODE_BITS) | (gc_word)(peer))
 static int gc_nedge;
 
 static int gc_degree[GC_MAX_NODE];
@@ -124,7 +133,7 @@ static int gc_nmove;
 #define GC_MV_CONSTRAINED 4
 static int gc_mv_status[GC_MAX_MOVE];
 
-#define GC_MAX_NMLIST 16384   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define GC_MAX_NMLIST (16384 * F77_ROOM)
 static int gc_nmlist_mv[GC_MAX_NMLIST];
 static int gc_nmlist_next[GC_MAX_NMLIST];
 static int gc_nmlist_head[GC_MAX_NODE];
@@ -712,7 +721,7 @@ static unsigned int *lv_in;
 static unsigned int *lv_out;
 static unsigned int *lv_live;
 static int lv_w;
-#define LV_BUDGET_WORDS 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define LV_BUDGET_WORDS (65536 * F77_ROOM * F77_ROOM)
 /* fort370: the live-in and live-out sets of a unit, allocated at the
  * size the largest unit so far has needed (at most LV_BUDGET_WORDS) --
  * two static pools at the budget were half a megabyte of the region. */

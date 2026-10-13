@@ -53,7 +53,7 @@ static int bg_cto[BG_MAX_CHAIN];
 static int bg_ccost[BG_MAX_CHAIN];
 static int bg_nchain;
 
-#define BG_MAX_INST 8192   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define BG_MAX_INST HIR_MAX_INST
 #define BG_COST_SZ (BG_MAX_INST * BG_NNT)
 static int bg_cost[BG_COST_SZ];
 static short bg_rule[BG_COST_SZ];   /* fort370: a rule number, or -1, or -(chain+2) */
