@@ -8,7 +8,15 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
-## Unreleased
+## 2026-10-13.2
+
+The day's third release, tagged `v2026.10.13.2`, for one bug found by
+the first program a reader tried.  Built from `1655d63`: FORT370.xmit
+SHA256 `cc0efa8ef0d3e105…`, 510,560 bytes; F77RT.obj unchanged,
+SHA256 `a41062cd214f7998…`, 569,840 bytes.  All 192 FCVS programs, 63
+tests, the 600K source, the 85-deep nesting test and a unit at each
+size limit compile on the guest to the host's assembler, byte for byte,
+in REGION=7168K.
 
 - A main program after its subprograms is compiled.  The compiler had
   begun a main program only before the first subprogram, so one after
