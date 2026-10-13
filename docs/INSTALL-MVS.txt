@@ -16,11 +16,11 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 ef22abf9405d9423c91487859d84e8b39bcdbe4f74e15cd7e61a2167a3533fb3
-                496000 bytes, FB80 when it lands on the guest
-  F77RT.obj     SHA256 378de5218fd62d7ec40d03bdb5585655a1b4bcf2171fed9ceba756545ed10a13
+  FORT370.xmit  SHA256 ce198b41447fe930064cd5dffa7a120cdddf5e6d8f65b344542cad96f9d5d86f
+                510320 bytes, FB80 when it lands on the guest
+  F77RT.obj     SHA256 a41062cd214f79983c8107b475db3ee136e63dfee2fb243191786725828bc1f6
                 569840 bytes, FB80
-  built         from fort370 887e804 with mvslovers/cc370 and libc370
+  built         from fort370 b85619e (release 2026-10-13) with mvslovers/cc370 and libc370
                 as installed 2026-09-22
   tested        all 192 FCVS programs and 62 test programs compiled
                 on the guest by this module, the assembler byte for
@@ -130,6 +130,13 @@ calls the Fortran main program (CSECT F77MAIN).
 
 F77CLG.jcl beside this file is a cataloged procedure that chains the
 whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
+
+  Give the program's step a REGION.  Its arrays and COMMON are static
+  storage in the module, beside about 290K of runtime; the default
+  region of a job class can be too small for that, and the program
+  then ends at once with return code 12 and no output.  F77CLG's GO
+  step asks for 4096K, which the kernels in bench/kernels fit in (the
+  largest, matmul, is 525K).
 
 When the program runs, a Fortran unit n is the DD FTnnF001: unit 6 is
 FT06F001 (SYSPRINT when there is no FT06F001), unit 5 FT05F001 (SYSIN

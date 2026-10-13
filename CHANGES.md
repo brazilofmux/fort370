@@ -7,8 +7,18 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
-## Unreleased
+## 2026-10-13
 
+Built from `b85619e`: FORT370.xmit SHA256 `ce198b41447fe930…`, 510,320
+bytes; F77RT.obj SHA256 `a41062cd214f7998…`, 569,840 bytes.  All 192
+FCVS programs, 62 tests, a 600K source of 204 units and an expression
+nested 85 deep compile on the guest to the host's assembler, byte for
+byte, in REGION=8192K.  The language and the code it compiles to are
+as on 2026-10-12; this release is about the compiler fitting MVS.
+
+- `jcl/F77CLG.jcl`'s GO step asks for REGION=4096K.  It had none, and a
+  job class's default region is too small for a program with large
+  arrays: matmul (525K) ended at once with return code 12.
 - The source is streamed: the compiler holds a statement, or a unit,
   and 32K of lookahead instead of the whole file, so a source file of
   any length compiles (it was refused past 256K), and FORT370 needs

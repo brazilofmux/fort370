@@ -2,20 +2,22 @@
 //*
 //*  FORT370 compiles FORTRAN 77 to S/370 assembler; IFOX00 and IEWL
 //*  are the system's own.  The program is linked with F77RT, the
-//*  fort370 runtime as object decks (docs/INSTALL-MVS.txt), which ends
-//*  in the control statement ENTRY @@CRT0: libc370's entry, which calls
-//*  the Fortran main program.
+//*  fort370 runtime as object decks (docs/INSTALL-MVS.txt), which
+//*  ends in the control statement ENTRY @@CRT0: libc370's entry,
+//*  which calls the Fortran main program.
 //*  Adjust the three data set names to where FORT370, F77RT and the
 //*  source live.
 //*
 //*  SYSIN may be a PDS member or DD * (the compiler reads it as its
-//*  standard input); SYSUT1 is the work data set the compiler copies it
-//*  to, so that it holds one program unit at a time, not the file.
+//*  standard input); SYSUT1 is the work data set the compiler copies
+//*  it to, so that it holds one program unit at a time, not the file.
 //*  REGION=8192K for the compiler is the recommendation; the largest
-//*  units tested compile in 6144K.  IFOX00 needs PARM='OBJ,NODECK' or it
-//*  assembles cleanly and produces nothing.  Units are the DD names
-//*  FTnnF001: unit 6 is FT06F001 (or SYSPRINT), unit 5 FT05F001 (or
-//*  SYSIN), and any other unit the program uses needs its DD.
+//*  units tested compile in 6144K.  IFOX00 needs PARM='OBJ,NODECK' or
+//*  it assembles cleanly and produces nothing.  A program's arrays
+//*  are static storage in its module; raise GO's REGION for large
+//*  ones.  Units are the DD names FTnnF001: unit 6 is FT06F001 (or
+//*  SYSPRINT), unit 5 FT05F001 (or SYSIN), and any other unit the
+//*  program uses needs its DD.
 //*
 //F77CLG   PROC MEM=
 //FORT     EXEC PGM=FORT370,REGION=8192K
@@ -46,7 +48,7 @@
 //            SPACE=(TRK,(30,10,5))
 //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 //SYSPRINT DD SYSOUT=*
-//GO       EXEC PGM=*.LKED.SYSLMOD,
+//GO       EXEC PGM=*.LKED.SYSLMOD,REGION=4096K,
 //            COND=((0,NE,FORT),(8,LE,ASM),(4,LT,LKED))
 //SYSPRINT DD SYSOUT=*
 //SYSTERM  DD SYSOUT=*
