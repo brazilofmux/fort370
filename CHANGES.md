@@ -8,6 +8,16 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## Unreleased
+
+- A main program after its subprograms is compiled.  The compiler had
+  begun a main program only before the first subprogram, so one after
+  them was taken for more of the last subprogram, past its END, and
+  never compiled: the source compiled without a word and the job failed
+  at link or run time.  A PROGRAM statement inside a subprogram (its
+  END missing) and a second main program are now refused, each with
+  its message.  Reported by Marco Verpelli on H390-MVS.
+
 ## 2026-10-13.1
 
 The day's second release, tagged `v2026.10.13.1`.  Built from

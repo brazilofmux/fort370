@@ -127,6 +127,8 @@ static void f77_scan_units(void) {
     int line;
     int rty;
     int started;
+    int ended;        /* fort370: the unit begun last has had its END */
+    int mains;        /* main programs begun */
 
     f77_nunit = 0;
     f77_nent = 0;
@@ -137,6 +139,8 @@ static void f77_scan_units(void) {
     f77_nesc = 0;
     { int z; z = 0; while (z < F77_MAX_UNIT) { f77_ustmts[z] = 0; f77_unosplice[z] = 0; z = z + 1; } }
     started = 0;
+    ended = 0;
+    mains = 0;
     pos = lx_pos;
     line = lx_line;
 
@@ -147,6 +151,34 @@ static void f77_scan_units(void) {
         if (!f77_keepall)
             lx_keep = (f77_nunit > 0 && f77_keep_candidate(f77_nunit - 1)) ? f77_upos[f77_nunit - 1] : pos;
         if (!f77_next_stmt()) break;
+        /* fort370: a PROGRAM statement inside a subprogram means the
+         * END before it is missing; taken as more of that unit, the
+         * main program would vanish without a word.  (In a main program
+         * a second one is documentation: 40 of the FCVS files as
+         * distributed open with their PROGRAM card twice.) */
+        if (started && !ended && f77_ukind[f77_nunit - 1] != F77_UNIT_PROGRAM
+            && f77_starts("PROGRAM")
+            && memchr(lx_stmt, '=', (size_t)lx_stmt_len) == NULL) {
+            f77_error("PROGRAM statement inside a subprogram: the END before it is missing");
+            return;
+        }
+        /* fort370: after an END, a statement that is no subprogram's
+         * header begins the main program, with a PROGRAM statement or
+         * without one -- the main program may follow its subprograms */
+        if (started && ended && !f77_starts("SUBROUTINE") && !f77_starts("BLOCKDATA")
+            && f77_unit_header_ty() < 0) {
+            if (mains > 0) { f77_error("more than one main program"); return; }
+            if (f77_nunit >= F77_MAX_UNIT) { f77_error("too many program units"); return; }
+            f77_unit_done(f77_nunit - 1, pos);
+            f77_upos[f77_nunit] = pos;
+            f77_uline[f77_nunit] = line;
+            f77_ukind[f77_nunit] = F77_UNIT_PROGRAM;
+            f77_urty[f77_nunit] = TY_INT;
+            strcpy(f77_uname[f77_nunit], "main");
+            f77_nunit = f77_nunit + 1;
+            mains = mains + 1;
+            ended = 0;
+        }
         /* Collect FORMAT statements: a WRITE may name a label defined
          * later in the unit, so they must all be known up front. */
         if (f77_starts("FORMAT") && lx_stmt_label >= 0 &&
@@ -221,6 +253,7 @@ static void f77_scan_units(void) {
             }
             f77_nunit = f77_nunit + 1;
             started = 1;
+            ended = 0;
         } else if (f77_starts("SUBROUTINE") || rty >= 0) {
             if (f77_nunit >= F77_MAX_UNIT) { f77_error("too many program units"); return; }
             if (f77_nunit > 0) f77_unit_done(f77_nunit - 1, pos);
@@ -250,6 +283,7 @@ static void f77_scan_units(void) {
             }
             f77_nunit = f77_nunit + 1;
             started = 1;
+            ended = 0;
         } else if (started && f77_nunit > 0 &&
                    f77_ukind[f77_nunit - 1] == F77_UNIT_FUNC) {
             int ty;
@@ -330,8 +364,10 @@ static void f77_scan_units(void) {
             f77_urty[f77_nunit] = TY_INT;
             strcpy(f77_uname[f77_nunit], "main");
             f77_nunit = f77_nunit + 1;
+            mains = mains + 1;
             started = 1;
         }
+        if (started && f77_is_unit_end()) ended = 1;
         pos = lx_pos;
         line = lx_line;
     }

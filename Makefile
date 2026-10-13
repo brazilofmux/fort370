@@ -50,6 +50,7 @@ test: out/f77
 	@CC="$(CC)" sh tests/host/dtoa.sh
 	@sh tests/host/rtnames.sh
 	@sh tests/host/port.sh
+	@sh tests/host/units.sh
 	@CC="$(CC)" sh tests/host/stream.sh
 
 RT := f77rt f77dtoa f77main f77math f77rec millicode
