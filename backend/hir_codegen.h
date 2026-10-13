@@ -91,7 +91,7 @@ static void cg_flush(void) {
     while (off < cg_olen) {
         n = write(cg_fd, &cg_out[off], cg_olen - off);
         if (n <= 0) {
-            fdputs("s12cc: write failed\n", 2);
+            fdputs("f77: write failed\n", 2);
             exit(1);
         }
         off = off + n;
@@ -114,7 +114,7 @@ static void cg_c(int ch) {
             /* Was a silent drop: the assembly came out truncated and the
              * failure surfaced much later as a mangled .s.  Inlining made
              * it reachable, but the landmine predates it. */
-            fdputs("s12cc: output buffer overflow (assembly too large)\n", 2);
+            fdputs("f77: output buffer overflow (assembly too large)\n", 2);
             exit(1);
         }
     }
@@ -1246,7 +1246,7 @@ static void hcg_move_vals(int *dst, int *vals, int n) {
     i = 0;
     while (i < n) {
         if (i >= HCG_ARGSHUF_MAX) {
-            fdputs("s12cc: too many parallel moves\n", 2);
+            fdputs("f77: too many parallel moves\n", 2);
             exit(1);
         }
         v = vals[i];
@@ -1271,7 +1271,7 @@ static void hcg_marshal_reg_args(int base, int nargs) {
     while (i < nargs) {
         if (hcg_argmap[i] >= 0) {
             if (n >= HCG_ARGSHUF_MAX) {
-                fdputs("s12cc: too many register arguments\n", 2);
+                fdputs("f77: too many register arguments\n", 2);
                 exit(1);
             }
             v = h_carg[base + i];
@@ -1426,7 +1426,7 @@ static void hcg_emit_sym(int inst) {
             /* A symbol operand whose base has no name: the BURG cost
              * table was once sized for 8192 instructions and larger
              * functions read past it here (selfhost ISSUES-67). */
-            fdputs("s12cc: internal error: nameless symbol operand in ", 2);
+            fdputs("f77: internal error: nameless symbol operand in ", 2);
             fdputs(hl_cur_fn_dbg, 2); fdputc(10, 2);
             exit(1);
         }
@@ -3397,7 +3397,7 @@ static void hcg_inst(int idx) {
         base = hjt_base[idx];
         span = hjt_span[idx];
         if (cg_njt >= CG_MAX_JT || cg_njt_ent + span > CG_MAX_JT_ENT) {
-            fdputs("s12cc: too many jump-table entries\n", 2);
+            fdputs("f77: too many jump-table entries\n", 2);
             exit(1);
         }
         jtid = cg_label();
@@ -4403,7 +4403,7 @@ static void cg_dce_rewrite_text(void) {
     fd = open(cg_outpath, 1); /* O_RDONLY */
     if (fd < 0) {
         free(buf);
-        fdputs("s12cc: dce: cannot reopen output\n", 2);
+        fdputs("f77: dce: cannot reopen output\n", 2);
         exit(1);
     }
     off = 0;
@@ -4412,7 +4412,7 @@ static void cg_dce_rewrite_text(void) {
         if (n <= 0) {
             close(fd);
             free(buf);
-            fdputs("s12cc: dce: read failed\n", 2);
+            fdputs("f77: dce: read failed\n", 2);
             exit(1);
         }
         off = off + n;
@@ -4421,7 +4421,7 @@ static void cg_dce_rewrite_text(void) {
     fd = open(cg_outpath, 26); /* O_WRONLY|O_CREAT|O_TRUNC */
     if (fd < 0) {
         free(buf);
-        fdputs("s12cc: dce: cannot rewrite output\n", 2);
+        fdputs("f77: dce: cannot rewrite output\n", 2);
         exit(1);
     }
     cg_fd = fd;
@@ -4431,7 +4431,7 @@ static void cg_dce_rewrite_text(void) {
     if (hdr > 0) {
         n = write(cg_fd, buf, hdr);
         if (n != hdr) {
-            fdputs("s12cc: dce: write failed\n", 2);
+            fdputs("f77: dce: write failed\n", 2);
             exit(1);
         }
         cg_file_pos = cg_file_pos + n;
@@ -4443,7 +4443,7 @@ static void cg_dce_rewrite_text(void) {
             n = cg_fn_end[i] - off;
             if (n > 0) {
                 if (write(cg_fd, buf + off, n) != n) {
-                    fdputs("s12cc: dce: write failed\n", 2);
+                    fdputs("f77: dce: write failed\n", 2);
                     exit(1);
                 }
                 cg_file_pos = cg_file_pos + n;

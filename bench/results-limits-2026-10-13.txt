@@ -1,0 +1,46 @@
+How large a program unit FORTRAN H and fort370 take, 2026-10-13.
+
+One unit of N statements of one shape (bench/limits.py SHAPE N), the
+same text to both compilers.  N counts the generated statements; H's own
+count is higher (it counts a logical IF as two, and the dozen lines of
+scaffolding).  Each figure is the largest N that compiled; ">=" means
+no limit was reached that far.
+
+FORTRAN H, level 21.8, on TK5: FORTHC with PARM.FORT='OPT=n,NOSOURCE',
+REGION.FORT=8192K, SYSLIN 5 cylinders (the proc's own SYSLIN fills at
+about 4000 statements, SB37 -- not a limit of the compiler).
+
+fort370 on MVS: out/f77-guest (F77_ROOM=1, the ceilings FORT370 has on
+the guest; the port sweep shows it writes what FORT370 writes).  On a
+host: out/f77 (F77_ROOM=4).  fort370 always optimizes, so OPT=2 is the
+comparison.
+
+             H OPT=2          H OPT=0          fort370 MVS   fort370 host
+  straight   >=8000           >=8000            497            2020
+  if          450 (500: 630)   800 (900: 800)   424            1717
+  labels      900 (1000: 630) 3000 (3500: 550)  507             507
+  vars       >=8000           >=8000           1019            1014
+
+In parentheses, the next size tried and H's message there:
+  630  IEK630I  INTERNAL TOPOLOGICAL-ANALYSIS TABLE EXCEEDED
+  550  IEK550I  PUSHDOWN, ADCON, CMAJOR, OR ASF ARGUMENT TABLE EXCEEDED
+               (at OPT=2 after IEK570I TABLE EXCEEDED, OPTIMIZATION
+               DOWNGRADED)
+  800  IEK800I  SOURCE PROGRAM IS TOO LARGE
+All three end the compilation (severity 16).
+
+What stops fort370:
+  straight, if  8192 HIR instructions per unit (HIR_MAX_INST); an
+                array assignment is about 16, a logical IF about 19
+  labels        512 statement labels per unit (F77_MAX_LABEL)
+  vars          1024 symbols per unit (F77_MAX_SYM)
+The last two do not scale with F77_ROOM, so the host has them too.
+
+H's limits are its tables' shapes, not its storage: every compilation,
+the largest included, ended with 5.9 to 8.0MB of the 8192K unused.  At
+OPT=2 its flow analysis gives out about where fort370's instruction
+ceiling does for branchy code (450 against 424); on straight-line code
+and on symbols H takes at least 16 and 8 times what fort370 does on MVS,
+and at OPT=0 two to six times as much in every shape.  Units are
+per unit in both: a source file of any length compiles in fort370, and
+H compiles one unit at a time as well.

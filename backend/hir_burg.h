@@ -610,7 +610,7 @@ static int  bg_walk[HIR_MAX_INST];    /* explicit stack: operand chains are not 
  * unbounded write into a static array is how silent corruption starts. */
 static int bg_walk_push(int sp, int v) {
     if (sp >= HIR_MAX_INST) {
-        fdputs("s12cc: burg walk stack overflow\n", 2);
+        fdputs("f77: burg walk stack overflow\n", 2);
         exit(1);
     }
     bg_walk[sp] = v;

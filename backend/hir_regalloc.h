@@ -1429,7 +1429,7 @@ static void lv_prepare(void) {
         if (lv_live) free(lv_live);
         lv_live_cap = lv_w + 256;
         lv_live = malloc(lv_live_cap * 4);
-        if (!lv_live) { fdputs("s12cc: out of memory for liveness sets\n", 2); exit(1); }
+        if (!lv_live) { fdputs("f77: out of memory for liveness sets\n", 2); exit(1); }
     }
 
     /* ra_order index range per block (blocks are contiguous runs). */

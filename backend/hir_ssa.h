@@ -209,7 +209,7 @@ static void ssa_build_cfg(void) {
             i = term + 1;
             while (i < bb_end[b]) {
                 if (h_kind[i] != HI_NOP) {
-                    fdputs("s12cc: instructions after a block's terminator (fn=", 2);
+                    fdputs("f77: instructions after a block's terminator (fn=", 2);
                     fdputs(hl_cur_fn_dbg ? hl_cur_fn_dbg : "?", 2);
                     fdputs(")\n", 2);
                     exit(1);
@@ -219,14 +219,14 @@ static void ssa_build_cfg(void) {
             k = h_kind[term];
             if (k == HI_BR) {
                 if (cursor + 1 > SSA_SUCC_SZ) {
-                    fdputs("s12cc: too many CFG successor edges\n", 2);
+                    fdputs("f77: too many CFG successor edges\n", 2);
                     exit(1);
                 }
                 ssa_succ[cursor] = h_val[term];
                 ssa_nsucc[b] = 1;
             } else if (k == HI_BRC) {
                 if (cursor + 2 > SSA_SUCC_SZ) {
-                    fdputs("s12cc: too many CFG successor edges\n", 2);
+                    fdputs("f77: too many CFG successor edges\n", 2);
                     exit(1);
                 }
                 ssa_succ[cursor] = h_src2[term];
@@ -243,7 +243,7 @@ static void ssa_build_cfg(void) {
                 n = 0;
                 /* default first */
                 if (cursor + 1 > SSA_SUCC_SZ) {
-                    fdputs("s12cc: too many CFG successor edges\n", 2);
+                    fdputs("f77: too many CFG successor edges\n", 2);
                     exit(1);
                 }
                 ssa_succ[cursor] = h_val[term];
@@ -260,7 +260,7 @@ static void ssa_build_cfg(void) {
                     }
                     if (!seen) {
                         if (cursor + n + 1 > SSA_SUCC_SZ) {
-                            fdputs("s12cc: too many CFG successor edges\n", 2);
+                            fdputs("f77: too many CFG successor edges\n", 2);
                             exit(1);
                         }
                         ssa_succ[cursor + n] = tgt;
@@ -306,7 +306,7 @@ static void ssa_build_cfg(void) {
         b = b + 1;
     }
     if (total > SSA_MAX_PRED) {
-        fdputs("s12cc: too many CFG edges\n", 2);
+        fdputs("f77: too many CFG edges\n", 2);
         exit(1);
     }
 
@@ -361,7 +361,7 @@ static void ssa_compute_rpo(void) {
                 ssa_vis[s] = 1;
                 top = top + 1;
                 if (top >= SSA_DFS) {
-                    fdputs("s12cc: RPO DFS stack overflow\n", 2);
+                    fdputs("f77: RPO DFS stack overflow\n", 2);
                     exit(1);
                 }
                 ssa_rblk[top] = s;
@@ -492,7 +492,7 @@ static void ssa_compute_df(void) {
                          * downstream can notice -- the one ceiling in this
                          * file that used to fail silently (GitHub issue
                          * 53).  Every other one stops here. */
-                        fdputs("s12cc: too many dominance-frontier entries\n", 2);
+                        fdputs("f77: too many dominance-frontier entries\n", 2);
                         exit(1);
                     }
                     ssa_df[base + ssa_dfc[runner]] = b;
@@ -732,7 +732,7 @@ static void ssa_build_dtree(void) {
         b = b + 1;
     }
     if (total > SSA_DTC_MAX) {
-        fdputs("s12cc: too many domtree children\n", 2);
+        fdputs("f77: too many domtree children\n", 2);
         exit(1);
     }
 
@@ -809,7 +809,7 @@ static void ssa_insert_phis(void) {
                     j = 0;
                     while (j < ssa_npred[d]) {
                         if (h_nparg >= HIR_MAX_PARG) {
-                            fdputs("s12cc: too many phi args\n", 2);
+                            fdputs("f77: too many phi args\n", 2);
                             exit(1);
                         }
                         h_pblk[h_nparg] = ssa_pred[ssa_pbase[d] + j];
@@ -964,7 +964,7 @@ static void ssa_rename(void) {
                 ssa_rci[top] = ci + 1;
                 top = top + 1;
                 if (top >= SSA_DFS) {
-                    fdputs("s12cc: SSA DFS stack overflow\n", 2);
+                    fdputs("f77: SSA DFS stack overflow\n", 2);
                     exit(1);
                 }
                 ssa_rblk[top] = child;

@@ -291,7 +291,7 @@ static int hir_new_block(void) {
     int b;
     b = bb_nblk;
     if (b >= HIR_MAX_BLOCK) {
-        fdputs("s12cc: too many HIR blocks (fn=", 2);
+        fdputs("f77: too many HIR blocks (fn=", 2);
         fdputs(hl_cur_fn_dbg ? hl_cur_fn_dbg : "?", 2);
         fdputs(" inl_depth=", 2);
         fdputuint(2, (unsigned)hl_inl_depth_dbg);
@@ -324,7 +324,7 @@ static int hi_emit(int kind, int ty, int s1, int s2, int val, char *name) {
     int idx;
     idx = h_ninst;
     if (idx >= HIR_MAX_INST) {
-        fdputs("s12cc: too many HIR instructions (inl_depth=", 2);
+        fdputs("f77: too many HIR instructions (inl_depth=", 2);
         fdputuint(2, (unsigned)hl_inl_depth_dbg);
         fdputs(" fn=", 2);
         fdputs(hl_cur_fn_dbg ? hl_cur_fn_dbg : "?", 2);
@@ -458,7 +458,7 @@ static int hi_emit_jmptab(int index_val, int def_blk, int *targets, int span) {
     int idx;
     int j;
     if (hjt_n + span > HIR_MAX_JT) {
-        fdputs("s12cc: jump-table target pool overflow\n", 2);
+        fdputs("f77: jump-table target pool overflow\n", 2);
         exit(1);
     }
     idx = hi_emit(HI_JMPTAB, 0, index_val, -1, def_blk, NULL);
