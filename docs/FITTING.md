@@ -115,9 +115,10 @@ there.
 
 ## In the region, and running
 
-The day's work the previous section predicted, done: the tables are
-6.2MB with the code, against 9.7MB, and the compiler runs on TK5 in
-REGION=8192K with room for libc370's 256K stack and its heap.
+The day's work the previous section predicted, done: the static tables
+and code are 4.5MB, against 9.7MB, and the compiler runs on TK5 in
+REGION=8192K; the heaviest units compile in 6656K (the phases' tables,
+up to 1MB for the interference graph, come and go on the heap).
 
 | | before | after |
 |---|---:|---:|
@@ -129,6 +130,9 @@ REGION=8192K with room for libc370's 256K stack and its heap.
 | labels, globals, names | 32K labels, 8K globals, 64-byte names | 8K, 2K, 32 bytes |
 | kinds, types, flags | int arrays | bytes and halfwords |
 | the source file | 256K, read whole | streamed: a unit and 32K of lookahead |
+| SSA construction, selection's costs, the graph's edges | static, all at once | allocated per phase, one at a time |
+| big frame buffers (8-33K, two in recursion) | the stack | the heap, or static |
+| libc370's stack | 256K | 128K; expressions nest 90 deep at most |
 
 Every FCVS program and test compiled to the same assembler before and
 after each step, except where a step fixed something: the SSA stacks

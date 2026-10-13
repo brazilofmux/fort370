@@ -1608,6 +1608,163 @@ static int f77_char_fcall(char *name, int rlen, int *addrs, int *lens, int nargs
     return tmp;
 }
 
+/* fort370: a reference to a FUNCTION of this file, from f77_primary.
+ * A function of its own because of its argument arrays: in f77_primary
+ * they sat in the frame of every level of a nested expression (FCVS
+ * FM045 nests 57 deep), which is what sizes the stack on MVS. */
+static int f77_unit_fcall(int u, char *nm) {
+    /* FUNCTION reference: by-reference actuals, result in the
+     * usual return register (plus its hi word for a double). */
+    int cb;
+    int nargs;
+    int nc;
+    int r;
+    int rty;
+    int addrs[64];
+    int lens[64];
+    int ai;
+    f77_tok();
+    nargs = 0;
+    if (lx_t == T_LP) {
+        f77_tok();
+        if (lx_t != T_RP) {
+            for (;;) {
+                /* Evaluate every actual BEFORE reserving any
+                 * h_carg slots: an actual may itself contain a
+                 * call, which would otherwise interleave its
+                 * arguments with ours. */
+                if (nargs < 64) { addrs[nargs] = f77_actual_addr(); lens[nargs] = f77_act_len; }
+                else f77_actual_addr();
+                nargs = nargs + 1;
+                if (lx_t != T_COMMA) break;
+                f77_tok();
+            }
+        }
+        if (lx_t != T_RP) f77_error("expected ) after arguments");
+        else f77_tok();
+    }
+    rty = f77_urty_of(u);
+    if (rty == TY_CHAR) {
+        int rl;
+        rl = f77_urlen[u];
+        if (rl < 0) rl = f77_slen[f77_sym(nm)];
+        return f77_char_fcall(f77_uname[u], rl, addrs, lens, nargs);
+    }
+    if (f77_can_inline(u)) {
+        /* Splice the body, then read its result variable. */
+        int rs;
+        rs = f77_inline_unit_body(u, addrs, nargs);
+        if (rs >= 0) return f77_load_sym(rs);
+        ex_ty = TY_INT;
+        return f77_iconst(0);
+    }
+    cb = h_ncarg;
+    nc = 0;
+    ai = 0;
+    while (ai < nargs) {
+        h_carg[h_ncarg] = addrs[ai];
+        h_carg_tag[h_ncarg] = 0;
+        h_ncarg = h_ncarg + 1;
+        nc = nc + 1;
+        ai = ai + 1;
+    }
+    for (ai = 0; ai < nargs; ai++) {
+        if (lens[ai] < 0) continue;
+        h_carg[h_ncarg] = lens[ai]; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+        nc = nc + 1;
+    }
+#ifdef F77_NATIVE_F64
+    /* a DOUBLE PRECISION result is one value, in FPR0 */
+    r = hi_emit(HI_CALL, rty == TY_CPLX ? TY_FLOAT : rty, -1, -1, nc, f77_uname[u]);
+    h_cbase[r] = cb;
+    ex_ty = rty;
+    ex_log = f77_urlog[u];
+    if (rty == TY_CPLX)
+        ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
+    return r;
+#else
+    r = hi_emit(HI_CALL, rty == TY_DOUBLE ? TY_INT : rty == TY_CPLX ? TY_FLOAT : rty, -1, -1,
+                nc, f77_uname[u]);
+    h_cbase[r] = cb;
+    ex_ty = rty;
+    ex_log = f77_urlog[u];
+    if (rty == TY_DOUBLE)
+        ex_hi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
+    else if (rty == TY_CPLX)
+        ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
+    return r;
+#endif
+}
+
+/* fort370: an external function reference or a dummy procedure, from
+ * f77_primary; a function of its own for the reason f77_unit_fcall is. */
+static int f77_ext_fcall(int s, char *nm) {
+    /* Not an array and not a FUNCTION in this file: an
+     * external function reference -- or a dummy procedure,
+     * called through the address the caller passed. Leaving
+     * the ( unconsumed used to drop the rest of the expression
+     * (GitHub #20). */
+    int cb;
+    int nargs;
+    int nc;
+    int r;
+    int addrs[64];
+    int lens[64];
+    int ai;
+    int rty;
+    int fptr;
+    fptr = (f77_sarg[s] && f77_srank[s] == 0) ? f77_sval[s] : -1;
+    nargs = 0;
+    f77_tok();
+    if (lx_t != T_RP) {
+        for (;;) {
+            if (nargs < 64) { addrs[nargs] = f77_actual_addr(); lens[nargs] = f77_act_len; }
+            else f77_actual_addr();
+            nargs = nargs + 1;
+            if (lx_t != T_COMMA) break;
+            f77_tok();
+        }
+    }
+    if (lx_t != T_RP) f77_error("expected ) after arguments");
+    else f77_tok();
+    /* The type is the caller's declaration of the name (or the
+     * implicit rule): INTEGER IRAND / CHARACTER*8 CDATE. */
+    rty = f77_sty[s];
+    if (rty == TY_CHAR) return f77_char_fcall(strdup(nm), f77_slen[s], addrs, lens, nargs);
+    cb = h_ncarg;
+    nc = 0;
+    ai = 0;
+    while (ai < nargs) {
+        h_carg[h_ncarg] = addrs[ai];
+        h_carg_tag[h_ncarg] = 0;
+        h_ncarg = h_ncarg + 1;
+        nc = nc + 1;
+        ai = ai + 1;
+    }
+    for (ai = 0; ai < nargs; ai++) {
+        if (lens[ai] < 0) continue;
+        h_carg[h_ncarg] = lens[ai]; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+        nc = nc + 1;
+    }
+    /* nm is this frame's buffer and hi_emit keeps the pointer:
+     * the callee's name must outlive the parse (GitHub #20 --
+     * the call came out as "EN", whatever the buffer held by
+     * codegen time). */
+    if (fptr >= 0)
+        r = hi_emit(HI_CALLP, f77_ispair(rty) ? (rty == TY_CPLX ? TY_FLOAT : TY_INT) : rty, fptr, -1,
+                    nc, NULL);
+    else
+        r = hi_emit(HI_CALL, f77_ispair(rty) ? (rty == TY_CPLX ? TY_FLOAT : TY_INT) : rty, -1, -1,
+                    nc, strdup(nm));
+    h_cbase[r] = cb;
+    ex_ty = rty;
+    ex_log = f77_slog[s];
+    ex_hi = -1;
+    if (f77_ispair(rty) && rty == TY_DOUBLE) ex_hi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
+    else if (rty == TY_CPLX) ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
+    return r;
+}
+
 static int f77_primary(void) {
     int v;
     int s;
@@ -2008,89 +2165,7 @@ static int f77_primary(void) {
             return a;
         }
 
-        if (u >= 0 && u != f77_cur_unit) {
-            /* FUNCTION reference: by-reference actuals, result in the
-             * usual return register (plus its hi word for a double). */
-            int cb;
-            int nargs;
-            int nc;
-            int r;
-            int rty;
-            int addrs[64];
-            int lens[64];
-            int ai;
-            f77_tok();
-            nargs = 0;
-            if (lx_t == T_LP) {
-                f77_tok();
-                if (lx_t != T_RP) {
-                    for (;;) {
-                        /* Evaluate every actual BEFORE reserving any
-                         * h_carg slots: an actual may itself contain a
-                         * call, which would otherwise interleave its
-                         * arguments with ours. */
-                        if (nargs < 64) { addrs[nargs] = f77_actual_addr(); lens[nargs] = f77_act_len; }
-                        else f77_actual_addr();
-                        nargs = nargs + 1;
-                        if (lx_t != T_COMMA) break;
-                        f77_tok();
-                    }
-                }
-                if (lx_t != T_RP) f77_error("expected ) after arguments");
-                else f77_tok();
-            }
-            rty = f77_urty_of(u);
-            if (rty == TY_CHAR) {
-                int rl;
-                rl = f77_urlen[u];
-                if (rl < 0) rl = f77_slen[f77_sym(nm)];
-                return f77_char_fcall(f77_uname[u], rl, addrs, lens, nargs);
-            }
-            if (f77_can_inline(u)) {
-                /* Splice the body, then read its result variable. */
-                int rs;
-                rs = f77_inline_unit_body(u, addrs, nargs);
-                if (rs >= 0) return f77_load_sym(rs);
-                ex_ty = TY_INT;
-                return f77_iconst(0);
-            }
-            cb = h_ncarg;
-            nc = 0;
-            ai = 0;
-            while (ai < nargs) {
-                h_carg[h_ncarg] = addrs[ai];
-                h_carg_tag[h_ncarg] = 0;
-                h_ncarg = h_ncarg + 1;
-                nc = nc + 1;
-                ai = ai + 1;
-            }
-            for (ai = 0; ai < nargs; ai++) {
-                if (lens[ai] < 0) continue;
-                h_carg[h_ncarg] = lens[ai]; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
-                nc = nc + 1;
-            }
-#ifdef F77_NATIVE_F64
-            /* a DOUBLE PRECISION result is one value, in FPR0 */
-            r = hi_emit(HI_CALL, rty == TY_CPLX ? TY_FLOAT : rty, -1, -1, nc, f77_uname[u]);
-            h_cbase[r] = cb;
-            ex_ty = rty;
-            ex_log = f77_urlog[u];
-            if (rty == TY_CPLX)
-                ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
-            return r;
-#else
-            r = hi_emit(HI_CALL, rty == TY_DOUBLE ? TY_INT : rty == TY_CPLX ? TY_FLOAT : rty, -1, -1,
-                        nc, f77_uname[u]);
-            h_cbase[r] = cb;
-            ex_ty = rty;
-            ex_log = f77_urlog[u];
-            if (rty == TY_DOUBLE)
-                ex_hi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
-            else if (rty == TY_CPLX)
-                ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
-            return r;
-#endif
-        }
+        if (u >= 0 && u != f77_cur_unit) return f77_unit_fcall(u, nm);
         s = f77_sym(nm);
         f77_tok();
         if (f77_sty[s] == TY_CHAR &&
@@ -2125,72 +2200,7 @@ static int f77_primary(void) {
             ex_log = f77_slog[s];
             return v;
         }
-        if (lx_t == T_LP) {
-            /* Not an array and not a FUNCTION in this file: an
-             * external function reference -- or a dummy procedure,
-             * called through the address the caller passed. Leaving
-             * the ( unconsumed used to drop the rest of the expression
-             * (GitHub #20). */
-            int cb;
-            int nargs;
-            int nc;
-            int r;
-            int addrs[64];
-            int lens[64];
-            int ai;
-            int rty;
-            int fptr;
-            fptr = (f77_sarg[s] && f77_srank[s] == 0) ? f77_sval[s] : -1;
-            nargs = 0;
-            f77_tok();
-            if (lx_t != T_RP) {
-                for (;;) {
-                    if (nargs < 64) { addrs[nargs] = f77_actual_addr(); lens[nargs] = f77_act_len; }
-                    else f77_actual_addr();
-                    nargs = nargs + 1;
-                    if (lx_t != T_COMMA) break;
-                    f77_tok();
-                }
-            }
-            if (lx_t != T_RP) f77_error("expected ) after arguments");
-            else f77_tok();
-            /* The type is the caller's declaration of the name (or the
-             * implicit rule): INTEGER IRAND / CHARACTER*8 CDATE. */
-            rty = f77_sty[s];
-            if (rty == TY_CHAR) return f77_char_fcall(strdup(nm), f77_slen[s], addrs, lens, nargs);
-            cb = h_ncarg;
-            nc = 0;
-            ai = 0;
-            while (ai < nargs) {
-                h_carg[h_ncarg] = addrs[ai];
-                h_carg_tag[h_ncarg] = 0;
-                h_ncarg = h_ncarg + 1;
-                nc = nc + 1;
-                ai = ai + 1;
-            }
-            for (ai = 0; ai < nargs; ai++) {
-                if (lens[ai] < 0) continue;
-                h_carg[h_ncarg] = lens[ai]; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
-                nc = nc + 1;
-            }
-            /* nm is this frame's buffer and hi_emit keeps the pointer:
-             * the callee's name must outlive the parse (GitHub #20 --
-             * the call came out as "EN", whatever the buffer held by
-             * codegen time). */
-            if (fptr >= 0)
-                r = hi_emit(HI_CALLP, f77_ispair(rty) ? (rty == TY_CPLX ? TY_FLOAT : TY_INT) : rty, fptr, -1,
-                            nc, NULL);
-            else
-                r = hi_emit(HI_CALL, f77_ispair(rty) ? (rty == TY_CPLX ? TY_FLOAT : TY_INT) : rty, -1, -1,
-                            nc, strdup(nm));
-            h_cbase[r] = cb;
-            ex_ty = rty;
-            ex_log = f77_slog[s];
-            ex_hi = -1;
-            if (f77_ispair(rty) && rty == TY_DOUBLE) ex_hi = hi_emit(HI_CALLHI, TY_INT, r, -1, 0, NULL);
-            else if (rty == TY_CPLX) ex_hi = hi_emit(HI_CALLHI, TY_FLOAT, r, -1, 0, NULL);
-            return r;
-        }
+        if (lx_t == T_LP) return f77_ext_fcall(s, nm);
         return f77_load_sym(s);
     }
     f77_error("bad expression");
@@ -2517,9 +2527,24 @@ static int f77_or(void) {
     return a;
 }
 
+/* fort370: how deep expressions may nest.  Each level is a chain of
+ * frames (f77_expr down to f77_primary, about 1.2K on MVS), and the
+ * stack is sized for this many (__stklen in f77.c): past it the compiler
+ * refuses the statement rather than run off the stack.  FCVS FM045 nests
+ * 57 deep. */
+#define F77_MAX_EXPR_DEPTH 90
+static int f77_expr_depth;
+
 static int f77_expr(void) {
     int a;
     int b;
+    if (f77_expr_depth >= F77_MAX_EXPR_DEPTH) {
+        f77_error("expression nested too deeply");
+        while (lx_t != T_EOF) f77_tok();          /* abandon the statement */
+        ex_ty = TY_INT;
+        return f77_iconst(0);
+    }
+    f77_expr_depth = f77_expr_depth + 1;
     a = f77_or();
     while (lx_t == T_EQV || lx_t == T_NEQV) {
         int op;
@@ -2531,6 +2556,7 @@ static int f77_expr(void) {
         ex_ty = TY_INT;
         ex_log = 1;
     }
+    f77_expr_depth = f77_expr_depth - 1;
     return a;
 }
 
@@ -2823,8 +2849,8 @@ static int f77_stf_expand(int si) {
     int vhi;
     int fs;
     int targs[F77_MAX_STF_ARGS];
-    char save_stmt[F77_MAX_STMT];
-    unsigned char save_brk[F77_MAX_STMT];
+    char *save_stmt;                 /* fort370: on the heap, not in the frame: */
+    unsigned char *save_brk;         /* this nests (16K a level on the stack) */
     int save_len;
     char *save_rp; char *save_rpe; char *save_rts; char *save_rte;
     int save_rcs; int save_ract;
@@ -2862,6 +2888,9 @@ static int f77_stf_expand(int si) {
     if (f77_stfb_n + n > F77_MAX_STFB) { f77_error("statement functions nested too deep"); return f77_iconst(0); }
 
     /* Checkpoint the statement and scanner, swap the definition in. */
+    save_stmt = (char *)malloc(F77_MAX_STMT);
+    save_brk = (unsigned char *)malloc(F77_MAX_STMT);
+    if (!save_stmt || !save_brk) { f77_error("out of storage"); return f77_iconst(0); }
     memcpy(save_stmt, lx_stmt, lx_stmt_len + 1);
     memcpy(save_brk, lx_brk, lx_stmt_len);
     save_len = lx_stmt_len;
@@ -2903,6 +2932,8 @@ static int f77_stf_expand(int si) {
     ex_ty = f77_sty[fs];
     ex_log = f77_slog[fs];
     ex_hi = vhi;
+    free(save_stmt);
+    free(save_brk);
     return v;
 }
 
@@ -3675,7 +3706,7 @@ static void f77_stmt_parameter(int skip) {
                 f77_spstr[s] = f77_cx_sidx;
             } else {
                 /* Pad or truncate to the declared length. */
-                char buf[F77_MAX_STMT];
+                static char buf[F77_MAX_STMT];   /* fort370: not in the frame */
                 int k;
                 for (k = 0; k < f77_slen[s] && k < F77_MAX_STMT - 1; k++)
                     buf[k] = (k < f77_cx_i) ? lex_strpool[lex_str_off[f77_cx_sidx] + k] : ' ';
@@ -5122,8 +5153,8 @@ static void f77_statement(void);
  * bound to its dummy arguments.  Returns the FUNCTION result symbol,
  * or -1 for a SUBROUTINE. */
 static int f77_inline_unit_body(int u, int *addrs, int nargs) {
-    char save_stmt[F77_MAX_STMT];
-    unsigned char save_brk[F77_MAX_STMT];
+    char *save_stmt;                 /* fort370: on the heap, not in the frame: */
+    unsigned char *save_brk;         /* this nests (16K a level on the stack) */
     int save_len;
     int save_label;
     int save_line;
@@ -5166,6 +5197,9 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     int rty;
     int result;
 
+    save_stmt = (char *)malloc(F77_MAX_STMT);
+    save_brk = (unsigned char *)malloc(F77_MAX_STMT);
+    if (!save_stmt || !save_brk) { f77_error("out of storage"); return -1; }
     /* Checkpoint everything the callee will disturb. */
     memcpy(save_stmt, lx_stmt, lx_stmt_len + 1);
     memcpy(save_brk, lx_brk, lx_stmt_len);
@@ -5293,6 +5327,8 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     lex_ival = save_ival; lex_dval = save_dval; strcpy(lex_ftext, save_ftext);
     lex_sidx = save_sidx; lex_slen = save_slen;
 
+    free(save_stmt);
+    free(save_brk);
     return result;
 }
 

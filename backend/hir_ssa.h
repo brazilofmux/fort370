@@ -50,12 +50,12 @@ static int ssa_idom[HIR_MAX_BLOCK];
  * right -- the ceiling just has to be big enough. */
 #define SSA_DF_W 64
 #define SSA_DF_SZ (HIR_MAX_BLOCK * SSA_DF_W)
-static short ssa_df[SSA_DF_SZ];   /* fort370: block numbers */
+static short *ssa_df;              /* fort370: block numbers; SSA_DF_SZ, allocated per construction */
 static int ssa_dfc[HIR_MAX_BLOCK];
 
 /* --- Promotable variables --- */
 #define SSA_MAX_PROMO 4096   /* was 256 */
-static int ssa_promo[SSA_MAX_PROMO];
+static int *ssa_promo;             /* fort370: SSA_MAX_PROMO, per construction */
 static int ssa_npromo;
 
 /* The function calls setjmp.  A longjmp brings control back to that
@@ -110,19 +110,19 @@ static int ssa_dtc_cnt[HIR_MAX_BLOCK];
  * been cut from 16MB to 128K for the region with their indexing kept, so
  * a unit with more than 32 promoted variables wrote past the table. */
 #define SSA_VD 1024   /* was 256 */
-static int ssa_vtop[SSA_MAX_PROMO];
+static int *ssa_vtop;              /* fort370: SSA_MAX_PROMO, per construction */
 
 /* --- Rename: DFS stack --- */
 #define SSA_DFS (2 * HIR_MAX_BLOCK)   /* fort370: the walk holds a path of the dominator tree */
-static int ssa_rblk[SSA_DFS];
-static int ssa_rci[SSA_DFS];
-static int ssa_rmark[SSA_DFS];
+static int *ssa_rblk;              /* fort370: SSA_DFS each, per construction */
+static int *ssa_rci;
+static int *ssa_rmark;
 
 /* --- Rename: push log for backtracking --- */
 #define SSA_PLOG (16384 * F77_ROOM)   /* fort370: pushes live along one path of the dominator tree */
-static int ssa_plog[SSA_PLOG];
-static int ssa_pval[SSA_PLOG];
-static int ssa_pprev[SSA_PLOG];
+static int *ssa_plog;              /* fort370: SSA_PLOG each, per construction */
+static int *ssa_pval;
+static int *ssa_pprev;
 static int ssa_plog_n;
 
 /* --- Temp arrays (reused across passes) --- */
@@ -519,8 +519,10 @@ static void ssa_find_promo(void) {
     int ai;
     int a;
     int off;
-    int ok[HL_MAX_ALLOCA];
+    int *ok;                        /* fort370: the heap, for this call */
 
+    ok = (int *)malloc(sizeof(int) * HL_MAX_ALLOCA);
+    if (!ok) { fdputs("f77: out of storage\n", 2); exit(1); }
     /* The promo list is rebuilt at the end of this scan; clear it up
      * front so nothing consults the PREVIOUS function's entries. */
     ssa_npromo = 0;
@@ -694,6 +696,7 @@ static void ssa_find_promo(void) {
         }
         i = i + 1;
     }
+    free(ok);
 }
 
 /* ------------------------------------------------------------ */
@@ -1229,7 +1232,38 @@ static int ssa_jmptab_split_multi(void) {
     return changed;
 }
 
+/* fort370: the tables only construction uses are allocated for it and
+ * freed after -- about 380K that was static on MVS and idle in every
+ * later phase.  Zeroed, as the static tables began. */
+static void hir_ssa_construct_body(void);
+static void *ssa_zalloc(int n, int size) {
+    void *p;
+    p = calloc((size_t)n, (size_t)size);
+    if (!p) { fdputs("f77: out of storage for SSA construction\n", 2); exit(1); }
+    return p;
+}
 static void hir_ssa_construct(void) {
+    ssa_df = (short *)ssa_zalloc(SSA_DF_SZ, sizeof(short));
+    ssa_promo = (int *)ssa_zalloc(SSA_MAX_PROMO, sizeof(int));
+    ssa_vtop = (int *)ssa_zalloc(SSA_MAX_PROMO, sizeof(int));
+    ssa_rblk = (int *)ssa_zalloc(SSA_DFS, sizeof(int));
+    ssa_rci = (int *)ssa_zalloc(SSA_DFS, sizeof(int));
+    ssa_rmark = (int *)ssa_zalloc(SSA_DFS, sizeof(int));
+    ssa_plog = (int *)ssa_zalloc(SSA_PLOG, sizeof(int));
+    ssa_pval = (int *)ssa_zalloc(SSA_PLOG, sizeof(int));
+    ssa_pprev = (int *)ssa_zalloc(SSA_PLOG, sizeof(int));
+    hir_ssa_construct_body();
+    free(ssa_df); ssa_df = 0;
+    free(ssa_promo); ssa_promo = 0;
+    free(ssa_vtop); ssa_vtop = 0;
+    free(ssa_rblk); ssa_rblk = 0;
+    free(ssa_rci); ssa_rci = 0;
+    free(ssa_rmark); ssa_rmark = 0;
+    free(ssa_plog); ssa_plog = 0;
+    free(ssa_pval); ssa_pval = 0;
+    free(ssa_pprev); ssa_pprev = 0;
+}
+static void hir_ssa_construct_body(void) {
     int b;
 
     if (bb_nblk < 1) {

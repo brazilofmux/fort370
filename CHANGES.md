@@ -19,6 +19,16 @@ with each release, built and checked by CI on their own platforms.
   compiles a 600K file, the same through a 1K window.
 - CI builds the SLOW-32 reference compiler too: the constants-from-text
   change had broken it, unseen.
+- Less storage on MVS: FORT370's static storage and code are 4.5MB, from
+  6.2MB.  The tables only one phase uses -- SSA construction's, the
+  instruction selector's costs and rules, the interference graph's
+  edges -- are allocated for that phase and freed after, so they no
+  longer all sit in storage at once; the seven buffers of 8 to 33K that
+  sat in stack frames (two of them in recursive ones) are on the heap or
+  static; and libc370's stack is 128K, not 256K, with expressions limited
+  to 90 levels of nesting (FCVS FM045 has 57), refused with a message
+  past that.  The largest FCVS units and the 600K test file compile in
+  REGION=6656K; 8192K stays the recommendation.
 
 ## 2026-10-12
 

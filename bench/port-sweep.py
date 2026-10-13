@@ -97,6 +97,7 @@ def main():
     setup = True
     sysut1 = False
     also = []
+    region = '8192K'
     while args:
         a = args.pop(0)
         if a == '--only':
@@ -105,6 +106,7 @@ def main():
         elif a == '--no-setup': setup = False
         elif a == '--sysut1': sysut1 = True       # a work data set: the source spooled, one unit held
         elif a == '--also': also.append(args.pop(0))
+        elif a == '--region': region = args.pop(0)      # the compile steps' REGION=
         else: sys.exit(__doc__)
     progs = programs(also)
     if only: progs = [p for p in progs if p[0] in only]
@@ -150,7 +152,7 @@ def main():
         chunk = progs[j:j + batch]
         jcl = JOBCARD
         for k, (m, f) in enumerate(chunk):
-            jcl += (f"//C{k:02d}      EXEC PGM=FORT370,REGION=8192K,COND=EVEN,TIME=(3,0)\n"
+            jcl += (f"//C{k:02d}      EXEC PGM=FORT370,REGION={region},COND=EVEN,TIME=(3,0)\n"
                     f"//STEPLIB  DD DSN=HERC01.FORT370.COMP,DISP=SHR\n"
                     f"//SYSPRINT DD SYSOUT=Z\n"
                     f"//SYSTERM  DD SYSOUT=Z\n"

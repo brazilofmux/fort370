@@ -126,7 +126,7 @@ static void f77_name_tok(char *ts, char *te) {
 /* A character constant, already normalised by the card reader so that
  * '' is the only escape.  Interned into the shared string pool. */
 static void f77_string_tok(char *ts, char *te) {
-    char buf[F77_MAX_STMT];
+    static char buf[F77_MAX_STMT];   /* fort370: not in the frame; runs under every nested expression */
     char *p;
     int n;
     p = ts + 1;          /* skip opening quote */

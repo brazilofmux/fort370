@@ -440,6 +440,16 @@ static void hl_func(Node *fn) {
     fn->locals_size = f77_frame;
 }
 
+#ifdef __MVS__
+/* fort370: the C stack libc370's startup allocates (its weak external
+ * @@STKLEN; the default is 256K).  The compiler's frames are small --
+ * the largest is under 1K, its big buffers live on the heap or in static
+ * storage -- and its deepest chain is a nested expression, about 1.2K a
+ * level, limited to F77_MAX_EXPR_DEPTH (90) levels: 128K holds that with
+ * room, and gives the tables 128K more of the region. */
+int __stklen = 131072;
+#endif
+
 /* fort370: how the source is read again for code generation (lx_reopen):
  * on a host the named file is opened again; on MVS the copy the scan
  * made in SYSUT1 is read back. */

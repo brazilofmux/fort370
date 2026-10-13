@@ -80,8 +80,10 @@ command on one line.
     //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
     //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 
-  REGION=8192K is not optional.  The compiler's tables are about 6MB
-  and it will not start in less.
+  REGION=8192K is the recommendation.  The compiler's static tables are
+  about 4MB, and each phase takes up to 1MB more while it runs; the
+  largest units tested compile in 6656K.  (The 2026-10-12 package
+  needs the full 8192K.)
 
   SYSIN is the source: fixed-form FORTRAN 77, any number of program
   units, columns 1-72 (73-80 are ignored).  It may be a data set or

@@ -55,8 +55,8 @@ static int bg_nchain;
 
 #define BG_MAX_INST HIR_MAX_INST
 #define BG_COST_SZ (BG_MAX_INST * BG_NNT)
-static int bg_cost[BG_COST_SZ];
-static short bg_rule[BG_COST_SZ];   /* fort370: a rule number, or -1, or -(chain+2) */
+static int *bg_cost;                 /* fort370: BG_COST_SZ, allocated by hir_burg for selection */
+static short *bg_rule;              /* fort370: a rule number, or -1, or -(chain+2); as bg_cost */
 
 static int bg_sel[HIR_MAX_INST];
 static signed char bg_fold[HIR_MAX_INST];
@@ -910,7 +910,18 @@ static void bg_select(void) {
     }
 }
 
+/* fort370: labeling's cost and rule tables are live only while it and
+ * selection run (344K on MVS): allocated here, freed after. */
+static void hir_burg_body(void);
 static void hir_burg(void) {
+    bg_cost = (int *)calloc((size_t)BG_COST_SZ, sizeof(int));
+    bg_rule = (short *)calloc((size_t)BG_COST_SZ, sizeof(short));
+    if (!bg_cost || !bg_rule) { fdputs("f77: out of storage for instruction selection\n", 2); exit(1); }
+    hir_burg_body();
+    free(bg_cost); bg_cost = 0;
+    free(bg_rule); bg_rule = 0;
+}
+static void hir_burg_body(void) {
     int i;
     if (!bg_inited) {
         bg_init();

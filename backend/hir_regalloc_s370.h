@@ -114,7 +114,7 @@ typedef unsigned int gc_word;
 typedef unsigned long long gc_word;
 #define GC_NODE_BITS 20
 #endif
-static gc_word gc_adj[GC_MAX_EDGE];
+static gc_word *gc_adj;              /* fort370: GC_MAX_EDGE, allocated by hir_regalloc */
 #define GC_PEER(e) ((int)(gc_adj[e] & (((gc_word)1 << GC_NODE_BITS) - 1)))
 #define GC_NEXT(e) ((int)(gc_adj[e] >> GC_NODE_BITS) - 1)
 #define GC_SETE(e, peer, next) (gc_adj[e] = ((gc_word)((next) + 1) << GC_NODE_BITS) | (gc_word)(peer))
@@ -1110,8 +1110,10 @@ static void lv_build_edges(void) {
 
 static void gc_build(void) {
     int i, j, inst, k, n, ni, aj, nact, p;
-    int act[GC_MAX_NODE];
+    int *act;                        /* fort370: the heap, for this call */
 
+    act = (int *)malloc(sizeof(int) * GC_MAX_NODE);
+    if (!act) { fdputs("f77: out of storage\n", 2); exit(1); }
     gc_nnode = 0;
     gc_nedge = 0;
     gc_nmove = 0;
@@ -1157,6 +1159,7 @@ static void gc_build(void) {
             if (gc_cls[n] && ra_crosses_call[gc_inst[n]]) gc_force_spill[n] = 1;
             n = n + 1;
         }
+        free(act);
         return;
     }
 
@@ -1196,6 +1199,7 @@ static void gc_build(void) {
         if (gc_cls[n] && ra_crosses_call[gc_inst[n]]) gc_force_spill[n] = 1;
         n = n + 1;
     }
+    free(act);
 }
 
 static void gc_find_moves(void) {
@@ -1732,7 +1736,9 @@ static void gc_alloc(void) {
  * force floating values to memory before the graph is built. */
 static void ra_mark_call_crossing(void) {
     int i, j, inst, k, p, nact;
-    int act[HIR_MAX_INST];
+    int *act;                        /* fort370: the heap, for this call (32K) */
+    act = (int *)malloc(sizeof(int) * HIR_MAX_INST);
+    if (!act) { fdputs("f77: out of storage\n", 2); exit(1); }
     i = 0;
     while (i < h_ninst) { ra_crosses_call[i] = 0; i = i + 1; }
     nact = 0;
@@ -1760,9 +1766,20 @@ static void ra_mark_call_crossing(void) {
         }
         i = i + 1;
     }
+    free(act);
 }
 
+/* fort370: the interference graph's edges (1MB on MVS) are live only
+ * while allocation runs: allocated here, freed after. */
+static void hir_regalloc_body(void);
 static void hir_regalloc(void) {
+    gc_adj = (gc_word *)calloc((size_t)GC_MAX_EDGE, sizeof(gc_word));
+    if (!gc_adj) { fdputs("f77: out of storage for register allocation\n", 2); exit(1); }
+    hir_regalloc_body();
+    free(gc_adj);
+    gc_adj = 0;
+}
+static void hir_regalloc_body(void) {
     int z;
     ra_build_wuses();
     ra_compute_pos();
