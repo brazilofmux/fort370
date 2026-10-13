@@ -9,6 +9,8 @@
 #   make asm          rewrite the committed assembler after a deliberate change
 #   make runtime      the runtime's objects for linking on the host with cc370
 #                     (needs mvslovers' cc370 and libc370; see bench/mkload.sh)
+#   make mvs          the compiler itself as an MVS load module and its XMIT,
+#                     out/mvs/FORT370.xmit (cc370 again)
 #
 # One translation unit: src/f77.c includes the front end and, from
 # backend/, the optimizer and the S/370 code generator.  C99, no
@@ -25,6 +27,14 @@ all: out/f77
 out/f77: $(SRC)
 	@mkdir -p out
 	$(CC) $(CFLAGS) -DF77_TARGET_S370 -I backend -o $@ src/f77.c $(LDFLAGS)
+
+# The host compiler with the guest's table ceilings (F77_ROOM=1, as on
+# MVS): what FORT370 on the guest must match byte for byte
+# (bench/port-sweep.py).  out/f77 has four times the room, and for a
+# unit too large for the guest's tables it may code better.
+out/f77-guest: $(SRC)
+	@mkdir -p out
+	$(CC) $(CFLAGS) -DF77_TARGET_S370 -DF77_ROOM=1 -I backend -o $@ src/f77.c $(LDFLAGS)
 
 out/f77-s32: $(SRC)
 	@mkdir -p out
@@ -46,13 +56,34 @@ runtime: $(RT:%=out/crt/%.o) out/crt/f77ishim.o
 
 out/crt/%.o: runtime/s370/%.c runtime/s370/f77rt.h runtime/s370/f77rec.h
 	@mkdir -p out/crt
-	cc370 -O1 -c -o $@ $<
+	$(MVSCLOCK) cc370 -O1 -c -o $@ $<
 
 out/crt/f77ishim.o: runtime/s370/f77ishim.asm
 	@mkdir -p out/crt
-	as370 -o $@ $<
+	$(MVSCLOCK) as370 -o $@ $<
+
+# The compiler as an MVS load module, out/mvs/FORT370 and its XMIT:
+# the same C, built with cc370 for libc370 (docs/INSTALL-MVS.txt).
+mvs: out/mvs/FORT370.xmit out/mvs/F77RT.obj
+
+# The clock is pinned (as370 and ld370 stamp the date and time into the
+# deck and the module), so two builds of the same source are the same
+# bytes and a package's SHA256 reproduces; MVSDATE/MVSTIME choose it.
+MVSDATE ?= 26285
+MVSTIME ?= 120000
+MVSCLOCK = ASMDATE=10/12/26 ASMTIME=12.00 LDDATE=$(MVSDATE) LDTIME=$(MVSTIME)
+out/mvs/FORT370.xmit: $(SRC) runtime/s370/millicode.c
+	@mkdir -p out/mvs
+	$(MVSCLOCK) cc370 -O1 -w -DF77_TARGET_S370 -I backend -c -o out/mvs/f77.o src/f77.c
+	$(MVSCLOCK) cc370 -O1 -c -o out/mvs/millicode.o runtime/s370/millicode.c
+	cd out/mvs && $(MVSCLOCK) cc370 -o FORT370 f77.o millicode.o -Wl,--sparse-text -flinker-output=xmit
+
+# The runtime as object decks for IEWL on MVS (bench/mkrtlib.py)
+out/mvs/F77RT.obj: runtime bench/mkrtlib.py out/f77
+	@mkdir -p out/mvs
+	python3 bench/mkrtlib.py $@
 
 clean:
 	rm -rf out
 
-.PHONY: all check-asm asm test runtime clean
+.PHONY: all check-asm asm test runtime mvs clean
