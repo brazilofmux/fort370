@@ -50,7 +50,7 @@ static int ssa_idom[HIR_MAX_BLOCK];
  * right -- the ceiling just has to be big enough. */
 #define SSA_DF_W 64
 #define SSA_DF_SZ 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
-static int ssa_df[SSA_DF_SZ];
+static short ssa_df[SSA_DF_SZ];   /* fort370: block numbers */
 static int ssa_dfc[HIR_MAX_BLOCK];
 
 /* --- Promotable variables --- */
@@ -90,7 +90,7 @@ static int ssa_phi_next[HIR_MAX_INST];
 /* hl_nparams defined in hir_lower.h (shared) */
 
 /* --- Dom tree children (flat) --- */
-#define SSA_DTC_MAX 65536   /* was 8192 */
+#define SSA_DTC_MAX HIR_MAX_BLOCK   /* fort370: every block but the entry is one child */
 static int ssa_dtc[SSA_DTC_MAX];
 static int ssa_dtc_base[HIR_MAX_BLOCK];
 static int ssa_dtc_cnt[HIR_MAX_BLOCK];
@@ -101,20 +101,28 @@ static int ssa_dtc_cnt[HIR_MAX_BLOCK];
  * deeply-nested functions in tools/dbt (block_cache.c) hit the cap.
  * 256 leaves comfortable headroom; the cost is just static memory in
  * the compiler. */
+/* fort370: the stacks are threaded through the push log instead of
+ * being SSA_VD deep each.  Pushes and pops are in strict stack order
+ * along the dominator-tree walk, so a push is the log entry that records
+ * it: the variable (ssa_plog), its value (ssa_pval) and the variable's
+ * previous top (ssa_pprev).  ssa_vtop[v] is the log index of v's top, or
+ * -1 when only the undefined value is on it.  The fixed-depth stacks had
+ * been cut from 16MB to 128K for the region with their indexing kept, so
+ * a unit with more than 32 promoted variables wrote past the table. */
 #define SSA_VD 1024   /* was 256 */
-#define SSA_VSTK_SZ 32768   /* fort370: one unit in an 8MB region, docs/FITTING.md */
-static int ssa_vstk[SSA_VSTK_SZ];
 static int ssa_vtop[SSA_MAX_PROMO];
 
 /* --- Rename: DFS stack --- */
-#define SSA_DFS 16384   /* was 2048 */
+#define SSA_DFS (2 * HIR_MAX_BLOCK)   /* fort370: the walk holds a path of the dominator tree */
 static int ssa_rblk[SSA_DFS];
 static int ssa_rci[SSA_DFS];
 static int ssa_rmark[SSA_DFS];
 
 /* --- Rename: push log for backtracking --- */
-#define SSA_PLOG 65536   /* was 8192 */
+#define SSA_PLOG 16384   /* fort370: pushes live along one path of the dominator tree */
 static int ssa_plog[SSA_PLOG];
+static int ssa_pval[SSA_PLOG];
+static int ssa_pprev[SSA_PLOG];
 static int ssa_plog_n;
 
 /* --- Temp arrays (reused across passes) --- */
@@ -837,23 +845,20 @@ static void ssa_insert_phis(void) {
 /* ------------------------------------------------------------ */
 
 static void ssa_vpush(int v, int val) {
-    if (ssa_vtop[v] + 1 >= SSA_VD) {
-        fdputs("s12cc: SSA var stack overflow\n", 2);
-        exit(1);
-    }
-    ssa_vtop[v] = ssa_vtop[v] + 1;
-    ssa_vstk[v * SSA_VD + ssa_vtop[v]] = val;
     if (ssa_plog_n >= SSA_PLOG) {
-        fdputs("s12cc: SSA push log overflow\n", 2);
+        fdputs("f77: SSA push log overflow (a unit too large to rename)\n", 2);
         exit(1);
     }
     ssa_plog[ssa_plog_n] = v;
+    ssa_pval[ssa_plog_n] = val;
+    ssa_pprev[ssa_plog_n] = ssa_vtop[v];
+    ssa_vtop[v] = ssa_plog_n;
     ssa_plog_n = ssa_plog_n + 1;
 }
 
 static int ssa_vcur(int v) {
     if (ssa_vtop[v] < 0) return -1;
-    return ssa_vstk[v * SSA_VD + ssa_vtop[v]];
+    return ssa_pval[ssa_vtop[v]];
 }
 
 static void ssa_rename(void) {
@@ -874,8 +879,7 @@ static void ssa_rename(void) {
     /* Init variable stacks: all start with undef (-1) */
     v = 0;
     while (v < ssa_npromo) {
-        ssa_vtop[v] = 0;
-        ssa_vstk[v * SSA_VD] = -1;
+        ssa_vtop[v] = -1;            /* the undefined value */
         v = v + 1;
     }
     ssa_plog_n = 0;
@@ -967,7 +971,7 @@ static void ssa_rename(void) {
                 while (ssa_plog_n > ssa_rmark[top]) {
                     ssa_plog_n = ssa_plog_n - 1;
                     v = ssa_plog[ssa_plog_n];
-                    ssa_vtop[v] = ssa_vtop[v] - 1;
+                    ssa_vtop[v] = ssa_pprev[ssa_plog_n];
                 }
                 top = top - 1;
             }
