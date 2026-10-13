@@ -327,6 +327,32 @@ register pair as a BXLE's step and limit are, so daxpy's outer loop
 is `LA / LH / LA / inner / BXH`. The seven kernels then stand at 0.89
 to 1.00 of H's OPT=2, H measured the same hour.
 
+Then the runtime, and the FCVS on MVS itself (`bench/fcvs.sh`; seven
+runs the same night, `bench/results-fcvs-2026-10-12.txt` is the last):
+192 programs build, ship and run, and their reports count 3227 tests
+passed and 24 failed, every failure accounted for. FM001's test 2 and
+FM257's STOP in its test 6 are by design; FM005, FM109 and FM500
+print for inspection; FM923's tests 22 and 23 read two cards of the
+1997 data file that the program never lists (with them removed, 27 of
+27); and the rest are the runtime's two gaps, direct access (FM407,
+FM413, FM910 and FM912 abend in `fseek` on a QSAM data set; FM916,
+FM917 and FM921 INQUIRE about such a file) and unformatted sequential
+records (FM411) -- both want record-level I/O rather than libc370's
+stream, which is the next runtime work. The runs found, in order: a
+COMMON item in a dimension bound read before its binding; the X'80'
+end-of-list bit on the last parameter; the callee's name and a
+format's address kept in static buffers a nested call clobbered; a
+DOUBLE function call typed INTEGER under native F64; RETURN n not in
+R0; an implicitly typed CHARACTER with a one-byte slot; CHARACTER DATA
+laid down in ASCII; a COMPLEX function's result moved `LER 0,2 / LER
+2,0` when its parts sat in each other's register; a spilled result
+computed in FPR6 parked in the scratch doubleword while the
+instruction's own divisor lived there (`DER 6,6`); and in the runtime,
+units as DD names with OPEN deferred to the first transfer,
+list-directed complex constants with blanks inside, and no sign on a
+value that rounds to nothing under F editing. The seven kernels
+through the runtime time as before (the results file's last block).
+
 Code beyond 4K of the base: the CSECT is emitted in a sizing pass
 first (`cg_dry`, nothing written, every `Lnnnnn` label's offset
 recorded), and a target 4K or more past the `BALR 12,0` is far: the

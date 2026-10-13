@@ -38,12 +38,17 @@ unrolling and calls, and it is worth perhaps 10 to 35%, not multiples.
 ## Where it stands
 
 2026-10-12. `out/f77` compiles a program unit to IFOX00 assembler with
-standard OS linkage, static storage per unit, FORTRAN H's `IBCOM#` for
-formatted output and STOP, and symbolic references the linkage editor
-resolves. All 192 FCVS programs compile; the seven kernels and the
-programs in `tests/s370/` have been assembled, linked and run on TK5,
-and print FORTRAN H's results to the digit. CPU seconds of the GO
-step, against H at OPT=2 on the same system (the last block of
+standard OS linkage, static storage per unit and symbolic references
+the linkage editor resolves; the I/O is FORTRAN H's `IBCOM#` or the
+compiler's own runtime (`runtime/s370`, C for libc370 with its own
+libm and exact decimal conversion). All 192 FCVS programs compile,
+link and run on TK5 through that runtime: 3227 tests pass, and each of
+the 24 that fail is a runtime gap (direct access and unformatted
+records, which need record-level I/O on MVS), a discrepancy in the
+1997 data file, or by design (`bench/results-fcvs-2026-10-12.txt` has
+the accounting). The seven kernels and the programs in `tests/s370/`
+print FORTRAN H's results to the digit. CPU seconds of the GO step,
+against H at OPT=2 on the same system (the last block of
 `bench/results-s370-2026-10-12d.txt`; about 2% of any figure is
 run-to-run drift):
 
@@ -63,10 +68,10 @@ counts is one `BXH`. What H does that this compiler does not yet:
 parameter lists built once in static storage, and a second base
 register for code beyond 4K (a branch to such a target here loads its
 address from the pool, `L 15,=A(L) / BC m,0(,15)`). What is not yet
-written: the compiler's own I/O runtime (`IBCOM#` covers only H's
-repertoire), the FCVS run on MVS itself, and the XMIT package that
-would put the compiler on the system. `docs/BACKEND.md`
-has the design and the record of the work.
+written: record-level I/O in the runtime, for direct access and
+unformatted files, and the XMIT package that would put the compiler
+on the system. `docs/BACKEND.md` has the design and the record of the
+work.
 
 ## The larger aim
 
@@ -89,9 +94,9 @@ nested procedures, is still its own work.
     src/                  the FORTRAN 77 front end and the driver, f77.c
     backend/              the optimizer, the S/370 code generator
                           (hir_*_s370.h, s370_hfp.h) and the SLOW-32 one
-    runtime/              the formatted-I/O runtime, still in C for SLOW-32;
-                          runtime/s370/ holds IPRINT/DPRINT, which write a
-                          value to the job log for debugging on MVS
+    runtime/              the I/O runtime, in C: libf77.c is the SLOW-32 one,
+                          runtime/s370/ the MVS one generated from it by
+                          port.py, with its own libm and exact conversion
     tests/f77/            regression programs; tests/oracle.sh runs gfortran
     tests/s370/           programs run through both H and fort370 on MVS
     build.sh              host build: out/f77 (S/370) and out/f77-s32
@@ -104,8 +109,12 @@ nested procedures, is still its own work.
     bench/run.sh          all of them through H; RUNNER is the submit command
     bench/asmclg.sh       an IFOX00, IEWL and GO deck for one .asm file
     bench/ab.sh           one program through H and through fort370, compared
+    bench/abc.sh          the same, fort370 with its own runtime as a load module
+    bench/mkload.sh       compile, assemble and link one program on the host
+    bench/ship.py         ship load modules to the guest and run them
+    bench/fcvs.sh         the FCVS on MVS; fcvs_summary.py reads the reports
     bench/listings/       H's OPT=2 object listings
-    bench/results-*.txt   the raw timings
+    bench/results-*.txt   the raw timings and the FCVS results
 
 ## License
 

@@ -1,0 +1,227 @@
+The FCVS on MVS 3.8j through fort370's own runtime, 2026-10-12 (the
+seventh run of the night; bench/fcvs.sh, reports read by
+bench/fcvs_summary.py).  Each FCVS program counts its own tests; this is
+what each said of itself.  192 programs built, shipped and ran.
+
+Every row marked <-- is accounted for:
+  FM001  test 2 fails by design (the FCVS's own check of its reporting)
+  FM257  STOPs in its test 6 by design, so the report ends after test 5
+  FM005, FM109, FM500  print for inspection, without counts
+  FM923  tests 22-23 read two cards of the 1997 FM923.DAT that the
+         program never lists ('ABCDEF' and a quoted string spanning two
+         cards); with those two cards removed, 27 of 27 pass
+  FM407, FM413, FM910, FM912  direct access: fseek on a QSAM data set
+         abends (S400/S300) -- the runtime needs record-level I/O
+  FM916, FM917, FM921  INQUIRE about a direct-access file (same gap)
+  FM411  unformatted sequential records through libc370's stream (same)
+
+Fixed between the first full run and this one (commits dff7085,
+bef68f9): CHARACTER DATA laid down in ASCII; a COMPLEX function result
+whose parts sat in each other's register; a spilled result's borrowed
+FPR parked while an operand lived in it; list-directed complex
+constants with blanks inside; a negative sign on a value that rounds
+to zero under F editing.  3199 passed / 17 failed became:
+
+FM001 pass   1 fail   0 deleted   1
+FM002 pass   9 fail   0 deleted   0
+FM003 pass   8 fail   0 deleted   0
+FM004 pass  12 fail   0 deleted   0
+FM005 inspection (no counts)
+FM006 pass  30 fail   0 deleted   0
+FM007 pass  20 fail   0 deleted   0
+FM008 pass  35 fail   0 deleted   0
+FM009 pass  30 fail   0 deleted   0
+FM010 pass   3 fail   0 deleted   0
+FM011 pass   7 fail   0 deleted   0
+FM012 pass  15 fail   0 deleted   0
+FM013 pass   5 fail   0 deleted   0
+FM014 pass   4 fail   0 deleted   0
+FM016 pass  31 fail   0 deleted   0
+FM017 pass  30 fail   0 deleted   0
+FM018 pass  30 fail   0 deleted   0
+FM019 pass  23 fail   0 deleted   0
+FM020 pass  12 fail   0 deleted   0
+FM021 pass  39 fail   0 deleted   0
+FM022 pass  28 fail   0 deleted   0
+FM023 pass  13 fail   0 deleted   0
+FM024 pass   8 fail   0 deleted   0
+FM025 pass  11 fail   0 deleted   0
+FM026 pass   4 fail   0 deleted   0
+FM028 pass   4 fail   0 deleted   0
+FM030 pass  35 fail   0 deleted   0
+FM031 pass  30 fail   0 deleted   0
+FM032 pass  30 fail   0 deleted   0
+FM033 pass  35 fail   0 deleted   0
+FM034 pass  35 fail   0 deleted   0
+FM035 pass  32 fail   0 deleted   0
+FM036 pass  29 fail   0 deleted   0
+FM037 pass  29 fail   0 deleted   0
+FM038 pass  32 fail   0 deleted   0
+FM039 pass  30 fail   0 deleted   0
+FM040 pass  33 fail   0 deleted   0
+FM041 pass  34 fail   0 deleted   0
+FM042 pass  34 fail   0 deleted   0
+FM043 pass  36 fail   0 deleted   0
+FM044 pass  28 fail   0 deleted   0
+FM045 pass  13 fail   0 deleted   0
+FM050 pass  30 fail   0 deleted   0
+FM056 pass  12 fail   0 deleted   0
+FM060 pass  31 fail   0 deleted   0
+FM061 pass  30 fail   0 deleted   0
+FM062 pass  31 fail   0 deleted   0
+FM080 pass  17 fail   0 deleted   0
+FM097 pass  32 fail   0 deleted   0
+FM098 pass  32 fail   0 deleted   0
+FM099 pass  26 fail   0 deleted   0
+FM100 pass  11 fail   0 deleted   0
+FM101 pass  11 fail   0 deleted   0
+FM102 pass  32 fail   0 deleted   0
+FM103 pass  32 fail   0 deleted   0
+FM104 pass   8 fail   0 deleted   0
+FM105 pass   8 fail   0 deleted   0
+FM106 pass  11 fail   0 deleted   0
+FM107 pass  11 fail   0 deleted   0
+FM108 pass  31 fail   0 deleted   0
+FM109 inspection (no counts)
+FM110 pass   0 fail   0 deleted   0
+FM111 pass   0 fail   0 deleted   0
+FM200 pass  13 fail   0 deleted   0
+FM201 pass  22 fail   0 deleted   0
+FM202 pass  30 fail   0 deleted   0
+FM203 pass  30 fail   0 deleted   0
+FM204 pass  26 fail   0 deleted   0
+FM205 pass  30 fail   0 deleted   0
+FM251 pass  13 fail   0 deleted   0
+FM252 pass  11 fail   0 deleted   0
+FM253 pass  28 fail   0 deleted   0
+FM254 pass  12 fail   0 deleted   0
+FM255 pass  16 fail   0 deleted   0
+FM256 pass  24 fail   0 deleted   0
+FM257 ends after test 5
+FM258 pass   0 fail   0 deleted   0
+FM259 pass   0 fail   0 deleted   0
+FM260 pass   0 fail   0 deleted   0
+FM261 pass   0 fail   0 deleted   0
+FM300 pass  19 fail   0 deleted   0
+FM301 pass  19 fail   0 deleted   0
+FM302 pass  16 fail   0 deleted   0
+FM306 pass  12 fail   0 deleted   0
+FM307 pass  31 fail   0 deleted   0
+FM308 pass  32 fail   0 deleted   0
+FM311 pass  37 fail   0 deleted   0
+FM317 pass  32 fail   0 deleted   0
+FM328 pass  22 fail   0 deleted   0
+FM351 pass  25 fail   0 deleted   0
+FM352 pass  28 fail   0 deleted   0
+FM353 pass   0 fail   0 deleted   0
+FM354 pass  14 fail   0 deleted   0
+FM355 pass  48 fail   0 deleted   0
+FM356 pass  10 fail   0 deleted   0
+FM357 pass  22 fail   0 deleted   0
+FM359 pass  22 fail   0 deleted   0
+FM360 pass  14 fail   0 deleted   0
+FM361 pass  48 fail   0 deleted   0
+FM362 pass  47 fail   0 deleted   0
+FM363 pass  14 fail   0 deleted   0
+FM364 pass  14 fail   0 deleted   0
+FM368 pass  13 fail   0 deleted   0
+FM369 pass  19 fail   0 deleted   0
+FM370 pass  16 fail   0 deleted   0
+FM371 pass  15 fail   0 deleted   0
+FM372 pass  17 fail   0 deleted   0
+FM373 pass  18 fail   0 deleted   0
+FM374 pass  12 fail   0 deleted   0
+FM375 pass  12 fail   0 deleted   0
+FM376 pass  13 fail   0 deleted   0
+FM377 pass  15 fail   0 deleted   0
+FM378 pass   9 fail   0 deleted   0
+FM379 pass  10 fail   0 deleted   0
+FM401 pass  22 fail   0 deleted   0
+FM402 pass  20 fail   0 deleted   0
+FM403 pass   0 fail   0 deleted   0
+FM404 pass   0 fail   0 deleted   0
+FM405 pass  15 fail   0 deleted   0
+FM406 pass  12 fail   0 deleted   0
+FM407 ABEND S400   <--
+FM411 pass  20 fail  15 deleted   0   <--
+FM413 ABEND S300, ends after test 9   <--
+FM500 inspection (counts withheld)
+FM503 pass   8 fail   0 deleted   0
+FM506 pass   4 fail   0 deleted   0
+FM509 pass  16 fail   0 deleted   0
+FM514 pass   2 fail   0 deleted   0
+FM517 pass   5 fail   0 deleted   0
+FM520 pass  30 fail   0 deleted   0
+FM700 pass  23 fail   0 deleted   0
+FM701 pass  35 fail   0 deleted   0
+FM710 pass  18 fail   0 deleted   0
+FM711 pass   5 fail   0 deleted   0
+FM715 pass  34 fail   0 deleted   0
+FM718 pass  29 fail   0 deleted   0
+FM719 pass  14 fail   0 deleted   0
+FM722 pass  12 fail   0 deleted   0
+FM800 pass  12 fail   0 deleted   0
+FM801 pass  45 fail   0 deleted   0
+FM802 pass   6 fail   0 deleted   0
+FM803 pass   9 fail   0 deleted   0
+FM804 pass  11 fail   0 deleted   0
+FM805 pass  18 fail   0 deleted   0
+FM806 pass  12 fail   0 deleted   0
+FM807 pass  12 fail   0 deleted   0
+FM808 pass   8 fail   0 deleted   0
+FM809 pass  25 fail   0 deleted   0
+FM810 pass  10 fail   0 deleted   0
+FM811 pass  10 fail   0 deleted   0
+FM812 pass  13 fail   0 deleted   0
+FM813 pass  13 fail   0 deleted   0
+FM814 pass  19 fail   0 deleted   0
+FM815 pass   9 fail   0 deleted   0
+FM816 pass  16 fail   0 deleted   0
+FM817 pass  11 fail   0 deleted   0
+FM818 pass  15 fail   0 deleted   0
+FM819 pass  19 fail   0 deleted   0
+FM820 pass  18 fail   0 deleted   0
+FM821 pass  19 fail   0 deleted   0
+FM822 pass  14 fail   0 deleted   0
+FM823 pass  12 fail   0 deleted   0
+FM824 pass  13 fail   0 deleted   0
+FM825 pass  16 fail   0 deleted   0
+FM826 pass   9 fail   0 deleted   0
+FM827 pass  10 fail   0 deleted   0
+FM828 pass   9 fail   0 deleted   0
+FM829 pass  35 fail   0 deleted   0
+FM830 pass   9 fail   0 deleted   0
+FM831 pass  12 fail   0 deleted   0
+FM832 pass  20 fail   0 deleted   0
+FM833 pass  11 fail   0 deleted   0
+FM834 pass   7 fail   0 deleted   0
+FM900 pass   0 fail   0 deleted   0
+FM901 pass   0 fail   0 deleted   0
+FM903 pass   0 fail   0 deleted   0
+FM905 pass   0 fail   0 deleted   0
+FM906 pass  28 fail   0 deleted   0
+FM907 pass   0 fail   0 deleted   0
+FM908 pass  54 fail   0 deleted   0
+FM909 pass  27 fail   0 deleted   0
+FM910 ABEND S400   <--
+FM912 ABEND S300, ends after test 5   <--
+FM914 pass   1 fail   0 deleted   0
+FM915 pass   3 fail   0 deleted   0
+FM916 pass   0 fail   1 deleted   0   <--
+FM917 pass   0 fail   3 deleted   0   <--
+FM919 pass   1 fail   0 deleted   0
+FM920 pass   3 fail   0 deleted   0
+FM921 pass   0 fail   3 deleted   0   <--
+FM922 pass   1 fail   0 deleted   0
+FM923 pass  25 fail   2 deleted   0   <--
+192 programs, 3227 tests passed, 24 failed
+
+The seven kernels through the same runtime, the same hour, CPU seconds
+of the GO step against FORTRAN H OPT=2 (every checksum H's):
+daxpy  4.39  H 4.40
+ddot   3.45  H 3.46
+matmul 4.47  H 5.08
+lll1   9.14  H 8.98
+lll5   5.54  H 5.52
+lll7   14.91 H 15.94
+linpk  12.79 H 13.41
