@@ -3191,7 +3191,14 @@ static void s370_gen_unit(Node *fn) {
 
     s370_cur_unit = fn->unit;
     s370_unit_is_main = (f77_ukind[fn->unit] == F77_UNIT_PROGRAM);
-    hl_func(fn);
+    {
+        int nerr;
+        nerr = f77_nerr;
+        hl_func(fn);
+        /* the front end reported an error: the unit's HIR is incomplete,
+         * and generating from it would only bury the message */
+        if (f77_nerr > nerr) return;
+    }
 
     { int z; z = 0; while (z < HIR_MAX_INST) { bg_fold[z] = 0; bg_memop[z] = 0; bg_mem_lnt[z] = -1; z = z + 1; } }
     ssa_split_pairs = 0;
