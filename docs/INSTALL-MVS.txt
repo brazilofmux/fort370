@@ -78,6 +78,7 @@ command on one line.
     //SYSPUNCH DD DSN=&&ASM,DISP=(NEW,PASS),UNIT=SYSDA,
     //            SPACE=(CYL,(2,2)),
     //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+    //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 
   REGION=8192K is not optional.  The compiler's tables are about 6MB
   and it will not start in less.
@@ -85,6 +86,15 @@ command on one line.
   SYSIN is the source: fixed-form FORTRAN 77, any number of program
   units, columns 1-72 (73-80 are ignored).  It may be a data set or
   DD * -- the compiler reads it as libc370's standard input.
+
+  SYSUT1 is a work data set.  The compiler reads the source twice,
+  once to find its program units and once to compile each, holding
+  one unit at a time rather than the file; SYSIN can be read only
+  once, so the first reading copies it to SYSUT1.  Without SYSUT1 the
+  whole source is kept in storage instead, which limits it to a few
+  hundred kilobytes beside the compiler's tables.  (The 2026-10-12
+  package predates this: it keeps the source whole, up to 256K, and
+  has no use for SYSUT1.)
 
   SYSPUNCH receives the S/370 assembler, one CSECT per program unit
   and one per COMMON block.  Feed it to IFOX00 with PARM='OBJ,NODECK'

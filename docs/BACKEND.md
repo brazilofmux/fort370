@@ -297,6 +297,17 @@ it took besides room:
   read as libc370's standard input (so it may be `DD *`: a second open
   of instream data is refused, S013-C0), and the assembler goes to
   SYSPUNCH.
+- **The source, streamed.** The card reader reads through a window
+  (`src/f77_card.h`) that holds a statement and its lookahead, or a
+  unit while the scan may keep it, instead of the whole file: the scan
+  reads the source once to find the units, and code generation reads
+  it again, a unit at a time. A host reopens the file; on MVS the scan
+  copies SYSIN to SYSUT1 as it goes, since SYSIN may be read only once
+  (without a SYSUT1 the window keeps everything). An ENTRY, compiled
+  after the other units, rereads its parent's text from the start; a
+  unit small enough to inline is kept whole by the scan. A file of any
+  length compiles; `tests/host/stream.sh` compiles a 600K one, the same
+  through a 1K window.
 - **EBCDIC.** Ragel bakes character classes into the scanner as ASCII
   values, which recompiling does not change; on MVS the scanner reads
   each byte through a CP037-to-ASCII table (Ragel's `getkey`) while its

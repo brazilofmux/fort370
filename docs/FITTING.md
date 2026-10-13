@@ -116,7 +116,7 @@ there.
 ## In the region, and running
 
 The day's work the previous section predicted, done: the tables are
-6.4MB with the code, against 9.7MB, and the compiler runs on TK5 in
+6.2MB with the code, against 9.7MB, and the compiler runs on TK5 in
 REGION=8192K with room for libc370's 256K stack and its heap.
 
 | | before | after |
@@ -128,6 +128,7 @@ REGION=8192K with room for libc370's 256K stack and its heap.
 | dominator-tree children, rename walk | 256K, 192K | one per block |
 | labels, globals, names | 32K labels, 8K globals, 64-byte names | 8K, 2K, 32 bytes |
 | kinds, types, flags | int arrays | bytes and halfwords |
+| the source file | 256K, read whole | streamed: a unit and 32K of lookahead |
 
 Every FCVS program and test compiled to the same assembler before and
 after each step, except where a step fixed something: the SSA stacks

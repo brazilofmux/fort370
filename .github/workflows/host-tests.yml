@@ -37,7 +37,7 @@ jobs:
           msystem: UCRT64
           install: make diffutils zip mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-python
       - name: build
-        run: make out/f77 LDFLAGS='${{ matrix.ldflags }}'
+        run: make out/f77 out/f77-s32 LDFLAGS='${{ matrix.ldflags }}'
       - name: every test program compiles to its committed assembler
         run: make check-asm
       - name: host checks

@@ -486,11 +486,14 @@ static int f77_sym_temp(int ty) {
 #define F77_UNIT_SUBR    1
 #define F77_UNIT_FUNC    2
 #define F77_UNIT_BDATA   3     /* BLOCK DATA: declarations only */
-#define F77_MAX_UNIT     256
+#define F77_MAX_UNIT     (256 * F77_ROOM)   /* program units in one source file */
 
 static char f77_uname[F77_MAX_UNIT][F77_MAX_NAME];
 static int  f77_ukind[F77_MAX_UNIT];
 static int  f77_upos[F77_MAX_UNIT];    /* source offset of the header */
+static int  f77_uend[F77_MAX_UNIT];    /* fort370: source offset past the unit */
+static char *f77_utext[F77_MAX_UNIT];  /* fort370: the unit's text, kept by the scan
+    for the inliner (the source is streamed, f77_card.h), or 0 */
 static int  f77_uline[F77_MAX_UNIT];
 static int  f77_urty[F77_MAX_UNIT];    /* FUNCTION result type */
 static int  f77_urlen[F77_MAX_UNIT];   /* CHARACTER FUNCTION result length, -1 = (*) */
@@ -2096,6 +2099,8 @@ static int f77_primary(void) {
         if (f77_sparam[s]) {            /* named constant: fold in place */
             ex_ty = f77_sty[s];
             ex_log = f77_slog[s];
+#ifdef F77_NATIVE_F64
+            /* fort370: from the PARAMETER's text when it has one */
             if (ex_ty == TY_CPLX) {
                 ex_hi = f77_sptext2[s] ? f77_fconst_text(f77_sptext2[s], TY_FLOAT) : f77_rconst(f77_spdval2[s]);
                 return f77_sptext[s] ? f77_fconst_text(f77_sptext[s], TY_FLOAT) : f77_rconst(f77_spdval[s]);
@@ -2105,6 +2110,11 @@ static int f77_primary(void) {
                 return f77_dconst(f77_spdval[s], &ex_hi);
             }
             if (ex_ty == TY_FLOAT) return f77_sptext[s] ? f77_fconst_text(f77_sptext[s], TY_FLOAT) : f77_rconst(f77_spdval[s]);
+#else
+            if (ex_ty == TY_CPLX) { ex_hi = f77_rconst(f77_spdval2[s]); return f77_rconst(f77_spdval[s]); }
+            if (ex_ty == TY_DOUBLE) return f77_dconst(f77_spdval[s], &ex_hi);
+            if (ex_ty == TY_FLOAT) return f77_rconst(f77_spdval[s]);
+#endif
             return f77_iconst(f77_spival[s]);
         }
         if (lx_t == T_LP && f77_srank[s] > 0) {
@@ -5036,14 +5046,42 @@ static int f77_actual_addr(void) {
 static int f77_inline_disabled = -1;   /* -1 = not yet probed */
 static int f77_inline_max;
 
-static int f77_can_inline(int u) {
-    int i;
+static void f77_inline_probe(void) {
     if (f77_inline_disabled < 0) {
         char *e;
         f77_inline_disabled = getenv("F77_NO_INLINE") ? 1 : 0;
         e = getenv("F77_INLINE_MAX");
         f77_inline_max = e ? atoi(e) : F77_INLINE_MAX_STMTS;
     }
+}
+
+/* fort370: might u be inlined somewhere?  The part of f77_can_inline
+ * that depends on u alone: the scan keeps such a unit's text whole
+ * (f77_utext), since the streamed source has passed it by the time a
+ * caller wants it. */
+static int f77_keep_candidate(int u) {
+    f77_inline_probe();
+    if (f77_inline_disabled) return 0;
+    if (f77_ukind[u] == F77_UNIT_PROGRAM) return 0;
+    if (f77_urty[u] == TY_CHAR) return 0;
+    if (f77_ustmts[u] > f77_inline_max) return 0;
+    if (f77_unosplice[u]) return 0;
+    return 1;
+}
+
+/* fort370: the scan has reached the end of unit u, at offset end. */
+static void f77_unit_done(int u, int end) {
+    f77_uend[u] = end;
+    f77_utext[u] = 0;
+    if (!lx_streaming || !f77_keep_candidate(u)) return;
+    if (f77_upos[u] < lx_lo || end > lx_hi || end <= f77_upos[u]) return;
+    f77_utext[u] = (char *)malloc((size_t)(end - f77_upos[u]));
+    if (f77_utext[u]) memcpy(f77_utext[u], lx_src + f77_upos[u], (size_t)(end - f77_upos[u]));
+}
+
+static int f77_can_inline(int u) {
+    int i;
+    f77_inline_probe();
     if (f77_inline_disabled) return 0;
     if (u < 0) return 0;
     if (f77_ukind[u] == F77_UNIT_PROGRAM) return 0;
@@ -5101,6 +5139,9 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     char *save_rte;
     int save_rcs;
     int save_ract;
+    char *save_src;                  /* fort370: the source being read, */
+    int save_lxlen;                  /* its end and whether it is the */
+    int save_streaming;              /* streamed window (f77_card.h) */
     int save_t;
     char save_name[F77_MAX_NAME];
     int save_namelen;
@@ -5161,9 +5202,20 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     f77_inline_depth = f77_inline_depth + 1;
     f77_inline_count = f77_inline_count + 1;
 
-    /* Read the callee's header and bind its dummies to the actuals. */
-    lx_pos = f77_upos[u];
-    lx_line = f77_uline[u];
+    /* Read the callee's header and bind its dummies to the actuals.
+     * fort370: from the text the scan kept, the source being streamed. */
+    save_src = lx_src;
+    save_lxlen = lx_len;
+    save_streaming = lx_streaming;
+    if (f77_utext[u]) {
+        lx_streaming = 0;
+        lx_src = f77_utext[u] - f77_upos[u];
+        lx_len = f77_uend[u];
+        lx_pos = f77_upos[u];
+        lx_line = f77_uline[u];
+    } else {
+        lx_goto(f77_upos[u], f77_uline[u]);
+    }
     if (!f77_next_stmt()) { f77_error("inline: empty unit"); }
     if (f77_ukind[u] == F77_UNIT_SUBR) skip = 10;
     else skip = f77_function_skip();
@@ -5220,8 +5272,15 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     f77_nlabel = save_nlabel;
     ctl_n = save_ctl;
     f77_ctl_base = save_ctl_base;
-    lx_pos = save_pos;
-    lx_line = save_line;
+    if (f77_utext[u]) {
+        lx_src = save_src;
+        lx_len = save_lxlen;
+        lx_streaming = save_streaming;
+        lx_pos = save_pos;
+        lx_line = save_line;
+    } else {
+        lx_goto(save_pos, save_line);
+    }
     memcpy(lx_stmt, save_stmt, save_len + 1);
     memcpy(lx_brk, save_brk, save_len);
     lx_stmt_len = save_len;

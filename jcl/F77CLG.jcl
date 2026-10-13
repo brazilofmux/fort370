@@ -9,7 +9,8 @@
 //*  source live.
 //*
 //*  SYSIN may be a PDS member or DD * (the compiler reads it as its
-//*  standard input).  REGION=8192K for the compiler is not optional:
+//*  standard input); SYSUT1 is the work data set the compiler copies it
+//*  to, so that it holds one program unit at a time, not the file.  REGION=8192K for the compiler is not optional:
 //*  its tables are about 6MB.  IFOX00 needs PARM='OBJ,NODECK' or it
 //*  assembles cleanly and produces nothing.  Units are the DD names
 //*  FTnnF001: unit 6 is FT06F001 (or SYSPRINT), unit 5 FT05F001 (or
@@ -24,6 +25,7 @@
 //SYSPUNCH DD DSN=&&ASM,DISP=(NEW,PASS),UNIT=SYSDA,
 //            SPACE=(CYL,(2,2)),
 //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+//SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 //ASM      EXEC PGM=IFOX00,PARM='OBJ,NODECK',REGION=2048K,
 //            COND=(0,NE)
 //SYSLIB   DD DSN=SYS1.MACLIB,DISP=SHR

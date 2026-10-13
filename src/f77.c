@@ -52,6 +52,7 @@
 
 static void f77_error(char *msg);
 static int f77_nerr;      /* errors so far; a unit with any is not given to the back end */
+static int f77_keepall;   /* the source is read once: all of it stays in the window */
 
 #include "f77_card.h"
 #include "f77_lexer_gen.c"
@@ -138,7 +139,13 @@ static void f77_scan_units(void) {
     pos = lx_pos;
     line = lx_line;
 
-    while (f77_next_stmt()) {
+    for (;;) {
+        /* fort370: what the window must hold while this statement is
+         * read -- from its start, or from the unit's header while the
+         * unit may yet be kept whole for the inliner (f77_unit_done) */
+        if (!f77_keepall)
+            lx_keep = (f77_nunit > 0 && f77_keep_candidate(f77_nunit - 1)) ? f77_upos[f77_nunit - 1] : pos;
+        if (!f77_next_stmt()) break;
         /* Collect FORMAT statements: a WRITE may name a label defined
          * later in the unit, so they must all be known up front. */
         if (f77_starts("FORMAT") && lx_stmt_label >= 0 &&
@@ -191,6 +198,7 @@ static void f77_scan_units(void) {
              * nothing calls; the name is mangled so it cannot collide
              * with a subprogram. */
             if (f77_nunit >= F77_MAX_UNIT) { f77_error("too many program units"); return; }
+            if (f77_nunit > 0) f77_unit_done(f77_nunit - 1, pos);
             f77_upos[f77_nunit] = pos;
             f77_uline[f77_nunit] = line;
             f77_ukind[f77_nunit] = F77_UNIT_BDATA;
@@ -214,6 +222,7 @@ static void f77_scan_units(void) {
             started = 1;
         } else if (f77_starts("SUBROUTINE") || rty >= 0) {
             if (f77_nunit >= F77_MAX_UNIT) { f77_error("too many program units"); return; }
+            if (f77_nunit > 0) f77_unit_done(f77_nunit - 1, pos);
             f77_upos[f77_nunit] = pos;
             f77_uline[f77_nunit] = line;
             f77_unit_name(f77_nunit);
@@ -326,6 +335,9 @@ static void f77_scan_units(void) {
         line = lx_line;
     }
 
+    if (f77_nunit > 0) f77_unit_done(f77_nunit - 1, lx_pos);
+    if (!f77_keepall) lx_keep = 0x7FFFFFFF;
+
     /* Each ENTRY becomes a unit of its own, after the ordinary ones. */
     {
         int q;
@@ -382,8 +394,7 @@ static void hl_func(Node *fn) {
     f77_begin_blk(b_entry);
 
     /* Rewind to this unit's first statement and bind its header. */
-    lx_pos = f77_upos[u];
-    lx_line = f77_uline[u];
+    lx_goto(f77_upos[u], f77_uline[u]);
     if (!f77_next_stmt()) return;
     f77_bind_unit(u);
     fn->nparams = f77_unit_nparams;
@@ -393,16 +404,14 @@ static void hl_func(Node *fn) {
          * the statements from the ENTRY onwards. */
         int par;
         par = f77_uentry_parent[u];
-        lx_pos = f77_upos[par];
-        lx_line = f77_uline[par];
+        lx_goto(f77_upos[par], f77_uline[par]);
         if (!f77_next_stmt()) return;                 /* the parent's header */
         for (;;) {
             if (!f77_next_stmt()) break;
             if (!f77_is_spec_stmt()) break;
             f77_statement();
         }
-        lx_pos = f77_upos[u];
-        lx_line = f77_uline[u];
+        lx_goto(f77_upos[u], f77_uline[u]);
         if (!f77_next_stmt()) return;                 /* the ENTRY statement */
     }
 
@@ -431,24 +440,44 @@ static void hl_func(Node *fn) {
     fn->locals_size = f77_frame;
 }
 
+/* fort370: how the source is read again for code generation (lx_reopen):
+ * on a host the named file is opened again; on MVS the copy the scan
+ * made in SYSUT1 is read back. */
+static char *f77_inname;
+static FILE *f77_reopen_file(void) {
+    if (lx_fp && lx_fp != stdin) fclose(lx_fp);
+#ifdef __MVS__
+    return fopen("dd:SYSUT1", "r");
+#else
+    return fopen(f77_inname, "rb");
+#endif
+}
+
 int main(int argc, char **argv) {
-    static char src[(1 << 18) * F77_ROOM];   /* the source file, whole */
-    int n;
 #ifdef F77_TARGET_S370
     /* stdio, which every host and libc370 have.  On MVS the source is
      * the SYSIN DD and the assembler goes to SYSPUNCH, as cobc370's do,
-     * both as records (text); on a host both are files, as bytes. */
+     * both as records (text); on a host both are files, as bytes.  The
+     * source is streamed (f77_card.h), so no limit on its length but the
+     * largest unit's. */
     FILE *fin;
     FILE *fout;
     char *inname;
     char *outname;
+    int keepall;
+    keepall = 0;
 #ifdef __MVS__
     /* SYSIN is libc370's stdin, already open: reading it there rather
      * than opening dd:SYSIN a second time lets it be DD * (a second open
-     * of instream data is the one JES2 refuses, S013-C0) */
+     * of instream data is the one JES2 refuses, S013-C0).  It is read
+     * once, so the scan copies it to the work data set SYSUT1 for the
+     * second reading; without a SYSUT1 the whole source is kept in
+     * storage instead. */
     inname = argc > 1 ? argv[1] : "dd:SYSIN";
     outname = argc > 2 ? argv[2] : "dd:SYSPUNCH";
     fin = argc > 1 ? fopen(inname, "r") : stdin;
+    lx_spool = fopen("dd:SYSUT1", "w");
+    if (!lx_spool) keepall = 1;
 #else
     if (argc < 3) {
         fdputs("usage: f77 source.f output.asm\n", 2);
@@ -464,20 +493,14 @@ int main(int argc, char **argv) {
         fdputc('\n', 2);
         return 1;
     }
-    n = 0;
-    while (n < (int)sizeof(src) - 1) {
-        size_t k;
-        k = fread(src + n, 1, sizeof(src) - 1 - (size_t)n, fin);
-        if (k == 0) break;
-        n = n + (int)k;
-    }
-    if (n >= (int)sizeof(src) - 1 && fgetc(fin) != EOF) {
-        fdputs("f77: source file too long\n", 2);
-        return 1;
-    }
-    src[n] = 0;
-    if (fin != stdin) fclose(fin);
+    f77_inname = inname;
+    f77_keepall = keepall;
+    lx_reopen = keepall ? 0 : f77_reopen_file;
+    lx_keep = keepall ? 0 : 0x7FFFFFFF;
+    lx_start(fin);
 #else
+    static char src[1 << 18];   /* the source file, whole */
+    int n;
     int fd;
 
     if (argc < 3) {
@@ -496,15 +519,25 @@ int main(int argc, char **argv) {
     if (n < 0) n = 0;
     src[n] = 0;
     close(fd);
-#endif
 
     lx_src = src;
     lx_len = n;
     lx_pos = 0;
     lx_line = 1;
+#endif
 
     f77_scan_units();
     if (f77_nunit == 0) { fdputs("f77: empty source\n", 2); return 1; }
+#ifdef F77_TARGET_S370
+    if (lx_spool) { fclose(lx_spool); lx_spool = 0; }
+    if (!keepall) {
+        FILE *again;
+        again = f77_reopen_file();
+        if (!again) { fdputs("f77: the source cannot be read again\n", 2); return 1; }
+        lx_keep = 0x7FFFFFFF;
+        lx_start(again);
+    }
+#endif
 
     {
         int i;

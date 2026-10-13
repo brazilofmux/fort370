@@ -42,7 +42,7 @@ def sh(*args):
     return r.stdout
 
 
-def programs():
+def programs(also=()):
     """(member, source) for every program, member names unique."""
     out = []
     seen = set()
@@ -58,6 +58,10 @@ def programs():
                 k = k + 1
             seen.add(m)
             out.append((m, f))
+    for f in also:
+        m = ('X' + re.sub(r'[^A-Z0-9]', '', os.path.basename(f).split('.')[0].upper()))[:8]
+        seen.add(m)
+        out.append((m, f))
     return out
 
 
@@ -91,14 +95,18 @@ def main():
     only = []
     batch = 12
     setup = True
+    sysut1 = False
+    also = []
     while args:
         a = args.pop(0)
         if a == '--only':
             while args and not args[0].startswith('--'): only.append(args.pop(0).upper())
         elif a == '--batch': batch = int(args.pop(0))
         elif a == '--no-setup': setup = False
+        elif a == '--sysut1': sysut1 = True       # a work data set: the source spooled, one unit held
+        elif a == '--also': also.append(args.pop(0))
         else: sys.exit(__doc__)
-    progs = programs()
+    progs = programs(also)
     if only: progs = [p for p in progs if p[0] in only]
     for d in ('src', 'ref', 'got'):
         os.makedirs(os.path.join(WORK, d), exist_ok=True)
@@ -148,7 +156,8 @@ def main():
                     f"//SYSTERM  DD SYSOUT=Z\n"
                     f"//SYSUDUMP DD DUMMY\n"
                     f"//SYSIN    DD DSN=HERC01.FORT370.SRC({m}),DISP=SHR\n"
-                    f"//SYSPUNCH DD DSN=HERC01.FORT370.ASM({m}),DISP=SHR\n")
+                    f"//SYSPUNCH DD DSN=HERC01.FORT370.ASM({m}),DISP=SHR\n"
+                    + ("//SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))\n" if sysut1 else ""))
         jcl += ("//PRT      EXEC PGM=IEBPTPCH,REGION=2048K,COND=EVEN\n"
                 "//SYSUT1   DD DSN=HERC01.FORT370.ASM,DISP=SHR\n"
                 "//SYSUT2   DD SYSOUT=Z\n"

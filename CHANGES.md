@@ -7,6 +7,19 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## Unreleased
+
+- The source is streamed: the compiler holds a statement, or a unit,
+  and 32K of lookahead instead of the whole file, so a source file of
+  any length compiles (it was refused past 256K), and FORT370 needs
+  256K less (6.2MB with its code).  On MVS the first reading copies
+  SYSIN to the work data set SYSUT1 for the second; `jcl/F77CLG.jcl`
+  and `docs/INSTALL-MVS.txt` have the DD.  Without SYSUT1 the whole
+  source is kept in storage, as before.  `tests/host/stream.sh`
+  compiles a 600K file, the same through a 1K window.
+- CI builds the SLOW-32 reference compiler too: the constants-from-text
+  change had broken it, unseen.
+
 ## 2026-10-12
 
 The first release.  Built from `887e804`: FORT370.xmit SHA256

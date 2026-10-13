@@ -47,6 +47,115 @@ static int   lx_len;
 static int   lx_pos;        /* byte offset of the next line to read */
 static int   lx_line;       /* 1-based line number of that line */
 
+/* fort370: the source is streamed, not read whole.  Positions are byte
+ * offsets in the source, as before, but lx_src[p] is only valid inside a
+ * window [lx_lo, lx_hi) of it, which lx_window refills as reading goes
+ * on: lx_src is lx_buf - lx_lo, and lx_len is lx_hi, the end of what has
+ * been read (lx_has tells the true end of the source from the end of the
+ * window).  Nothing before min(lx_keep, lx_pos) is kept -- the card
+ * reader copies a line into the statement as it reads it -- so the
+ * window holds a statement and its lookahead, or, while a phase asks
+ * for it through lx_keep, a unit.  The driver reads the source twice
+ * (the unit scan, then each unit's compilation) by reopening it
+ * (lx_reopen); on MVS SYSIN may be DD *, which cannot be read twice, so
+ * the scan copies it to SYSUT1 as it goes (lx_spool).  A unit compiled
+ * out of order -- an ENTRY, after the others -- rewinds the stream; a
+ * unit the front end inlines is kept whole from the scan (f77_utext).
+ * lx_streaming is 0 while lx_src is such a kept copy. */
+static char  *lx_buf;
+static int    lx_cap;
+static int    lx_lo;
+static int    lx_hi;
+static int    lx_eof;
+static int    lx_keep = 0x7FFFFFFF;
+static int    lx_streaming;
+static FILE  *lx_fp;
+static FILE  *lx_spool;
+static FILE *(*lx_reopen)(void);
+#ifndef LX_AHEAD
+#define LX_AHEAD 32768                   /* read at least this far past lx_pos */
+#endif
+#ifndef LX_CAP0
+#define LX_CAP0 65536                    /* the window's first allocation */
+#endif
+
+static void lx_window(int need) {
+    int keep;
+    size_t n;
+    if (!lx_streaming) return;
+    keep = lx_keep < lx_pos ? lx_keep : lx_pos;
+    for (;;) {
+        if (keep > lx_lo) {                  /* drop what nothing needs */
+            int d;
+            d = keep - lx_lo;
+            if (d > lx_hi - lx_lo) d = lx_hi - lx_lo;
+            if (lx_hi - lx_lo - d > 0) memmove(lx_buf, lx_buf + d, (size_t)(lx_hi - lx_lo - d));
+            lx_lo = lx_lo + d;
+        }
+        if (lx_eof || (lx_hi >= need && lx_hi >= keep)) break;
+        if (lx_hi - lx_lo >= lx_cap) {
+            char *nb;
+            int nc;
+            nc = lx_cap ? lx_cap * 2 : LX_CAP0;
+            nb = (char *)realloc(lx_buf, (size_t)nc);
+            if (!nb) {
+#ifdef __MVS__
+                f77_error(lx_reopen ? "out of storage for the source (a unit too large)"
+                                    : "out of storage for the source: give the step a SYSUT1 work data set");
+#else
+                f77_error("out of storage for the source");
+#endif
+                lx_eof = 1;
+                break;
+            }
+            lx_buf = nb;
+            lx_cap = nc;
+        }
+        n = fread(lx_buf + (lx_hi - lx_lo), 1, (size_t)(lx_cap - (lx_hi - lx_lo)), lx_fp);
+        if (n == 0) { lx_eof = 1; break; }
+        if (lx_spool) fwrite(lx_buf + (lx_hi - lx_lo), 1, n, lx_spool);
+        lx_hi = lx_hi + (int)n;
+    }
+    lx_src = lx_buf - lx_lo;
+    lx_len = lx_hi;
+}
+
+/* Is there a byte at offset p?  Reads on when the window ends first. */
+static int lx_has(int p) {
+    if (p < lx_len) return 1;
+    if (!lx_streaming || lx_eof) return 0;
+    lx_window(p + LX_AHEAD);
+    return p < lx_len;
+}
+
+/* Start reading the source from its beginning (again). */
+static void lx_start(FILE *fp) {
+    lx_fp = fp;
+    lx_lo = 0;
+    lx_hi = 0;
+    lx_eof = 0;
+    lx_pos = 0;
+    lx_line = 1;
+    lx_streaming = 1;
+    lx_window(LX_AHEAD);
+}
+
+/* Go to offset pos, the start of a line numbered line: forward through
+ * the stream, or back by reading it again from the start. */
+static void lx_goto(int pos, int line) {
+    if (lx_streaming && pos < lx_lo) {
+        FILE *fp;
+        fp = lx_reopen ? lx_reopen() : 0;
+        if (!fp) { f77_error("the source cannot be read again"); return; }
+        lx_keep = pos;
+        lx_start(fp);
+        lx_keep = 0x7FFFFFFF;
+    }
+    lx_pos = pos;
+    lx_line = line;
+    if (lx_streaming) lx_window(pos + LX_AHEAD);
+}
+
 /* --- assembled statement --- */
 static char  lx_stmt[F77_MAX_STMT];
 static int   lx_stmt_len;
@@ -95,7 +204,7 @@ static int lx_upper(int c) {
  * treat as a comment (the historic default when debug lines are off). */
 static int lx_is_comment(int p) {
     int c;
-    if (p >= lx_len) return 0;
+    if (!lx_has(p)) return 0;
     c = lx_upper(lx_src[p]);
     if (c == 'C' || c == '*' || c == '!' || c == 'D') return 1;
     return 0;
@@ -103,8 +212,8 @@ static int lx_is_comment(int p) {
 
 /* Advance past the newline that ends the line beginning at p. */
 static int lx_next_line(int p) {
-    while (p < lx_len && lx_src[p] != '\n') p = p + 1;
-    if (p < lx_len) p = p + 1;
+    while (lx_has(p) && lx_src[p] != '\n') p = p + 1;
+    if (lx_has(p)) p = p + 1;
     lx_line = lx_line + 1;
     return p;
 }
@@ -118,7 +227,7 @@ static int lx_next_line(int p) {
 static int lx_is_blank_line(int p) {
     int col;
     col = 1;
-    while (p < lx_len && lx_src[p] != '\n' && col <= 72) {
+    while (lx_has(p) && lx_src[p] != '\n' && col <= 72) {
         if (lx_src[p] != ' ' && lx_src[p] != '\t' && lx_src[p] != '\r')
             return 0;
         p = p + 1;
@@ -143,14 +252,14 @@ static int lx_line_body(int p, int *cont, int *label) {
     have_lab = 0;
     col = 1;
 
-    while (p < lx_len && lx_src[p] != '\n' && col <= 6) {
+    while (lx_has(p) && lx_src[p] != '\n' && col <= 6) {
         c = lx_src[p];
         if (c == '\t') {
             /* Tab-format extension: the tab ends the label field.  A
              * digit 1-9 immediately after it marks a continuation;
              * anything else begins the statement body. */
             p = p + 1;
-            if (p < lx_len && lx_src[p] >= '1' && lx_src[p] <= '9') {
+            if (lx_has(p) && lx_src[p] >= '1' && lx_src[p] <= '9') {
                 *cont = 1;
                 p = p + 1;
             }
@@ -224,14 +333,15 @@ static int f77_next_stmt(void) {
     lx_after_blank = 0;
     first = 1;
     inq = 0;
+    lx_window(lx_pos + LX_AHEAD);
 
     for (;;) {
         /* Skip comment and blank lines. */
-        while (lx_pos < lx_len &&
+        while (lx_has(lx_pos) &&
                (lx_is_comment(lx_pos) || lx_is_blank_line(lx_pos))) {
             lx_pos = lx_next_line(lx_pos);
         }
-        if (lx_pos >= lx_len) break;
+        if (!lx_has(lx_pos)) break;
 
         p = lx_pos;
         body = lx_line_body(p, &cont, &label);
@@ -249,14 +359,14 @@ static int f77_next_stmt(void) {
         /* Copy columns 7-72, squeezing blanks outside character context. */
         col = 7;
         p = body;
-        while (p < lx_len && lx_src[p] != '\n' && col <= 72) {
+        while (lx_has(p) && lx_src[p] != '\n' && col <= 72) {
             c = lx_src[p];
             if (c == '\r') { p = p + 1; continue; }
             if (inq) {
                 lx_put(c);
                 if (c == '\'') {
                     /* '' inside a constant is an escaped quote. */
-                    if (p + 1 < lx_len && lx_src[p + 1] == '\'') {
+                    if (lx_has(p + 1) && lx_src[p + 1] == '\'') {
                         p = p + 1;
                         col = col + 1;
                         lx_put('\'');
@@ -293,7 +403,7 @@ static int f77_next_stmt(void) {
                     col = col + 1;
                     k = 0;
                     while (k < hcount) {
-                        if (p >= lx_len || lx_src[p] == '\n' || col > 72) {
+                        if (!lx_has(p) || lx_src[p] == '\n' || col > 72) {
                             /* The constant continues on the next
                              * continuation line (comments between are
                              * allowed), from its column 7. */
@@ -301,9 +411,9 @@ static int f77_next_stmt(void) {
                             int qcont;
                             int qlabel;
                             q = lx_next_line(lx_pos);
-                            while (q < lx_len && (lx_is_comment(q) || lx_is_blank_line(q)))
+                            while (lx_has(q) && (lx_is_comment(q) || lx_is_blank_line(q)))
                                 q = lx_next_line(q);
-                            if (q >= lx_len) {
+                            if (!lx_has(q)) {
                                 f77_error("Hollerith constant runs off the end of the file");
                                 break;
                             }
@@ -340,11 +450,11 @@ static int f77_next_stmt(void) {
             int qcont;
             int qlabel;
             q = lx_pos;
-            while (q < lx_len && (lx_is_comment(q) || lx_is_blank_line(q))) {
+            while (lx_has(q) && (lx_is_comment(q) || lx_is_blank_line(q))) {
                 q = lx_next_line(q);
                 lx_pos = q;
             }
-            if (q >= lx_len) break;
+            if (!lx_has(q)) break;
             lx_line_body(q, &qcont, &qlabel);
             if (!qcont) break;
         }
