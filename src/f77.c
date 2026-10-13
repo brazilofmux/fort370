@@ -57,6 +57,7 @@ static int f77_keepall;   /* the source is read once: all of it stays in the win
 #include "f77_card.h"
 #include "f77_lexer_gen.c"
 #include "hir.h"
+typedef char f77_alloca_room[HL_MAX_ALLOCA >= HIR_MAX_INST ? 1 : -1];   /* see f77_contract.h */
 #include "hir_ssa.h"
 #include "hir_opt.h"
 #include "hir_licm.h"
@@ -375,7 +376,7 @@ static void hl_func(Node *fn) {
     hir_reset();
     hl_nalloca = 0;
     hl_temp_stack = 0;
-    f77_nsym = 0;
+    f77_sym_reset();
     f77_nlabel = 0;
     f77_scope_base = 0;
     f77_label_base = 0;

@@ -11,15 +11,16 @@ REGION.FORT=8192K, SYSLIN 5 cylinders (the proc's own SYSLIN fills at
 about 4000 statements, SB37 -- not a limit of the compiler).
 
 fort370 on MVS: out/f77-guest (F77_ROOM=1, the ceilings FORT370 has on
-the guest; the port sweep shows it writes what FORT370 writes).  On a
-host: out/f77 (F77_ROOM=4).  fort370 always optimizes, so OPT=2 is the
-comparison.
+the guest; the port sweep shows it writes what FORT370 writes, and
+units of 497, 419, 575 and 2690 statements of the four shapes were
+compiled by FORT370 on TK5 to the same bytes).  On a host: out/f77 (F77_ROOM=4).  fort370 always
+optimizes, so OPT=2 is the comparison.
 
              H OPT=2          H OPT=0          fort370 MVS   fort370 host
-  straight   >=8000           >=8000            497            2020
-  if          450 (500: 630)   800 (900: 800)   424            1717
-  labels      900 (1000: 630) 3000 (3500: 550)  507             507
-  vars       >=8000           >=8000           1019            1014
+  straight   >=8000           >=8000            499            2027
+  if          450 (500: 630)   800 (900: 800)   426            1724
+  labels      900 (1000: 630) 3000 (3500: 550)  582            2342
+  vars      >=16000          >=16000           2701           10891
 
 In parentheses, the next size tried and H's message there:
   630  IEK630I  INTERNAL TOPOLOGICAL-ANALYSIS TABLE EXCEEDED
@@ -29,18 +30,18 @@ In parentheses, the next size tried and H's message there:
   800  IEK800I  SOURCE PROGRAM IS TOO LARGE
 All three end the compilation (severity 16).
 
-What stops fort370:
-  straight, if  8192 HIR instructions per unit (HIR_MAX_INST); an
-                array assignment is about 16, a logical IF about 19
-  labels        512 statement labels per unit (F77_MAX_LABEL)
-  vars          1024 symbols per unit (F77_MAX_SYM)
-The last two do not scale with F77_ROOM, so the host has them too.
+What stops fort370, in every shape: 8192 HIR instructions per unit on
+MVS, 32768 on a host (HIR_MAX_INST).  An array assignment is about 16
+of them, a logical IF about 19, a labelled statement about 14, a scalar
+assignment 3.
+
+Earlier the same day, before the symbol and label tables were raised
+(4096 each on MVS, from 1024 and 512, and four times that on a host),
+fort370 took 507 labels and 1019 variables on MVS and on a host alike.
 
 H's limits are its tables' shapes, not its storage: every compilation,
 the largest included, ended with 5.9 to 8.0MB of the 8192K unused.  At
-OPT=2 its flow analysis gives out about where fort370's instruction
-ceiling does for branchy code (450 against 424); on straight-line code
-and on symbols H takes at least 16 and 8 times what fort370 does on MVS,
-and at OPT=0 two to six times as much in every shape.  Units are
-per unit in both: a source file of any length compiles in fort370, and
-H compiles one unit at a time as well.
+OPT=2 on branchy code fort370 is close to H (426 IFs to 450); on
+straight-line code and on symbols H takes at least 16 and 6 times what
+fort370 does on MVS.  Both compile one unit at a time, and a fort370
+source file may be of any length.

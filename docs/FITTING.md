@@ -117,7 +117,7 @@ there.
 
 The day's work the previous section predicted, done: the static tables
 and code are 3.9MB, against 9.7MB, and the compiler runs on TK5 in
-REGION=8192K; the heaviest units compile in 6144K (the phases' tables,
+REGION=8192K; every FCVS program and test compiles in 6656K (the phases' tables,
 up to 1MB for the interference graph, come and go on the heap).
 
 | | before | after |
@@ -134,6 +134,16 @@ up to 1MB for the interference graph, come and go on the heap).
 | big frame buffers (8-33K, two in recursion) | the stack | the heap, or static |
 | libc370's stack | 256K | 128K; expressions nest 90 deep at most |
 | 34 per-instruction index tables | ints | halfwords (`hir_ix`), 560K |
+
+Some of the room went back into the language the same day.  FORTRAN H
+takes far larger units than the guest's first ceilings allowed
+(`bench/results-limits-2026-10-13.txt`): 4096 symbols and 4096 labels
+in a unit, from 1024 and 512, cost 464K, after an array's bounds moved
+into rows of their own (a scalar had carried 112 bytes of rank-7
+bounds) and the symbols' flags and types became bytes and halfwords.
+The static tables and code are 4.4MB, and every FCVS program and test
+compiles in 7168K, FM912 being the one that needs more than 6656K.
+What bounds a unit now is its 8192 instructions.
 
 Every FCVS program and test compiled to the same assembler before and
 after each step, except where a step fixed something: the SSA stacks

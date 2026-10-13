@@ -32,21 +32,46 @@
 
 /* --- symbols -------------------------------------------------------- */
 
-#define F77_MAX_SYM 1024
+#define F77_MAX_SYM (4096 * F77_ROOM)  /* fort370: symbols in one unit, inlined callees' too */
 #define F77_MAX_RANK 7                 /* the F77 limit */
 static char f77_sname[F77_MAX_SYM][F77_MAX_NAME];
-static int  f77_sty[F77_MAX_SYM];      /* TY_INT / TY_FLOAT / TY_DOUBLE */
+static short  f77_sty[F77_MAX_SYM];      /* TY_INT / TY_FLOAT / TY_DOUBLE */
 static int  f77_sval[F77_MAX_SYM];     /* HIR alloca */
-static int  f77_srank[F77_MAX_SYM];    /* 0 = scalar */
-static int  f77_slo[F77_MAX_SYM][F77_MAX_RANK];   /* lower bound per dim */
-static int  f77_sext[F77_MAX_SYM][F77_MAX_RANK];  /* constant extent */
+static signed char  f77_srank[F77_MAX_SYM];    /* 0 = scalar */
+/* fort370: the bounds live in rows of their own, one per array, and a
+ * symbol points at its row (f77_slo[s][k] reads as before).  Every
+ * scalar shares row 0, whose bounds nothing writes (f77_parse_dims
+ * gives a symbol its own row before it writes any); 112 bytes of rank-7
+ * bounds per scalar would be most of the table. */
+#define F77_MAX_ARR (1024 * F77_ROOM)  /* arrays in one unit */
+static int  f77_dlo[F77_MAX_ARR][F77_MAX_RANK];
+static int  f77_dext[F77_MAX_ARR][F77_MAX_RANK];
+static int  f77_dextsym[F77_MAX_ARR][F77_MAX_RANK];
+static int  f77_dlov[F77_MAX_ARR][F77_MAX_RANK];
+static int  f77_narr;
+static int *f77_slo[F77_MAX_SYM];      /* lower bound per dim */
+static int *f77_sext[F77_MAX_SYM];     /* constant extent */
 /* Adjustable dimensions: DOUBLE PRECISION A(LDA,1) inside a subprogram,
  * where LDA is itself a dummy argument.  LINPACK is built on this.  When
  * f77_sextv[s][k] >= 0 the extent is that HIR value (computed in the
  * declaration part) and f77_sext[s][k] is meaningless. */
-static int  f77_sextsym[F77_MAX_SYM][F77_MAX_RANK];   /* now: HIR value of the extent, or -1 */
-static int  f77_slov[F77_MAX_SYM][F77_MAX_RANK];      /* HIR value of the lower bound, or -1 */
+static int *f77_sextsym[F77_MAX_SYM];  /* now: HIR value of the extent, or -1 */
+static int *f77_slov[F77_MAX_SYM];     /* HIR value of the lower bound, or -1 */
 #define f77_sextv f77_sextsym
+/* Row r's bounds, fresh: extents and lower bounds unknown (-1). */
+static void f77_dim_row(int s, int r) {
+    int d;
+    f77_slo[s] = f77_dlo[r];
+    f77_sext[s] = f77_dext[r];
+    f77_sextsym[s] = f77_dextsym[r];
+    f77_slov[s] = f77_dlov[r];
+    for (d = 0; d < F77_MAX_RANK; d++) {
+        f77_dlo[r][d] = 0;
+        f77_dext[r][d] = 0;
+        f77_dextsym[r][d] = -1;
+        f77_dlov[r][d] = -1;
+    }
+}
 static int f77_adjustable(int s) {
     int k;
     for (k = 0; k < f77_srank[s]; k++)
@@ -54,6 +79,42 @@ static int f77_adjustable(int s) {
     return 0;
 }
 static int  f77_nsym;
+
+/* fort370: names hashed, so a unit of thousands of symbols does not look
+ * each one up by scanning them all.  A chain holds every symbol of the
+ * name's bucket, newest first; f77_sym_at answers what the scan from
+ * f77_scope_base answered -- the oldest match at or above the base. */
+#define F77_SHASH 1024
+static int f77_shead[F77_SHASH];       /* symbol + 1, 0 = empty */
+static int f77_snext[F77_MAX_SYM];     /* symbol + 1, 0 = end */
+static int f77_shash(char *nm) {
+    unsigned h;
+    h = 0;
+    while (*nm) { h = h * 31 + (unsigned char)*nm; nm++; }
+    return (int)(h % F77_SHASH);
+}
+static void f77_sym_hash(int s) {
+    int h;
+    h = f77_shash(f77_sname[s]);
+    f77_snext[s] = f77_shead[h];
+    f77_shead[h] = s + 1;
+}
+static void f77_sym_reset(void) {
+    memset(f77_shead, 0, sizeof f77_shead);
+    f77_nsym = 0;
+    f77_narr = 1;                      /* row 0 is every scalar's */
+}
+static int f77_sym_at(char *nm, int base) {
+    int i;
+    int found;
+    found = -1;
+    i = f77_shead[f77_shash(nm)];
+    while (i) {
+        if (i - 1 >= base && i - 1 < f77_nsym && strcmp(f77_sname[i - 1], nm) == 0) found = i - 1;
+        i = f77_snext[i - 1];
+    }
+    return found;
+}
 
 /* Lookups start here, not at 0.  Inlining a subprogram pushes a fresh
  * scope so the callee's locals cannot resolve to identically-named
@@ -66,7 +127,7 @@ static int  f77_label_base;
  * Fortran, so the symbol's value is already an address and there is no
  * alloca behind it -- everything downstream works off an address, so
  * loads, stores and subscripting need no special case. */
-static int  f77_sarg[F77_MAX_SYM];
+static signed char  f77_sarg[F77_MAX_SYM];
 
 /* Hi-word slot for a scalar DOUBLE local, or -1.
  *
@@ -87,8 +148,8 @@ static int  f77_split_count;
 static int  f77_split_on = -1;
 
 /* Static storage flags: member of a COMMON block / named in SAVE. */
-static int  f77_scom[F77_MAX_SYM];
-static int  f77_ssaved[F77_MAX_SYM];
+static signed char  f77_scom[F77_MAX_SYM];
+static signed char  f77_ssaved[F77_MAX_SYM];
 
 /* Read-only dummy-load tracking, for LICM's h_ld_ro assertion.  F77
  * 15.9.3.6: while a subprogram executes, its scalar dummies cannot
@@ -98,7 +159,7 @@ static int  f77_ssaved[F77_MAX_SYM];
  * address passed onward).  One-pass compilation means the store may
  * be seen after the load, so loads are recorded and the flag is
  * RETRACTED at unit end for every symbol that got stored. */
-static int  f77_sstored[F77_MAX_SYM];
+static signed char  f77_sstored[F77_MAX_SYM];
 #define F77_MAX_LDRO 4096
 static int  f77_ldro_inst[F77_MAX_LDRO];
 static int  f77_ldro_sym[F77_MAX_LDRO];
@@ -137,12 +198,12 @@ static int  f77_sgoff[F77_MAX_SYM];    /* byte offset inside that object */
 static int  f77_slen[F77_MAX_SYM];     /* length in bytes, -1 = assumed (*) */
 static int  f77_slenv[F77_MAX_SYM];    /* HIR value of the length when -1 */
 static int  f77_spstr[F77_MAX_SYM];    /* CHARACTER PARAMETER: string index */
-static int  f77_sexternal[F77_MAX_SYM]; /* named in EXTERNAL */
-static int  f77_sintrinsic[F77_MAX_SYM]; /* named in INTRINSIC */
+static signed char  f77_sexternal[F77_MAX_SYM]; /* named in EXTERNAL */
+static signed char  f77_sintrinsic[F77_MAX_SYM]; /* named in INTRINSIC */
 /* LOGICAL shares TY_INT with INTEGER in the backend; what tells them
  * apart for list-directed output (T/F vs a number) is this flag on the
  * symbol, carried through expressions in ex_log. */
-static int  f77_slog[F77_MAX_SYM];
+static signed char  f77_slog[F77_MAX_SYM];
 /* fort370: indexed by letter - 'A', which in EBCDIC runs to 40 ('A' to
  * 'Z' has gaps there), so the tables span 'A'..'Z' in the execution
  * character set: 26 on a host, 41 on MVS. */
@@ -213,7 +274,7 @@ static int f77_eq_delta[F77_MAX_SYM];    /* addr(s) = addr(parent) + delta */
 /* PARAMETER named constants: no storage, value folded at parse time.
  * The value is kept in both domains and converted per the symbol's
  * type at each use. */
-static int    f77_sparam[F77_MAX_SYM];
+static signed char    f77_sparam[F77_MAX_SYM];
 static int    f77_spival[F77_MAX_SYM];
 static double f77_spdval[F77_MAX_SYM];
 static double f77_spdval2[F77_MAX_SYM];  /* COMPLEX PARAMETER: imaginary part */
@@ -223,7 +284,7 @@ static char  *f77_sptext2[F77_MAX_SYM];
 /* Explicitly typed by a type declaration (or a typed FUNCTION
  * header): what IMPLICIT NONE checks, and what an IMPLICIT statement
  * must not retype. */
-static int    f77_styped[F77_MAX_SYM];
+static signed char    f77_styped[F77_MAX_SYM];
 
 /* Per-unit implicit typing map, letter -> type.  bind_unit resets it
  * to the default rule (I-N INTEGER, the rest REAL) and the IMPLICIT
@@ -391,11 +452,8 @@ static int f77_sym(char *nm) {
         i = i - 1;
         if (strcmp(f77_stfb_name[i], nm) == 0) return f77_stfb_sym[i];
     }
-    i = f77_scope_base;
-    while (i < f77_nsym) {
-        if (strcmp(f77_sname[i], nm) == 0) return i;
-        i = i + 1;
-    }
+    i = f77_sym_at(nm, f77_scope_base);
+    if (i >= 0) return i;
     if (f77_nsym >= F77_MAX_SYM) { f77_error("too many symbols"); return 0; }
     if (f77_imp_none && !f77_decls_open) {
         /* A name first seen in executable code has no declaration. */
@@ -405,6 +463,7 @@ static int f77_sym(char *nm) {
         f77_error(msg);
     }
     strcpy(f77_sname[f77_nsym], nm);
+    f77_sym_hash(f77_nsym);
     f77_sty[f77_nsym] = f77_implicit_ty(nm);
     f77_srank[f77_nsym] = 0;
     f77_sarg[f77_nsym] = 0;
@@ -426,7 +485,7 @@ static int f77_sym(char *nm) {
     f77_sparam[f77_nsym] = 0;
     f77_styped[f77_nsym] = 0;
     f77_sstored[f77_nsym] = 0;
-    { int d; d = 0; while (d < F77_MAX_RANK) { f77_sextsym[f77_nsym][d] = -1; f77_slov[f77_nsym][d] = -1; d = d + 1; } }
+    f77_dim_row(f77_nsym, 0);
     /* An implicitly typed CHARACTER (IMPLICIT CHARACTER*14 (C)) has its
      * length now and gets all of it; a declaration re-issues the slot
      * anyway.  One byte here left CVCOMP*14 overlapping its
@@ -452,6 +511,7 @@ static int f77_sym_temp(int ty) {
     if (f77_nsym >= F77_MAX_SYM) { f77_error("too many symbols"); return 0; }
     s = f77_nsym;
     strcpy(f77_sname[s], "%T");
+    f77_sym_hash(s);
     f77_sty[s] = ty;
     f77_srank[s] = 0;
     f77_sarg[s] = 0;
@@ -469,7 +529,7 @@ static int f77_sym_temp(int ty) {
     f77_sexternal[s] = 0;
     f77_sintrinsic[s] = 0;
     f77_slog[s] = 0;
-    { int d; d = 0; while (d < F77_MAX_RANK) { f77_sextsym[s][d] = -1; f77_slov[s][d] = -1; d = d + 1; } }
+    f77_dim_row(s, 0);
     f77_frame = f77_frame + f77_tysize(ty);
     f77_sval[s] = hi_emit(HI_ALLOCA, ty == TY_CPLX ? TY_FLOAT : ty, -1, -1, 0 - f77_frame, NULL);
     hl_ainst[hl_nalloca] = f77_sval[s];
@@ -529,6 +589,7 @@ static int f77_sym_param(char *nm, int index) {
     if (f77_nsym >= F77_MAX_SYM) { f77_error("too many symbols"); return 0; }
     s = f77_nsym;
     strcpy(f77_sname[s], nm);
+    f77_sym_hash(s);
     f77_sty[s] = f77_implicit_ty(nm);
     f77_srank[s] = 0;
     f77_sarg[s] = 1;
@@ -550,7 +611,7 @@ static int f77_sym_param(char *nm, int index) {
         if (f77_sty[s] == TY_CHAR) f77_slen[s] = f77_imp_len[nm[0] - 'A'];
         f77_slog[s] = f77_imp_log[nm[0] - 'A'];
     }
-    { int d; d = 0; while (d < F77_MAX_RANK) { f77_sextsym[s][d] = -1; f77_slov[s][d] = -1; d = d + 1; } }
+    f77_dim_row(s, 0);
     f77_sval[s] = hi_emit(HI_PARAM, HL_ADDR_TY, -1, -1, index, NULL);
     f77_nsym = f77_nsym + 1;
     return s;
@@ -621,7 +682,7 @@ static void f77_realloc_sym(int s) {
 
 /* --- statement labels ----------------------------------------------- */
 
-#define F77_MAX_LABEL 512
+#define F77_MAX_LABEL (4096 * F77_ROOM)   /* fort370: was 512 */
 static int f77_lnum[F77_MAX_LABEL];
 static int f77_lblk[F77_MAX_LABEL];
 static int f77_nlabel;
@@ -3270,6 +3331,11 @@ static void f77_parse_dims(int s) {
     int losym;
     int hisym;
     rank = 0;
+    if (f77_slo[s] == f77_dlo[0]) {  /* fort370: its own row of bounds */
+        if (f77_narr >= F77_MAX_ARR) { f77_error("too many arrays"); return; }
+        f77_dim_row(s, f77_narr);
+        f77_narr = f77_narr + 1;
+    }
     f77_tok();                       /* past ( */
     for (;;) {
         lo = 1;
@@ -4917,10 +4983,7 @@ static char *f77_intrinsic_proc(char *nm) {
 
 /* Index of an existing symbol, or -1 (no creation). */
 static int f77_sym_find(char *nm) {
-    int i;
-    for (i = f77_scope_base; i < f77_nsym; i++)
-        if (strcmp(f77_sname[i], nm) == 0) return i;
-    return -1;
+    return f77_sym_at(nm, f77_scope_base);
 }
 
 /* ABS(X) or SF(X) as an actual argument is a value, not a variable:
@@ -5100,8 +5163,25 @@ static int f77_keep_candidate(int u) {
     return 1;
 }
 
-/* fort370: the scan has reached the end of unit u, at offset end. */
+/* fort370: the scan has reached the end of unit u, at offset end (the
+ * next unit's header).  The comment and blank lines between u's END and
+ * that header are not kept: a file of small subroutines, each before a
+ * block of comments, had kept every block (750K of heap for the 600K
+ * file of tests/host/stream.sh). */
 static void f77_unit_done(int u, int end) {
+    int ls;
+    int k;
+    while (end > f77_upos[u] && end > lx_lo && end <= lx_hi) {
+        ls = end - 1;                  /* the last line: [ls, end) */
+        while (ls > f77_upos[u] && ls > lx_lo && lx_src[ls - 1] != '\n') ls = ls - 1;
+        if (ls >= end) break;
+        if (lx_src[ls] != 'C' && lx_src[ls] != 'c' && lx_src[ls] != '*') {
+            k = ls;
+            while (k < end && (lx_src[k] == ' ' || lx_src[k] == '\n' || lx_src[k] == '\r')) k = k + 1;
+            if (k < end) break;        /* a statement line */
+        }
+        end = ls;
+    }
     f77_uend[u] = end;
     f77_utext[u] = 0;
     if (!lx_streaming || !f77_keep_candidate(u)) return;
@@ -5137,11 +5217,12 @@ static int f77_bind_actual(char *nm, int addr) {
     if (f77_nsym >= F77_MAX_SYM) { f77_error("too many symbols"); return 0; }
     s = f77_nsym;
     strcpy(f77_sname[s], nm);
+    f77_sym_hash(s);
     f77_sty[s] = f77_implicit_ty(nm);
     f77_srank[s] = 0;
     f77_sarg[s] = 1;
     f77_shi[s] = -1;                 /* by-reference: value is an address */
-    { int d; d = 0; while (d < F77_MAX_RANK) { f77_sextsym[s][d] = -1; f77_slov[s][d] = -1; d = d + 1; } }
+    f77_dim_row(s, 0);
     f77_sval[s] = addr;
     f77_nsym = f77_nsym + 1;
     return s;

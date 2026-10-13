@@ -187,7 +187,7 @@ static void f_n(int v) {
     char b[16];
     int n;
     unsigned int u;
-    if (v < 0) { f_c('-'); u = (unsigned int)(0 - v); } else u = (unsigned int)v;
+    if (v < 0) { f_c('-'); u = 0u - (unsigned int)v; } else u = (unsigned int)v;
     n = 0;
     if (u == 0) { f_c('0'); return; }
     while (u > 0) { b[n] = (char)('0' + (u % 10)); u = u / 10; n = n + 1; }
@@ -723,6 +723,10 @@ static void s370_load_into(int d, int v) {
     int c;
     int root;
     char mem[40];
+    if (v < 0) {                     /* undefined: a variable read before any assignment */
+        f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(d)); asm_ins("SR", s370_line, 2);
+        return;
+    }
     if (ra_reg[v] >= 0) {
         if (ra_reg[v] != d) { f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_r(ra_reg[v])); asm_ins("LR", s370_line, 2); }
         return;

@@ -7,6 +7,32 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## Unreleased
+
+- Larger units: 4096 symbols and 4096 statement labels in a unit, from
+  1024 and 512 (four times that on a host, where the labels had not
+  grown with the other tables).  Symbols are found by hashing, not by
+  scanning them all; an array's bounds live in a row of their own, so a
+  scalar no longer carries 112 bytes of them; flags and types are bytes
+  and halfwords.  The list of a unit's locals is sized by its
+  instructions, which it can never outnumber: past 4096 locals it had
+  been written beyond its end.  On MVS, 464K more storage (4.4MB with
+  the code): every FCVS program and test compiles in REGION=7168K, from
+  6656K, the heaviest being FM912, whose interference graph wants 1MB
+  in one piece.  (The 2026-10-13 notes said 6144K, measured on eight
+  programs; FM509, FM910 and FM912 needed 6656K.)  How
+  large a unit fort370 and FORTRAN H each take is measured in
+  `bench/results-limits-2026-10-13.txt`; what bounds a unit now is its
+  8192 instructions.
+- A small subroutine kept whole for the inliner no longer keeps the
+  comment lines between its END and the next unit: the 600K test file,
+  a block of comments after each of 200 subroutines, had held 750K of
+  heap for them.
+- An undefined value -- a variable read before anything assigned it,
+  as FCVS FM718 does on a failure line -- is passed to a call as zero;
+  the code generator had looked up a register for it before the start
+  of its table.  The diagnostic messages say `f77:`.
+
 ## 2026-10-13
 
 Built from `b85619e`: FORT370.xmit SHA256 `ce198b41447fe930…`, 510,320

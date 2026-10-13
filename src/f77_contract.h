@@ -97,7 +97,7 @@ static int ty_size(int ty) {
 
 /* --- 3. alloca registry scanned by the SSA promoter ----------------- */
 
-#define HL_MAX_ALLOCA 4096
+#define HL_MAX_ALLOCA (8192 * F77_ROOM)   /* fort370: HIR_MAX_INST -- each is an ALLOCA instruction, so the list cannot fill first */
 static int hl_ainst[HL_MAX_ALLOCA];  /* HIR index of each ALLOCA */
 static int hl_aoff[HL_MAX_ALLOCA];   /* frame offset of each ALLOCA */
 static int hl_aslot[HL_MAX_ALLOCA];  /* the C parser's slot id; always 0 here

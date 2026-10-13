@@ -21,6 +21,6 @@ elif kind=='labels':
     for i in range(n): L.append('%5d A(%d)=A(%d)+1.0' % (i+2,i%100+1,(i*3)%100+1))
 elif kind=='vars':
     for i in range(n): L.append('      X%04d=%d.0' % (i,i))
-    L.append('      A(1)=' + '+'.join('X%04d'%i for i in range(0,n,max(1,n//20))))
+    L.append('      A(1)=' + '+'.join('X%04d'%i for i in range(0,n,max(1,n//8)))[:59].rstrip('+'))   # within column 72
 L += ['      WRITE(6,99999) A(1),K','99999 FORMAT(1X,E15.7,I8)','      STOP','      END']
 print('\n'.join(L))
