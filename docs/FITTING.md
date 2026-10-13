@@ -116,8 +116,8 @@ there.
 ## In the region, and running
 
 The day's work the previous section predicted, done: the static tables
-and code are 4.5MB, against 9.7MB, and the compiler runs on TK5 in
-REGION=8192K; the heaviest units compile in 6656K (the phases' tables,
+and code are 3.9MB, against 9.7MB, and the compiler runs on TK5 in
+REGION=8192K; the heaviest units compile in 6144K (the phases' tables,
 up to 1MB for the interference graph, come and go on the heap).
 
 | | before | after |
@@ -133,6 +133,7 @@ up to 1MB for the interference graph, come and go on the heap).
 | SSA construction, selection's costs, the graph's edges | static, all at once | allocated per phase, one at a time |
 | big frame buffers (8-33K, two in recursion) | the stack | the heap, or static |
 | libc370's stack | 256K | 128K; expressions nest 90 deep at most |
+| 34 per-instruction index tables | ints | halfwords (`hir_ix`), 560K |
 
 Every FCVS program and test compiled to the same assembler before and
 after each step, except where a step fixed something: the SSA stacks

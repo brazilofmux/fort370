@@ -649,8 +649,8 @@ static char *s370_r(int r) {
 /* Materialize an integer value (or address) into register d. */
 static void s370_load_into(int d, int v);
 static char *s370_memop_text(int ld, int s);
-static int s370_bxle_add[HIR_MAX_INST];   /* BRC -> the index-step ADD it performs, or -1 */
-static int s370_bxle_brc[HIR_MAX_INST];   /* ADD -> its BRC, or -1 */
+static hir_ix s370_bxle_add[HIR_MAX_INST];   /* BRC -> the index-step ADD it performs, or -1 */
+static hir_ix s370_bxle_brc[HIR_MAX_INST];   /* ADD -> its BRC, or -1 */
 static int s370_bxle_ok(int brc);
 
 /* Chain folding: a LOAD/STORE/ADDI address through ADDI chains to a

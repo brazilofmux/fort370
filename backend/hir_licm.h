@@ -34,11 +34,11 @@ static int licm_split_on = 1;        /* licm_split around each loop (a target ma
  * become a pointer induction variable; set by the S/370 emitter. */
 static int licm_no_ptr_iv;
 static int licm_tail[HIR_MAX_BLOCK];  /* last hoisted inst, for O(1) append */
-static int licm_next[HIR_MAX_INST];   /* next hoisted inst, -1 = end */
+static hir_ix licm_next[HIR_MAX_INST];   /* next hoisted inst, -1 = end */
 
 /* --- Old-to-clone mapping --- */
-static int licm_map[HIR_MAX_INST];    /* old index -> clone index, -1 = not hoisted */
-static int licm_cpin[HIR_MAX_INST];   /* ICONST clone placed in a preheader by
+static hir_ix licm_map[HIR_MAX_INST];    /* old index -> clone index, -1 = not hoisted */
+static hir_ix licm_cpin[HIR_MAX_INST];   /* ICONST clone placed in a preheader by
                                        * licm_fp64_consts; codegen pins it
                                        * (h_no_remat) so it can keep a pair */
 
@@ -119,7 +119,7 @@ static int licm_in_loop(int inst) {
  * - already marked as invariant (ho_use[inst] == 1) */
 static int licm_cur_header = -1;
 static int licm_cur_latch = -1;      /* back-edge source of the loop being hoisted */
-static int licm_ucnt[HIR_MAX_INST];  /* marked in-loop users, for the cheap-leaf rule */
+static hir_ix licm_ucnt[HIR_MAX_INST];  /* marked in-loop users, for the cheap-leaf rule */
 
 static int licm_operand_ok(int inst) {
     if (inst < 0) return 1;

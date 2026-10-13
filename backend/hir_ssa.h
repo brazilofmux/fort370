@@ -85,7 +85,7 @@ static int ssa_phi_base; /* h_ninst before phi insertion */
 
 /* --- PHI optimization (linked lists per block) --- */
 static int ssa_phi_head[HIR_MAX_BLOCK];
-static int ssa_phi_next[HIR_MAX_INST];
+static hir_ix ssa_phi_next[HIR_MAX_INST];
 
 /* hl_nparams defined in hir_lower.h (shared) */
 

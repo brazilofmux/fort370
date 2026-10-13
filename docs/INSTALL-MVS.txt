@@ -81,8 +81,8 @@ command on one line.
     //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 
   REGION=8192K is the recommendation.  The compiler's static tables are
-  about 4MB, and each phase takes up to 1MB more while it runs; the
-  largest units tested compile in 6656K.  (The 2026-10-12 package
+  about 3.5MB, and each phase takes up to 1MB more while it runs; the
+  largest units tested compile in 6144K.  (The 2026-10-12 package
   needs the full 8192K.)
 
   SYSIN is the source: fixed-form FORTRAN 77, any number of program

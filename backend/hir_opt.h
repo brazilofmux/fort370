@@ -12,7 +12,7 @@
  */
 
 /* Use count per instruction */
-static int ho_use[HIR_MAX_INST];
+static hir_ix ho_use[HIR_MAX_INST];
 static char ho_phi_vouched[HIR_MAX_INST];   /* ho_count_uses: this live phi has counted its args */
 
 /* Resolve COPY chains: follow src1 until non-COPY */
@@ -865,7 +865,7 @@ static int ho_dominates(int a, int b) {
 #define HO_CSE_MASK   2047
 
 static int ho_cse_head[HO_CSE_SLOTS];   /* slot -> first inst index, -1 if empty */
-static int ho_cse_next[HIR_MAX_INST];    /* inst -> next in chain, -1 if end */
+static hir_ix ho_cse_next[HIR_MAX_INST];    /* inst -> next in chain, -1 if end */
 static int ho_stat_cse;
 
 static int ho_cse_hash(int kind, int s1, int s2, int val) {

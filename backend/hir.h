@@ -134,6 +134,16 @@ char *getenv(const char *name);
 int atoi(const char *nptr);
 
 #define HIR_MAX_INST (8192 * F77_ROOM)   /* fort370: see F77_ROOM in f77.c */
+/* fort370: an instruction index, or a value no larger -- a block, a
+ * use count, a register, a list link.  A halfword on the S/370 build,
+ * where HIR_MAX_INST is 8,192 (32,768 with a host's room, still within a
+ * signed short with -1 to spare): thirty per-instruction tables take
+ * half the space.  The SLOW-32 reference build keeps ints. */
+#ifdef F77_TARGET_S370
+typedef short hir_ix;
+#else
+typedef int hir_ix;
+#endif
 #define HIR_MAX_BLOCK (1024 * F77_ROOM)
 #define HIR_MAX_CARG (8192 * F77_ROOM)
 #define HIR_MAX_PARG (8192 * F77_ROOM)
@@ -144,11 +154,11 @@ static int   s12cc_dump_intervals;  /* set by `-d` to dump per-fn live intervals
 /* --- Instruction parallel arrays --- */
 static signed char h_kind[HIR_MAX_INST];   /* fort370: a kind fits a byte (73 of them) */
 static short h_ty[HIR_MAX_INST];          /* fort370: a type with its flags fits 16 bits */
-static int   h_src1[HIR_MAX_INST];
-static int   h_src2[HIR_MAX_INST];
+static hir_ix   h_src1[HIR_MAX_INST];
+static hir_ix   h_src2[HIR_MAX_INST];
 static int   h_val[HIR_MAX_INST];
 static char *h_name[HIR_MAX_INST];
-static int   h_blk[HIR_MAX_INST];
+static hir_ix   h_blk[HIR_MAX_INST];
 static int   h_ninst;
 
 /* Call arguments (flat array, indexed per-call) */
@@ -233,7 +243,7 @@ static int hl_pp_inst[66];       /* HI_PARAM inst id per flat phys slot;
                                     all PARAMs are emitted before any
                                     param-copy code so incoming registers
                                     stay pinned across earlier copies */
-static int   h_cbase[HIR_MAX_INST];
+static hir_ix   h_cbase[HIR_MAX_INST];
 static int   h_ncarg;
 
 /* Jump-table targets (flat pool; per-HI_JMPTAB-instruction slice).
@@ -242,15 +252,15 @@ static int   h_ncarg;
  * these are block numbers, not value instructions. */
 #define HIR_MAX_JT (4096 * F77_ROOM)
 static int   hjt_target[HIR_MAX_JT];
-static int   hjt_base[HIR_MAX_INST];
-static int   hjt_span[HIR_MAX_INST];
+static hir_ix   hjt_base[HIR_MAX_INST];
+static hir_ix   hjt_span[HIR_MAX_INST];
 static int   hjt_n;
 
 /* Phi arguments (Phase B) */
 static int   h_pblk[HIR_MAX_PARG];
 static int   h_pval[HIR_MAX_PARG];
-static int   h_pbase[HIR_MAX_INST];
-static int   h_pcnt[HIR_MAX_INST];
+static hir_ix   h_pbase[HIR_MAX_INST];
+static hir_ix   h_pcnt[HIR_MAX_INST];
 static int   h_nparg;
 
 /* Basic blocks */

@@ -63,21 +63,21 @@ static signed char ra_mem_forced[HIR_MAX_INST];   /* iterated-spill victims, and
  * next odd one.  The loop pass marks the two values as partners; the
  * colouring prefers an aligned pair for them, and the emitter falls
  * back to AR/C/BC when it could not be had. */
-static int  ra_pair_of[HIR_MAX_INST];     /* partner, or -1 */
+static hir_ix  ra_pair_of[HIR_MAX_INST];     /* partner, or -1 */
 static char ra_pair_lo[HIR_MAX_INST];     /* 1 = wants the even register */
 static int  gc_pin[GC_MAX_NODE];          /* colour the partner asked for, or -1 */
 static int  gc_pair_inst[GC_MAX_NODE];    /* a pair-marked member of the node, or -1: survives coalescing */
 static void ra_dump_signed(int v);
 
 /* --- Output arrays --- */
-static int ra_reg[HIR_MAX_INST];
+static hir_ix ra_reg[HIR_MAX_INST];
 static int ra_spill_off[HIR_MAX_INST];
 static int ra_nslots;
 
 /* --- Live interval arrays --- */
-static int ra_pos[HIR_MAX_INST];
-static int ra_iend[HIR_MAX_INST];
-static int ra_order[HIR_MAX_INST];
+static hir_ix ra_pos[HIR_MAX_INST];
+static hir_ix ra_iend[HIR_MAX_INST];
+static hir_ix ra_order[HIR_MAX_INST];
 static int ra_norder;
 
 static int ra_stat_spills;
@@ -98,7 +98,7 @@ static int ra_can_reuse_src1(int k) {
 
 static int gc_nnode;
 static int gc_inst[GC_MAX_NODE];
-static int gc_node[HIR_MAX_INST];
+static hir_ix gc_node[HIR_MAX_INST];
 static char gc_cls[GC_MAX_NODE];
 
 static int gc_adj_head[GC_MAX_NODE];
@@ -474,9 +474,9 @@ static void ra_compute_ends(void) {
  * Step 3: spill slots, 8 bytes each, shared by live range
  * ================================================================= */
 
-static int ra_shead[HIR_MAX_INST];
-static int ra_snext[HIR_MAX_INST];
-static int ra_slot_end[HIR_MAX_INST];
+static hir_ix ra_shead[HIR_MAX_INST];
+static hir_ix ra_snext[HIR_MAX_INST];
+static hir_ix ra_slot_end[HIR_MAX_INST];
 
 static int ra_spill_wants_slot(int i) {
     if (ra_reg[i] >= 0) return 0;
@@ -730,8 +730,8 @@ static unsigned int *lv_pool_out;
 static int lv_pool_cap;
 static int lv_cap;
 static int lv_live_cap;
-static int lv_id[HIR_MAX_INST];
-static int lv_rev[HIR_MAX_INST];
+static hir_ix lv_id[HIR_MAX_INST];
+static hir_ix lv_rev[HIR_MAX_INST];
 static int lv_nid;
 static int lv_nw;
 static int lv_bstart[HIR_MAX_BLOCK];
