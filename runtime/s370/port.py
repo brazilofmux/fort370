@@ -56,7 +56,7 @@ h += ['', '/* the compiler\'s names for AINT/ANINT and their DOUBLE PRECISION fo
       'double f77_dint(double) __asm__("F77DINT");',
       'double f77_dnint(double) __asm__("F77DNINT");',
       '', '#endif', '']
-open('runtime/s370/f77rt.h', 'w').write('\n'.join(h))
+open('runtime/s370/f77rt.h', 'w', newline='\n').write('\n'.join(h))
 
 s = src
 def rep(old, new, count=1):
@@ -614,5 +614,5 @@ s = re.sub(r'snprintf\(nm, sizeof nm, ', 'sprintf(nm, ', s)
 left = [l for l in s.split('\n') if ('snprintf(' in l or 'strtod(' in l) and not l.strip().startswith('*') and 'fio_strtod' not in l]
 if left:
     sys.exit('port.py: C99 calls left:\n' + '\n'.join(left))
-open('runtime/s370/f77rt.c', 'w').write(s)
+open('runtime/s370/f77rt.c', 'w', newline='\n').write(s)
 print('port.py: %d entry points, f77rt.c and f77rt.h written' % len(protos))
