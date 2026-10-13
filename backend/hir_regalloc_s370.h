@@ -56,8 +56,8 @@ static int ra_class(int inst) { return ra_is_fpv(inst); }
 
 static int ra_class_k(int cls) { return cls ? RA_NFPR : ra_gpr_avail; }
 
-static int ra_crosses_call[HIR_MAX_INST];
-static int ra_mem_forced[HIR_MAX_INST];   /* iterated-spill victims, and floating values across calls */
+static signed char ra_crosses_call[HIR_MAX_INST];
+static signed char ra_mem_forced[HIR_MAX_INST];   /* iterated-spill victims, and floating values across calls */
 
 /* BXLE wants its increment in an even register and its limit in the
  * next odd one.  The loop pass marks the two values as partners; the
@@ -102,8 +102,13 @@ static int gc_node[HIR_MAX_INST];
 static char gc_cls[GC_MAX_NODE];
 
 static int gc_adj_head[GC_MAX_NODE];
-static int gc_adj_peer[GC_MAX_EDGE];
-static int gc_adj_next[GC_MAX_EDGE];
+/* An edge's peer node and the next edge of its list, in one word: the
+ * peer in the low 12 bits (GC_MAX_NODE is 4096), the next edge plus one
+ * above them (0 ends a list).  Two int arrays were 2MB of the region. */
+static unsigned int gc_adj[GC_MAX_EDGE];
+#define GC_PEER(e) ((int)(gc_adj[e] & 0xFFFu))
+#define GC_NEXT(e) ((int)(gc_adj[e] >> 12) - 1)
+#define GC_SETE(e, peer, next) (gc_adj[e] = ((unsigned)((next) + 1) << 12) | (unsigned)(peer))
 static int gc_nedge;
 
 static int gc_degree[GC_MAX_NODE];
@@ -598,8 +603,8 @@ static int gc_has_edge(int u, int v) {
     int e;
     e = gc_adj_head[u];
     while (e >= 0) {
-        if (gc_adj_peer[e] == v) return 1;
-        e = gc_adj_next[e];
+        if (GC_PEER(e) == v) return 1;
+        e = GC_NEXT(e);
     }
     return 0;
 }
@@ -629,13 +634,11 @@ static void gc_add_edge(int u, int v) {
         return;
     }
     e1 = gc_nedge;
-    gc_adj_peer[e1] = v;
-    gc_adj_next[e1] = gc_adj_head[u];
+    GC_SETE(e1, v, gc_adj_head[u]);
     gc_adj_head[u] = e1;
     gc_nedge = gc_nedge + 1;
     e2 = gc_nedge;
-    gc_adj_peer[e2] = u;
-    gc_adj_next[e2] = gc_adj_head[v];
+    GC_SETE(e2, u, gc_adj_head[v]);
     gc_adj_head[v] = e2;
     gc_nedge = gc_nedge + 1;
     gc_degree[u] = gc_degree[u] + 1;
@@ -710,8 +713,12 @@ static unsigned int *lv_out;
 static unsigned int *lv_live;
 static int lv_w;
 #define LV_BUDGET_WORDS 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
-static unsigned int lv_pool_in[LV_BUDGET_WORDS];
-static unsigned int lv_pool_out[LV_BUDGET_WORDS];
+/* fort370: the live-in and live-out sets of a unit, allocated at the
+ * size the largest unit so far has needed (at most LV_BUDGET_WORDS) --
+ * two static pools at the budget were half a megabyte of the region. */
+static unsigned int *lv_pool_in;
+static unsigned int *lv_pool_out;
+static int lv_pool_cap;
 static int lv_cap;
 static int lv_live_cap;
 static int lv_id[HIR_MAX_INST];
@@ -886,9 +893,19 @@ static void lv_prepare(void) {
     if (lv_nw == 0) lv_nw = 1;
     lv_w = lv_nw;
     if (bb_nblk * lv_w > LV_BUDGET_WORDS) return;
+    if (bb_nblk * lv_w > lv_pool_cap) {
+        int need;
+        need = bb_nblk * lv_w;
+        if (lv_pool_in) free(lv_pool_in);
+        if (lv_pool_out) free(lv_pool_out);
+        lv_pool_in = (unsigned int *)malloc((size_t)need * 4);
+        lv_pool_out = (unsigned int *)malloc((size_t)need * 4);
+        if (!lv_pool_in || !lv_pool_out) { fdputs("f77: out of memory for liveness sets\n", 2); exit(1); }
+        lv_pool_cap = need;
+    }
     lv_in = lv_pool_in;
     lv_out = lv_pool_out;
-    lv_cap = LV_BUDGET_WORDS;
+    lv_cap = lv_pool_cap;
     if (lv_w > lv_live_cap) {
         if (lv_live) free(lv_live);
         lv_live_cap = lv_w + 256;
@@ -1224,9 +1241,9 @@ static int gc_simplify(void) {
             gc_nsel = gc_nsel + 1;
             e = gc_adj_head[n];
             while (e >= 0) {
-                peer = gc_adj_peer[e];
+                peer = GC_PEER(e);
                 if (gc_wl[peer] != GC_WL_SELECT && gc_wl[peer] != GC_WL_COALESCED) gc_dec_degree(peer);
-                e = gc_adj_next[e];
+                e = GC_NEXT(e);
             }
             return 1;
         }
@@ -1239,12 +1256,12 @@ static int gc_george(int u, int v) {
     int e, t, kk;
     e = gc_adj_head[v];
     while (e >= 0) {
-        t = gc_adj_peer[e];
+        t = GC_PEER(e);
         if (gc_wl[t] != GC_WL_SELECT && gc_wl[t] != GC_WL_COALESCED) {
             kk = gc_k(t);
             if (gc_degree[t] >= kk && !gc_has_edge(t, u)) return 0;
         }
-        e = gc_adj_next[e];
+        e = GC_NEXT(e);
     }
     return 1;
 }
@@ -1255,19 +1272,19 @@ static int gc_briggs(int u, int v) {
     kk = gc_k(u);
     e = gc_adj_head[u];
     while (e >= 0) {
-        t = gc_adj_peer[e];
+        t = GC_PEER(e);
         if (gc_wl[t] != GC_WL_SELECT && gc_wl[t] != GC_WL_COALESCED && t != v) {
             if (gc_degree[t] >= kk) count = count + 1;
         }
-        e = gc_adj_next[e];
+        e = GC_NEXT(e);
     }
     e = gc_adj_head[v];
     while (e >= 0) {
-        t = gc_adj_peer[e];
+        t = GC_PEER(e);
         if (gc_wl[t] != GC_WL_SELECT && gc_wl[t] != GC_WL_COALESCED && t != u) {
             if (gc_degree[t] >= kk && !gc_has_edge(t, u)) count = count + 1;
         }
-        e = gc_adj_next[e];
+        e = GC_NEXT(e);
     }
     return count < kk;
 }
@@ -1281,12 +1298,12 @@ static void gc_combine(int u, int v) {
     while (e >= 0) { gc_add_node_move(u, gc_nmlist_mv[e]); e = gc_nmlist_next[e]; }
     e = gc_adj_head[v];
     while (e >= 0) {
-        t = gc_adj_peer[e];
+        t = GC_PEER(e);
         if (gc_wl[t] != GC_WL_COALESCED) {
             gc_add_edge(t, u);
             if (gc_wl[t] != GC_WL_SELECT) gc_dec_degree(t);
         }
-        e = gc_adj_next[e];
+        e = GC_NEXT(e);
     }
     if (gc_degree[u] >= gc_k(u) && gc_wl[u] == GC_WL_FREEZE) gc_wl[u] = GC_WL_SPILL;
 }
@@ -1502,11 +1519,11 @@ static void gc_select(void) {
         while (c < RA_NCOLORS) { used[c] = 0; c = c + 1; }
         e = gc_adj_head[n];
         while (e >= 0) {
-            peer = gc_adj_peer[e];
+            peer = GC_PEER(e);
             pa = gc_get_alias(peer);
             pc = gc_color[pa];
             if (pc >= 0 && pc < RA_NCOLORS) used[pc] = 1;
-            e = gc_adj_next[e];
+            e = GC_NEXT(e);
         }
         gc_color[n] = -1;
         if (gc_force_spill[n]) { gc_wl[n] = GC_WL_SPILL; i = i - 1; continue; }
@@ -1543,9 +1560,9 @@ static void gc_select(void) {
                 if (pn >= 0 && pn != n) {
                     e = gc_adj_head[pn];
                     while (e >= 0) {
-                        pc = gc_color[gc_get_alias(gc_adj_peer[e])];
+                        pc = gc_color[gc_get_alias(GC_PEER(e))];
                         if (pc >= 0 && pc < RA_NCOLORS) pused[pc] = 1;
-                        e = gc_adj_next[e];
+                        e = GC_NEXT(e);
                     }
                 }
                 c2 = 0;
@@ -1655,7 +1672,7 @@ static int gc_respill(void) {
             if (h_no_remat[gc_inst[n]] && hi_is_remat(h_kind[gc_inst[n]])) bcost = ra_pair_of[gc_inst[n]] >= 0 ? bcost * 2 : 0;
             e = gc_adj_head[n];
             while (e >= 0) {
-                a = gc_get_alias(gc_adj_peer[e]);
+                a = gc_get_alias(GC_PEER(e));
                 inst = gc_inst[a];
                 /* a victim must be of the node's own class: spilling a
                  * floating value frees no general register */
@@ -1665,7 +1682,7 @@ static int gc_respill(void) {
                     if (h_no_remat[inst] && hi_is_remat(h_kind[inst])) cost = ra_pair_of[inst] >= 0 ? cost * 2 : 0;
                     if (cost < bcost) { best = a; bcost = cost; }
                 }
-                e = gc_adj_next[e];
+                e = GC_NEXT(e);
             }
             inst = gc_inst[best];
             if (!ra_mem_forced[inst]) {

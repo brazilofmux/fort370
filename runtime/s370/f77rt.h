@@ -108,6 +108,7 @@ void f77_close(int unit, const char *status, int slen) __asm__("F77CLOSE");
 int f77_inquire(int unit, const char *file, int flen) __asm__("F77INQR");
 void f77_inq(int code, void *p, int len) __asm__("F77INQ");
 void f77_rewind(int unit) __asm__("F77REWND");
+int f77_lstrcmp(const char *a, int la, const char *b, int lb) __asm__("F77LSTRC");
 
 /* the compiler's names for AINT/ANINT and their DOUBLE PRECISION forms */
 double f77_dint(double) __asm__("F77DINT");

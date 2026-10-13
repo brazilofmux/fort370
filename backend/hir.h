@@ -142,8 +142,8 @@ int atoi(const char *nptr);
 static int   s12cc_dump_intervals;  /* set by `-d` to dump per-fn live intervals */
 
 /* --- Instruction parallel arrays --- */
-static int   h_kind[HIR_MAX_INST];
-static int   h_ty[HIR_MAX_INST];
+static signed char h_kind[HIR_MAX_INST];   /* fort370: a kind fits a byte (73 of them) */
+static short h_ty[HIR_MAX_INST];          /* fort370: a type with its flags fits 16 bits */
 static int   h_src1[HIR_MAX_INST];
 static int   h_src2[HIR_MAX_INST];
 static int   h_val[HIR_MAX_INST];
@@ -374,7 +374,7 @@ static int hi_is_remat(int kind) {
  * lui+addi rematerialized at every use (two instructions per loop
  * iteration), the value gets a graph node, a color, and one
  * materialization at its def.  Reset per function by that pass. */
-static int h_no_remat[HIR_MAX_INST];
+static short h_no_remat[HIR_MAX_INST];
 
 /* Instruction-level remat query: kind says remat, override says
  * keep it in a register.  Use wherever an instruction (not just a

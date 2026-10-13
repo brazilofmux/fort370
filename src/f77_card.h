@@ -39,7 +39,7 @@
 #define F77_CARD_H
 
 #define F77_MAX_STMT 8192
-#define F77_MAX_NAME 64
+#define F77_MAX_NAME 32   /* fort370: FORTRAN 77 names are six characters; 31 are kept */
 
 /* --- source state --- */
 static char *lx_src;
@@ -67,6 +67,17 @@ static void f77_error(char *msg);    /* supplied by the driver */
 /* --- character helpers ---------------------------------------------- */
 
 static int lx_isdigit(int c) { return c >= '0' && c <= '9'; }
+#ifdef __MVS__
+/* fort370: EBCDIC letters have gaps (i-j, r-s), so a range test would
+ * take the characters between them for letters; libc370's ctype knows. */
+static int lx_isalpha(int c) {
+    return (c >= 0 && c < 256 && isalpha(c)) || c == '_' || c == '$';
+}
+static int lx_upper(int c) {
+    if (c >= 0 && c < 256 && islower(c)) return toupper(c);
+    return c;
+}
+#else
 static int lx_isalpha(int c) {
     return (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') ||
            c == '_' || c == '$';
@@ -75,6 +86,7 @@ static int lx_upper(int c) {
     if (c >= 'a' && c <= 'z') return c - 'a' + 'A';
     return c;
 }
+#endif
 
 /* --- statement assembly --------------------------------------------- */
 

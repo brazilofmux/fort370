@@ -143,10 +143,14 @@ static int  f77_sintrinsic[F77_MAX_SYM]; /* named in INTRINSIC */
  * apart for list-directed output (T/F vs a number) is this flag on the
  * symbol, carried through expressions in ex_log. */
 static int  f77_slog[F77_MAX_SYM];
-static int  f77_imp_log[26];
+/* fort370: indexed by letter - 'A', which in EBCDIC runs to 40 ('A' to
+ * 'Z' has gaps there), so the tables span 'A'..'Z' in the execution
+ * character set: 26 on a host, 41 on MVS. */
+#define F77_IMP_N ('Z' - 'A' + 1)
+static int  f77_imp_log[F77_IMP_N];
 static int  ex_log;
 static int  f77_decl_log;              /* the type statement being parsed is LOGICAL */
-static int  f77_imp_len[26];           /* IMPLICIT CHARACTER*n per letter */
+static int  f77_imp_len[F77_IMP_N];           /* IMPLICIT CHARACTER*n per letter */
 static int  ex_len;
 static int  ex_clen;
 static int  f77_act_len;               /* length of the last f77_actual_addr, or -1 */
@@ -213,6 +217,8 @@ static int    f77_sparam[F77_MAX_SYM];
 static int    f77_spival[F77_MAX_SYM];
 static double f77_spdval[F77_MAX_SYM];
 static double f77_spdval2[F77_MAX_SYM];  /* COMPLEX PARAMETER: imaginary part */
+static char  *f77_sptext[F77_MAX_SYM];   /* fort370: the value's decimal text (f77_cx_t), or 0 */
+static char  *f77_sptext2[F77_MAX_SYM];
 
 /* Explicitly typed by a type declaration (or a typed FUNCTION
  * header): what IMPLICIT NONE checks, and what an IMPLICIT statement
@@ -223,7 +229,7 @@ static int    f77_styped[F77_MAX_SYM];
  * to the default rule (I-N INTEGER, the rest REAL) and the IMPLICIT
  * statement rewrites ranges; before the first bind (the phase-1 unit
  * scan) the default rule applies directly. */
-static int f77_imp_map[26];
+static int f77_imp_map[F77_IMP_N];
 static int f77_imp_ready;
 static int f77_imp_none;
 
@@ -899,13 +905,22 @@ static int f77_libm_f2(char *name, int a, int b) {
  * hexadecimal float, truncated as FORTRAN H does), which a host double
  * could not promise.  Literals keep the source spelling; values the
  * compiler made up are printed with enough digits to be exact. */
+/* A double the compiler made as decimal text for s370_hfp.h: an integral
+ * value exactly (0, 1, the common case -- and the same on every host);
+ * anything else to seventeen digits, exact for an IEEE double, which on
+ * MVS's HFP doubles and inexact printf it is not.  Literals never come
+ * here: they keep their source text (f77_cx_t, lex_ftext). */
+static void f77_dtext(double d, char *b) {
+    if (d == (double)(int)d && d > -1.0e9 && d < 1.0e9) { sprintf(b, "%d", (int)d); return; }
+    sprintf(b, "%.17g", d);
+}
 static int f77_fconst_text(char *text, int ty) {
     return hi_emit(HI_FCONST, ty, -1, -1, 0, strdup(text));
 }
 static int f77_dconst(double d, int *hi) {
     char b[40];
     *hi = -1;
-    snprintf(b, sizeof b, "%.17g", d);
+    f77_dtext(d, b);
     return f77_fconst_text(b, TY_DOUBLE);
 }
 #else
@@ -1031,7 +1046,7 @@ static int f77_iconst(int v) {
 #ifdef F77_NATIVE_F64
 static int f77_rconst(double d) {
     char b[40];
-    snprintf(b, sizeof b, "%.17g", d);
+    f77_dtext(d, b);
     return f77_fconst_text(b, TY_FLOAT);
 }
 #else
@@ -1781,7 +1796,15 @@ static int f77_primary(void) {
                 args[0] = a; args[1] = alen; args[2] = b; args[3] = ex_len;
                 ex_ty = TY_INT; ex_hi = -1;
                 if (in == IN_INDEX) return f77_call_i("f77_index", 4, args);
+#ifdef F77_TARGET_S370
+                /* LGE and its kin compare in ASCII's order (15.10), which on
+                 * an EBCDIC machine is not the machine's: the MVS runtime's
+                 * f77_lstrcmp translates; the relational operators keep the
+                 * native order through f77_strcmp */
+                a = f77_call_i("f77_lstrcmp", 4, args);
+#else
                 a = f77_call_i("f77_strcmp", 4, args);
+#endif
                 ex_log = 1;
                 if (in == IN_LGE) return hi_emit(HI_SGE, TY_INT, a, f77_iconst(0), 0, NULL);
                 if (in == IN_LGT) return hi_emit(HI_SGT, TY_INT, a, f77_iconst(0), 0, NULL);
@@ -2073,9 +2096,15 @@ static int f77_primary(void) {
         if (f77_sparam[s]) {            /* named constant: fold in place */
             ex_ty = f77_sty[s];
             ex_log = f77_slog[s];
-            if (ex_ty == TY_CPLX) { ex_hi = f77_rconst(f77_spdval2[s]); return f77_rconst(f77_spdval[s]); }
-            if (ex_ty == TY_DOUBLE) return f77_dconst(f77_spdval[s], &ex_hi);
-            if (ex_ty == TY_FLOAT) return f77_rconst(f77_spdval[s]);
+            if (ex_ty == TY_CPLX) {
+                ex_hi = f77_sptext2[s] ? f77_fconst_text(f77_sptext2[s], TY_FLOAT) : f77_rconst(f77_spdval2[s]);
+                return f77_sptext[s] ? f77_fconst_text(f77_sptext[s], TY_FLOAT) : f77_rconst(f77_spdval[s]);
+            }
+            if (ex_ty == TY_DOUBLE) {
+                if (f77_sptext[s]) { ex_hi = -1; return f77_fconst_text(f77_sptext[s], TY_DOUBLE); }
+                return f77_dconst(f77_spdval[s], &ex_hi);
+            }
+            if (ex_ty == TY_FLOAT) return f77_sptext[s] ? f77_fconst_text(f77_sptext[s], TY_FLOAT) : f77_rconst(f77_spdval[s]);
             return f77_iconst(f77_spival[s]);
         }
         if (lx_t == T_LP && f77_srank[s] > 0) {
@@ -2964,6 +2993,36 @@ static int    f77_cx_i;
 static double f77_cx_d;
 static int    f77_cx_sidx;   /* TY_CHAR: string index; f77_cx_i is the length */
 static double f77_cx_d2;     /* TY_CPLX: the imaginary part (f77_cx_d is the real) */
+/* fort370: the value's decimal text, when it is one: a literal (possibly
+ * signed) or an integer, "" after real arithmetic.  A floating constant
+ * is converted to HFP from text (s370_hfp.h); through a host double it
+ * would depend on the host's floating point and its printf, and the
+ * compiler on MVS, whose doubles are HFP and whose printf is inexact,
+ * would not emit what the compiler on a host emits. */
+static char   f77_cx_t[64];
+static char   f77_cx_t2[64];  /* TY_CPLX: the imaginary part's */
+static void f77_cx_settext(char *t, const char *v) {
+    int n;
+    n = (int)strlen(v);
+    if (n >= 63) { t[0] = 0; return; }     /* too long to keep: the double serves */
+    memcpy(t, v, (size_t)n + 1);
+}
+static void f77_cx_negtext(char *t) {
+    int n;
+    if (!t[0]) return;
+    if (t[0] == '-') { memmove(t, t + 1, strlen(t)); return; }
+    if (t[0] == '+') { t[0] = '-'; return; }
+    n = (int)strlen(t);
+    if (n >= 62) { t[0] = 0; return; }
+    memmove(t + 1, t, (size_t)n + 1);
+    t[0] = '-';
+}
+/* After arithmetic: an integer result has exact text, a real one none. */
+static void f77_cx_arith_text(void) {
+    if (f77_cx_ty == TY_INT) sprintf(f77_cx_t, "%d", f77_cx_i);
+    else f77_cx_t[0] = 0;
+    f77_cx_t2[0] = 0;
+}
 #define F77_MAX_CXB 8
 static char f77_cxb_name[F77_MAX_CXB][F77_MAX_NAME];
 static int  f77_cxb_val[F77_MAX_CXB];
@@ -2974,12 +3033,14 @@ static void f77_cexpr(void);
 static void f77_cprimary(void) {
     if (lx_t == T_SCON) {
         f77_cx_ty = TY_CHAR; f77_cx_sidx = lex_sidx; f77_cx_i = lex_slen; f77_cx_d = 0.0;
+        f77_cx_t[0] = 0; f77_cx_t2[0] = 0;
         f77_tok();
         return;
     }
-    if (lx_t == T_ICON) { f77_cx_ty = TY_INT; f77_cx_i = lex_ival; f77_cx_d = (double)lex_ival; f77_tok(); return; }
-    if (lx_t == T_RCON) { f77_cx_ty = TY_FLOAT; f77_cx_d = lex_dval; f77_cx_i = (int)lex_dval; f77_tok(); return; }
-    if (lx_t == T_DCON) { f77_cx_ty = TY_DOUBLE; f77_cx_d = lex_dval; f77_cx_i = (int)lex_dval; f77_tok(); return; }
+    f77_cx_t[0] = 0; f77_cx_t2[0] = 0;
+    if (lx_t == T_ICON) { f77_cx_ty = TY_INT; f77_cx_i = lex_ival; f77_cx_d = (double)lex_ival; sprintf(f77_cx_t, "%d", lex_ival); f77_tok(); return; }
+    if (lx_t == T_RCON) { f77_cx_ty = TY_FLOAT; f77_cx_d = lex_dval; f77_cx_i = (int)lex_dval; f77_cx_settext(f77_cx_t, lex_ftext); f77_tok(); return; }
+    if (lx_t == T_DCON) { f77_cx_ty = TY_DOUBLE; f77_cx_d = lex_dval; f77_cx_i = (int)lex_dval; f77_cx_settext(f77_cx_t, lex_ftext); f77_tok(); return; }
     if (lx_t == T_TRUE)  { f77_cx_ty = TY_INT; f77_cx_i = 1; f77_cx_d = 1.0; f77_tok(); return; }
     if (lx_t == T_FALSE) { f77_cx_ty = TY_INT; f77_cx_i = 0; f77_cx_d = 0.0; f77_tok(); return; }
     if (lx_t == T_LP) {
@@ -2987,12 +3048,16 @@ static void f77_cprimary(void) {
         f77_cexpr();
         if (lx_t == T_COMMA) {
             double re;
+            char ret[64];
             re = f77_cx_d;
+            strcpy(ret, f77_cx_t);
             f77_tok();
             f77_cexpr();
             if (lx_t != T_RP) { f77_error("expected ) after complex constant"); return; }
             f77_tok();
             f77_cx_d2 = f77_cx_d;
+            strcpy(f77_cx_t2, f77_cx_t);
+            strcpy(f77_cx_t, ret);
             f77_cx_d = re;
             f77_cx_ty = TY_CPLX;
             f77_cx_i = (int)re;
@@ -3007,6 +3072,9 @@ static void f77_cprimary(void) {
         f77_cprimary();
         f77_cx_i = 0 - f77_cx_i;
         f77_cx_d = 0.0 - f77_cx_d;
+        if (f77_cx_ty == TY_INT) sprintf(f77_cx_t, "%d", f77_cx_i);
+        else if (f77_cx_ty == TY_CPLX) { f77_cx_d2 = 0.0 - f77_cx_d2; f77_cx_negtext(f77_cx_t); f77_cx_negtext(f77_cx_t2); }
+        else f77_cx_negtext(f77_cx_t);
         return;
     }
     if (lx_t == T_PLUS) { f77_tok(); f77_cprimary(); return; }
@@ -3016,6 +3084,7 @@ static void f77_cprimary(void) {
         for (b = f77_cxb_n - 1; b >= 0; b--) {
             if (strcmp(f77_cxb_name[b], lex_name) == 0) {
                 f77_cx_ty = TY_INT; f77_cx_i = f77_cxb_val[b]; f77_cx_d = (double)f77_cx_i;
+                sprintf(f77_cx_t, "%d", f77_cx_i);
                 f77_tok();
                 return;
             }
@@ -3035,6 +3104,12 @@ static void f77_cprimary(void) {
         f77_cx_ty = f77_sty[s];
         f77_cx_i = f77_spival[s];
         f77_cx_d = f77_spdval[s];
+        if (f77_cx_ty == TY_CPLX) f77_cx_d2 = f77_spdval2[s];
+        if (f77_cx_ty == TY_INT) sprintf(f77_cx_t, "%d", f77_cx_i);
+        else {
+            if (f77_sptext[s]) strcpy(f77_cx_t, f77_sptext[s]);
+            if (f77_sptext2[s]) strcpy(f77_cx_t2, f77_sptext2[s]);
+        }
         f77_tok();
         return;
     }
@@ -3072,6 +3147,7 @@ static void f77_cterm(void) {
         }
         if (f77_cx_ty == TY_INT) f77_cx_d = (double)f77_cx_i;
         else f77_cx_i = (int)f77_cx_d;
+        f77_cx_arith_text();
     }
 }
 
@@ -3090,6 +3166,7 @@ static void f77_cexpr(void) {
         else     { f77_cx_i = iv - f77_cx_i; f77_cx_d = dv - f77_cx_d; }
         if (f77_cx_ty == TY_INT) f77_cx_d = (double)f77_cx_i;
         else f77_cx_i = (int)f77_cx_d;
+        f77_cx_arith_text();
     }
 }
 
@@ -3601,6 +3678,8 @@ static void f77_stmt_parameter(int skip) {
             f77_spdval[s] = (f77_cx_ty == TY_INT) ? (double)f77_cx_i : f77_cx_d;
             f77_spdval2[s] = (f77_cx_ty == TY_CPLX) ? f77_cx_d2 : 0.0;
             f77_spival[s] = (int)f77_spdval[s];
+            f77_sptext[s] = f77_cx_t[0] ? strdup(f77_cx_t) : 0;
+            f77_sptext2[s] = (f77_cx_ty == TY_CPLX) ? (f77_cx_t2[0] ? strdup(f77_cx_t2) : 0) : strdup("0");
         } else if (f77_sty[s] == TY_INT) {
             f77_spival[s] = (f77_cx_ty == TY_INT) ? f77_cx_i : (int)f77_cx_d;
             f77_spdval[s] = (double)f77_spival[s];
@@ -3609,6 +3688,7 @@ static void f77_stmt_parameter(int skip) {
             if (f77_sty[s] == TY_FLOAT)
                 f77_spdval[s] = (double)(float)f77_spdval[s];
             f77_spival[s] = (int)f77_spdval[s];
+            f77_sptext[s] = f77_cx_t[0] ? strdup(f77_cx_t) : 0;
         }
         if (lx_t != T_COMMA) break;
         f77_tok();
@@ -3633,6 +3713,8 @@ static int    f77_di_i[F77_MAX_DINIT];
 static double f77_di_d[F77_MAX_DINIT];
 static int    f77_di_sidx[F77_MAX_DINIT];
 static double f77_di_d2[F77_MAX_DINIT];
+static char  *f77_di_t[F77_MAX_DINIT];    /* fort370: the value's decimal text, or 0 */
+static char  *f77_di_t2[F77_MAX_DINIT];
 static int    f77_di_sub[F77_MAX_DINIT];   /* substring target: byte length, elem is a byte offset */
 static int    f77_di_n;
 
@@ -3660,7 +3742,12 @@ static unsigned char f77_a2e[256] = {
     0x44, 0x45, 0x42, 0x46, 0x43, 0x47, 0x9C, 0x48, 0x54, 0x51, 0x52, 0x53, 0x58, 0x55, 0x56, 0x57,
     0x8C, 0x49, 0xCD, 0xCE, 0xCB, 0xCF, 0xCC, 0xE1, 0x70, 0xDD, 0xDE, 0xDB, 0xDC, 0x8D, 0x8E, 0xDF,
 };
+#ifdef __MVS__
+/* the source is EBCDIC already when the compiler runs on MVS */
+static unsigned char f77_target_char(unsigned char c) { return c; }
+#else
 static unsigned char f77_target_char(unsigned char c) { return f77_a2e[c]; }
+#endif
 static void f77_image_int(unsigned char *p, unsigned int v, int n) {
     int k;
     for (k = 0; k < n; k++) p[k] = (unsigned char)((v >> ((n - 1 - k) * 8)) & 255);
@@ -3668,10 +3755,20 @@ static void f77_image_int(unsigned char *p, unsigned int v, int n) {
 static void f77_image_fp(unsigned char *p, double d, int bytes) {
     char b[40];
     unsigned int hi, lo;
-    snprintf(b, sizeof b, "%.17g", d);
+    f77_dtext(d, b);
     if (hfp_from_text(b, &hi, &lo) < 0) { hi = 0; lo = 0; }
     f77_image_int(p, hi, 4);
     if (bytes == 8) f77_image_int(p + 4, lo, 4);
+}
+/* From the constant's own text when there is one (f77_cx_t). */
+static void f77_image_fpt(unsigned char *p, const char *t, double d, int bytes) {
+    unsigned int hi, lo;
+    if (t && hfp_from_text(t, &hi, &lo) >= 0) {
+        f77_image_int(p, hi, 4);
+        if (bytes == 8) f77_image_int(p + 4, lo, 4);
+        return;
+    }
+    f77_image_fp(p, d, bytes);
 }
 #else
 static unsigned char f77_target_char(unsigned char c) { return c; }
@@ -3679,6 +3776,7 @@ static void f77_image_int(unsigned char *p, unsigned int v, int n) {
     int k;
     for (k = 0; k < n; k++) p[k] = (unsigned char)((v >> (k * 8)) & 255);
 }
+static void f77_image_fpt(unsigned char *p, const char *t, double d, int bytes);
 static void f77_image_fp(unsigned char *p, double d, int bytes) {
     int k;
     if (bytes == 8) {
@@ -3691,6 +3789,10 @@ static void f77_image_fp(unsigned char *p, double d, int bytes) {
         for (k = 0; k < 4; k++) p[k] = u.b[k];
     }
 }
+static void f77_image_fpt(unsigned char *p, const char *t, double d, int bytes) {
+    (void)t;
+    f77_image_fp(p, d, bytes);
+}
 #endif
 
 /* One DATA constant: sign, literal, .TRUE./.FALSE., or a PARAMETER
@@ -3701,24 +3803,29 @@ static void f77_data_const(void) {
     neg = 0;
     if (lx_t == T_MINUS) { neg = 1; f77_tok(); }
     else if (lx_t == T_PLUS) f77_tok();
-    if (lx_t == T_ICON) { f77_cx_ty = TY_INT; f77_cx_i = lex_ival; f77_cx_d = (double)lex_ival; f77_tok(); }
-    else if (lx_t == T_RCON) { f77_cx_ty = TY_FLOAT; f77_cx_d = lex_dval; f77_cx_i = (int)lex_dval; f77_tok(); }
-    else if (lx_t == T_DCON) { f77_cx_ty = TY_DOUBLE; f77_cx_d = lex_dval; f77_cx_i = (int)lex_dval; f77_tok(); }
+    f77_cx_t[0] = 0; f77_cx_t2[0] = 0;
+    if (lx_t == T_ICON) { f77_cx_ty = TY_INT; f77_cx_i = lex_ival; f77_cx_d = (double)lex_ival; sprintf(f77_cx_t, "%d", lex_ival); f77_tok(); }
+    else if (lx_t == T_RCON) { f77_cx_ty = TY_FLOAT; f77_cx_d = lex_dval; f77_cx_i = (int)lex_dval; f77_cx_settext(f77_cx_t, lex_ftext); f77_tok(); }
+    else if (lx_t == T_DCON) { f77_cx_ty = TY_DOUBLE; f77_cx_d = lex_dval; f77_cx_i = (int)lex_dval; f77_cx_settext(f77_cx_t, lex_ftext); f77_tok(); }
     else if (lx_t == T_TRUE)  { f77_cx_ty = TY_INT; f77_cx_i = 1; f77_cx_d = 1.0; f77_tok(); }
     else if (lx_t == T_FALSE) { f77_cx_ty = TY_INT; f77_cx_i = 0; f77_cx_d = 0.0; f77_tok(); }
     else if (lx_t == T_SCON) { f77_cx_ty = TY_CHAR; f77_cx_sidx = lex_sidx; f77_cx_i = lex_slen; f77_cx_d = 0.0; f77_tok(); }
     else if (lx_t == T_LP) {
         /* (re, im) */
         double re;
+        char ret[64];
         f77_tok();
         f77_data_const();
         re = f77_cx_d;
+        strcpy(ret, f77_cx_t);
         if (lx_t != T_COMMA) { f77_error("expected , in complex constant"); return; }
         f77_tok();
         f77_data_const();
         if (lx_t != T_RP) { f77_error("expected ) after complex constant"); return; }
         f77_tok();
         f77_cx_d2 = f77_cx_d;
+        strcpy(f77_cx_t2, f77_cx_t);
+        strcpy(f77_cx_t, ret);
         f77_cx_d = re;
         f77_cx_ty = TY_CPLX;
         f77_cx_i = (int)re;
@@ -3732,13 +3839,23 @@ static void f77_data_const(void) {
         f77_cx_d = f77_spdval[s];
         f77_cx_d2 = f77_spdval2[s];
         if (f77_cx_ty == TY_CHAR) { f77_cx_sidx = f77_spstr[s]; f77_cx_i = f77_slen[s]; }
+        else if (f77_cx_ty == TY_INT) sprintf(f77_cx_t, "%d", f77_cx_i);
+        else {
+            if (f77_sptext[s]) strcpy(f77_cx_t, f77_sptext[s]);
+            if (f77_sptext2[s]) strcpy(f77_cx_t2, f77_sptext2[s]);
+        }
         f77_tok();
     } else {
         f77_error("DATA value must be a constant");
         f77_cx_ty = TY_INT; f77_cx_i = 0; f77_cx_d = 0.0;
         return;
     }
-    if (neg) { f77_cx_i = 0 - f77_cx_i; f77_cx_d = 0.0 - f77_cx_d; }
+    if (neg) {
+        f77_cx_i = 0 - f77_cx_i;
+        f77_cx_d = 0.0 - f77_cx_d;
+        if (f77_cx_ty == TY_INT) sprintf(f77_cx_t, "%d", f77_cx_i);
+        else f77_cx_negtext(f77_cx_t);
+    }
 }
 
 #define F77_MAX_DTGT 1024
@@ -3918,6 +4035,8 @@ static void f77_stmt_data(int skip) {
                     f77_di_d[f77_di_n] = f77_cx_d;
                     f77_di_sidx[f77_di_n] = f77_cx_sidx;
                     f77_di_d2[f77_di_n] = f77_cx_d2;
+                    f77_di_t[f77_di_n] = f77_cx_t[0] ? strdup(f77_cx_t) : 0;
+                    f77_di_t2[f77_di_n] = f77_cx_t2[0] ? strdup(f77_cx_t2) : 0;
                     f77_di_sub[f77_di_n] = f77_dt_sublen[ti];
                     f77_di_n = f77_di_n + 1;
                     te = te + 1;
@@ -4291,15 +4410,15 @@ static void f77_layout_static(void) {
             f77_error("a CHARACTER item needs a character constant in DATA");
             return;
         } else if (f77_sty[s] == TY_CPLX) {
-            f77_image_fp(ps_ginit_pool + off,
+            f77_image_fpt(ps_ginit_pool + off, f77_di_t[i],
                          (f77_di_ty[i] == TY_INT) ? (double)f77_di_i[i] : f77_di_d[i], 4);
-            f77_image_fp(ps_ginit_pool + off + 4,
+            f77_image_fpt(ps_ginit_pool + off + 4, (f77_di_ty[i] == TY_CPLX) ? f77_di_t2[i] : "0",
                          (f77_di_ty[i] == TY_CPLX) ? f77_di_d2[i] : 0.0, 4);
         } else if (f77_sty[s] == TY_DOUBLE) {
-            f77_image_fp(ps_ginit_pool + off,
+            f77_image_fpt(ps_ginit_pool + off, f77_di_t[i],
                          (f77_di_ty[i] == TY_INT) ? (double)f77_di_i[i] : f77_di_d[i], 8);
         } else if (f77_sty[s] == TY_FLOAT) {
-            f77_image_fp(ps_ginit_pool + off,
+            f77_image_fpt(ps_ginit_pool + off, f77_di_t[i],
                          (f77_di_ty[i] == TY_INT) ? (double)f77_di_i[i] : f77_di_d[i], 4);
         } else {
             int v;
@@ -5409,7 +5528,7 @@ static void f77_bind_unit(int u) {
     /* Reset the implicit-typing map to the default rule. */
     {
         int c;
-        for (c = 0; c < 26; c++) {
+        for (c = 0; c < F77_IMP_N; c++) {
             f77_imp_map[c] = (c >= 'I' - 'A' && c <= 'N' - 'A') ? TY_INT : TY_FLOAT;
             f77_imp_len[c] = 1;
             f77_imp_log[c] = 0;

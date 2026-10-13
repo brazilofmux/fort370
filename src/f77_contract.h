@@ -32,8 +32,14 @@
 
 /* --- 1. diagnostic output ------------------------------------------ */
 
+#ifdef F77_TARGET_S370
+/* fort370: stdio, which libc370 has; fd 2 is stderr, anything else stdout */
+static void fdputs(char *s, int fd) { fputs(s, fd == 2 ? stderr : stdout); }
+static void fdputc(int c, int fd) { fputc(c, fd == 2 ? stderr : stdout); }
+#else
 static void fdputs(char *s, int fd) { write(fd, s, strlen(s)); }
 static void fdputc(int c, int fd) { char b; b = (char)c; write(fd, &b, 1); }
+#endif
 static void fdputuint(int fd, unsigned int v) {
     char b[16];
     int n;
@@ -119,7 +125,7 @@ static void  hl_inl_prepare(Node *prog) { (void)prog; }
 
 /* --- 4. global data tables walked by gen_data() --------------------- */
 
-#define P_MAX_GLOBALS 8192
+#define P_MAX_GLOBALS 2048   /* fort370: COMMON blocks, unit areas and DATA objects of one source file */
 #define PS_MAX_INIT_POOL 65536   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 #define PS_MAX_INIT_RELOCS 8192
 

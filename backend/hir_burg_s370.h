@@ -56,16 +56,16 @@ static int bg_nchain;
 #define BG_MAX_INST 8192   /* fort370: one unit in an 8MB region, docs/FITTING.md */
 #define BG_COST_SZ (BG_MAX_INST * BG_NNT)
 static int bg_cost[BG_COST_SZ];
-static int bg_rule[BG_COST_SZ];
+static short bg_rule[BG_COST_SZ];   /* fort370: a rule number, or -1, or -(chain+2) */
 
 static int bg_sel[HIR_MAX_INST];
-static int bg_fold[HIR_MAX_INST];
+static signed char bg_fold[HIR_MAX_INST];
 static int bg_uses[HIR_MAX_INST];
 static int bg_foff[HIR_MAX_INST];   /* offset within the ALLOCA's object along an ADDI chain */
 static int bg_ssym[HIR_MAX_INST];
 static int bg_soff[HIR_MAX_INST];
-static int bg_memop[HIR_MAX_INST];    /* 0; 1 = src1 is a folded MEM; 2 = src2 is */
-static int bg_fold_kind[HIR_MAX_INST]; /* a folded instruction's kind before it became a NOP */
+static signed char bg_memop[HIR_MAX_INST];    /* 0; 1 = src1 is a folded MEM; 2 = src2 is */
+static signed char bg_fold_kind[HIR_MAX_INST]; /* a folded instruction's kind before it became a NOP */
 static char bg_need_reg[HIR_MAX_INST];  /* some user reads this value from a register */
 
 /* The kind of an instruction as the address parsers need it: folded
@@ -75,7 +75,7 @@ static int bg_kind(int i) {
     if (bg_fold[i]) return bg_fold_kind[i];
     return h_kind[i];
 }
-static int bg_mem_lnt[HIR_MAX_INST];  /* for a folded LOAD: its address nonterminal */
+static signed char bg_mem_lnt[HIR_MAX_INST];  /* for a folded LOAD: its address nonterminal */
 
 /* Filled by the emitter's layout pass before hir_burg(): for an ALLOCA,
  * its byte offset in the unit's static area, or -1 when it lies past
@@ -937,7 +937,7 @@ static void hir_burg(void) {
 
 static int hcg_brc_fuse[HIR_MAX_INST];
 static int hcg_cmp_fused[HIR_MAX_INST];
-static int hcg_cmp_kind[HIR_MAX_INST];
+static signed char hcg_cmp_kind[HIR_MAX_INST];
 
 static int hcg_is_cmp(int k) {
     return (k >= HI_SEQ && k <= HI_SGEU) || k == HI_FEQ || k == HI_FLT || k == HI_FLE;

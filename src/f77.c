@@ -14,8 +14,11 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <ctype.h>
+#ifndef __MVS__
 #include <unistd.h>
 #include <fcntl.h>
+#endif
 
 /* Windows opens files in text mode unless told; the output must be the
  * same bytes on every host. */
@@ -413,8 +416,52 @@ static void hl_func(Node *fn) {
 
 int main(int argc, char **argv) {
     static char src[1 << 18];   /* fort370: one unit in an 8MB region, docs/FITTING.md */
-    int fd;
     int n;
+#ifdef F77_TARGET_S370
+    /* stdio, which every host and libc370 have.  On MVS the source is
+     * the SYSIN DD and the assembler goes to SYSPUNCH, as cobc370's do,
+     * both as records (text); on a host both are files, as bytes. */
+    FILE *fin;
+    FILE *fout;
+    char *inname;
+    char *outname;
+#ifdef __MVS__
+    /* SYSIN is libc370's stdin, already open: reading it there rather
+     * than opening dd:SYSIN a second time lets it be DD * (a second open
+     * of instream data is the one JES2 refuses, S013-C0) */
+    inname = argc > 1 ? argv[1] : "dd:SYSIN";
+    outname = argc > 2 ? argv[2] : "dd:SYSPUNCH";
+    fin = argc > 1 ? fopen(inname, "r") : stdin;
+#else
+    if (argc < 3) {
+        fdputs("usage: f77 source.f output.asm\n", 2);
+        return 1;
+    }
+    inname = argv[1];
+    outname = argv[2];
+    fin = fopen(inname, "rb");
+#endif
+    if (!fin) {
+        fdputs("f77: cannot open ", 2);
+        fdputs(inname, 2);
+        fdputc('\n', 2);
+        return 1;
+    }
+    n = 0;
+    while (n < (int)sizeof(src) - 1) {
+        size_t k;
+        k = fread(src + n, 1, sizeof(src) - 1 - (size_t)n, fin);
+        if (k == 0) break;
+        n = n + (int)k;
+    }
+    if (n >= (int)sizeof(src) - 1 && fgetc(fin) != EOF) {
+        fdputs("f77: source longer than 256K\n", 2);
+        return 1;
+    }
+    src[n] = 0;
+    if (fin != stdin) fclose(fin);
+#else
+    int fd;
 
     if (argc < 3) {
         fdputs("usage: f77 source.f output.s\n", 2);
@@ -432,6 +479,7 @@ int main(int argc, char **argv) {
     if (n < 0) n = 0;
     src[n] = 0;
     close(fd);
+#endif
 
     lx_src = src;
     lx_len = n;
@@ -459,6 +507,25 @@ int main(int argc, char **argv) {
     /* The output is opened before code generation: the emitter flushes
      * its buffer to it whenever the buffer fills (a full buffer used to
      * be a silent drop). */
+#ifdef F77_TARGET_S370
+#ifdef __MVS__
+    fout = fopen(outname, "w");
+#else
+    fout = fopen(outname, "wb");
+#endif
+    if (!fout) {
+        fdputs("f77: cannot open output\n", 2);
+        return 1;
+    }
+    cg_fp = fout;
+    cg_outpath = outname;
+    gen_program(&f77_program);
+    cg_flush();
+    if (fclose(fout) != 0) {
+        fdputs("f77: the output could not be written\n", 2);
+        return 1;
+    }
+#else
     fd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
     if (fd < 0) {
         fdputs("f77: cannot open output\n", 2);
@@ -469,6 +536,7 @@ int main(int argc, char **argv) {
     gen_program(&f77_program);
     cg_flush();
     close(fd);
+#endif
 
     if (getenv("HIR_PAIR_STATS")) {
         int z;
@@ -491,7 +559,13 @@ int main(int argc, char **argv) {
     }
     if (f77_nerr > 0) {
         fdputs("f77: compilation failed\n", 2);
+#ifdef F77_TARGET_S370
+#ifndef __MVS__
+        remove(outname);    /* on MVS the DD's data set is the job's */
+#endif
+#else
         unlink(argv[2]);
+#endif
         return 1;
     }
     return 0;

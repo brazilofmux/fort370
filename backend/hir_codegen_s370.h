@@ -24,21 +24,17 @@
 /* Output                                                            */
 /* ---------------------------------------------------------------- */
 
-#define CG_MAX_OUT 262144   /* fort370: one unit in an 8MB region, docs/FITTING.md */
+#define CG_MAX_OUT 32768    /* flushed whenever it fills */
 static char cg_out[CG_MAX_OUT];
 static int  cg_olen;
-static int  cg_fd = -1;
+static FILE *cg_fp;
 static char *cg_outpath;
 
 static void cg_flush(void) {
-    int off;
-    int n;
-    if (cg_fd < 0) { cg_olen = 0; return; }
-    off = 0;
-    while (off < cg_olen) {
-        n = write(cg_fd, &cg_out[off], cg_olen - off);
-        if (n <= 0) { fdputs("f77: write failed\n", 2); exit(1); }
-        off = off + n;
+    if (!cg_fp) { cg_olen = 0; return; }
+    if (cg_olen > 0 && fwrite(cg_out, 1, (size_t)cg_olen, cg_fp) != (size_t)cg_olen) {
+        fdputs("f77: write failed\n", 2);
+        exit(1);
     }
     cg_olen = 0;
 }
@@ -100,7 +96,7 @@ static int s370_scache[16];
  * (the BALR 12,0) is "far": a branch to it loads its address into R15
  * from the pool and branches 0(,15).  A sizing pass (cg_dry) finds
  * them before the real one; see s370_gen_unit. */
-#define S370_MAX_ULBL 32768
+#define S370_MAX_ULBL 8192    /* fort370: labels in one unit; a unit past it is refused */
 static int  s370_lbl_base;
 static int  s370_lbl_pc[S370_MAX_ULBL];
 static char s370_far[S370_MAX_ULBL];
@@ -262,7 +258,7 @@ static char *s370_extname(char *name) {
     }
     i = 0;
     while (name[i] && i < 8) {
-        s370_nbuf[i] = (char)((name[i] >= 'a' && name[i] <= 'z') ? name[i] - 32 : name[i]);
+        s370_nbuf[i] = (char)toupper((unsigned char)name[i]);   /* fort370: not - 32, which is ASCII's */
         if (s370_nbuf[i] == '_') s370_nbuf[i] = '@';
         i = i + 1;
     }
@@ -2316,7 +2312,11 @@ static void s370_emit_dc_string(char *label, unsigned char *s, int len) {
             int c;
             c = s[i];
             if (c == '\'' || c == '&') { f_c(c); f_c(c); }
+#ifdef __MVS__
+            else if (!isprint(c)) f_c('?');          /* EBCDIC: printable is not 32..126 */
+#else
             else if (c < 32 || c > 126) f_c('?');
+#endif
             else f_c(c);
             i = i + 1;
             n = n + 1;
@@ -2508,7 +2508,7 @@ static int s370_cheap_operand(int inst) {
  * carries nothing but the subscript.  Both instructions are rewritten
  * in place, which keeps the order right; the ADD must have no other
  * use. */
-static int s370_use_count[HIR_MAX_INST];
+static short s370_use_count[HIR_MAX_INST];
 static void s370_reassoc(void) {
     int i;
     int j;

@@ -53,6 +53,7 @@ static char *s370_rt_map[] = {
     "f77_ccos",         "F77CCOS",
     "f77_strcpy",       "F77STRCP",
     "f77_strcmp",       "F77STRCM",
+    "f77_lstrcmp",      "F77LSTRC",
     "f77_cat",          "F77CAT",
     "f77_index",        "F77INDEX",
     /* the libm names the front end emits, to libc370's; a REAL
@@ -110,7 +111,7 @@ static char *s370_rt_extname(char *name) {
         n = 2;
         i = 5;
         while (name[i] && n < 8) {
-            ibuf[n] = (char)((name[i] >= 'a' && name[i] <= 'z') ? name[i] - 32 : name[i]);
+            ibuf[n] = (char)toupper((unsigned char)name[i]);
             n = n + 1; i = i + 1;
         }
         ibuf[n] = 0;
