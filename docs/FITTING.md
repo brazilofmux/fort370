@@ -143,7 +143,8 @@ into rows of their own (a scalar had carried 112 bytes of rank-7
 bounds) and the symbols' flags and types became bytes and halfwords.
 The static tables and code are 4.4MB, and every FCVS program and test
 compiles in 7168K, FM912 being the one that needs more than 6656K.
-What bounds a unit now is its 8192 instructions.
+A constant subscript then became one instruction instead of four,
+and what bounds a unit now is its 8192 instructions and 1024 blocks.
 
 Every FCVS program and test compiled to the same assembler before and
 after each step, except where a step fixed something: the SSA stacks

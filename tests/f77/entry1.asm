@@ -257,39 +257,37 @@ Q00003   DC    C'ALT2'
 * SUB
 SUB      CSECT
          USING *,15
-         B     L00052
+         B     L00051
          DC    AL1(3),CL7'SUB'
-L00052   STM   14,12,12(13)
+L00051   STM   14,12,12(13)
          BALR  12,0
          USING *,12
          DROP  15
-         B     L00053
-L00054   DC    A(S00042)
-L00053   L     15,L00054
+         B     L00052
+L00053   DC    A(S00042)
+L00052   L     15,L00053
          ST    13,4(,15)
          ST    15,8(,13)
          MVC   76(4,15),76(13)
          LR    13,15
          USING S00042,13
          ST    1,S00042+72
-L00044   DS    0H
+L00043   DS    0H
          L     4,0(,1)
          L     3,4(,1)
          LA    3,0(,3)
-         LA    15,10
-         ST    15,T00043
          L     2,0(,4)
-         A     2,T00043
+         A     2,C00054
          ST    2,0(,3)
          LA    0,0
-         B     L00051
+         B     L00050
+L00044   DS    0H
 L00045   DS    0H
 L00046   DS    0H
 L00047   DS    0H
 L00048   DS    0H
 L00049   DS    0H
 L00050   DS    0H
-L00051   DS    0H
          L     13,4(,13)
          L     14,12(,13)
          LM    2,12,28(13)
@@ -305,8 +303,7 @@ S00042   DS    0D
          DS    D
          DS    8D
          DS    D
-T00043   DS    XL36
-         DS    XL4
+C00054   DC    F'10'
 * SQ
 SQ       CSECT
          USING *,15

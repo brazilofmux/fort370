@@ -916,7 +916,11 @@ static int ho_cse(void) {
         j = ho_cse_head[slot];
         while (j >= 0) {
             if (h_kind[j] == k && h_src1[j] == s1 && h_src2[j] == s2 &&
-                h_val[j] == v && ho_dominates(h_blk[j], h_blk[i])) {
+                h_val[j] == v && ho_dominates(h_blk[j], h_blk[i]) &&
+                /* fort370: an address over a remat base (A(3)) is one LA
+                 * wherever it is used; shared across blocks it would
+                 * hold a register from the first use to the last */
+                !(k == HI_ADDI && s1 >= 0 && hi_is_remat(h_kind[s1]) && h_blk[j] != h_blk[i])) {
                 found = j;
                 j = -1;  /* break */
             } else {

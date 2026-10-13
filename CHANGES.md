@@ -22,8 +22,19 @@ with each release, built and checked by CI on their own platforms.
   in one piece.  (The 2026-10-13 notes said 6144K, measured on eight
   programs; FM509, FM910 and FM912 needed 6656K.)  How
   large a unit fort370 and FORTRAN H each take is measured in
-  `bench/results-limits-2026-10-13.txt`; what bounds a unit now is its
-  8192 instructions.
+  `bench/results-limits-2026-10-13.txt`.
+- A constant subscript, A(3) or the 2 of A(I,2), is part of the
+  address's displacement: one instruction where it had been four (the
+  constant, a shift, an add and the lower bound).  Units of
+  straight-line array code compile to about 900 statements on MVS, from
+  499, and the branches and labels a unit may hold are now bounded by
+  its 1024 blocks: 508 logical IFs and 1017 labelled statements, more
+  than FORTRAN H takes at OPT=2.  An address over an array's base is
+  shared within a block, not across the unit, so it does not hold a
+  register from its first use to its last.  71 FCVS programs compile
+  differently, with 1.5% fewer statements of assembler among them (20
+  grew, by at most 4%, where registers fell out differently); each
+  still prints what it did on MVS, and the kernels print H's checksums.
 - A small subroutine kept whole for the inliner no longer keeps the
   comment lines between its END and the next unit: the 600K test file,
   a block of comments after each of 200 subroutines, had held 750K of

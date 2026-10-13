@@ -1154,6 +1154,7 @@ static int f77_subscript_addr(int s) {
     int e;
     int coff;         /* compile-time part: -sum(lo_k * stride_k) */
     int addr;
+    int n0;           /* the first instruction a subscript's expression made */
 
     /* A constant lower bound over a CONSTANT stride contributes a
      * compile-time byte offset, accumulated in coff and emitted as one
@@ -1168,6 +1169,7 @@ static int f77_subscript_addr(int s) {
     vstride = -1;
     k = 0;
     for (;;) {
+        n0 = h_ninst;
         idx = f77_expr();
         idx = f77_cvt(idx, &ex_hi, ex_ty, TY_INT);
         if (k < f77_srank[s]) {
@@ -1184,7 +1186,19 @@ static int f77_subscript_addr(int s) {
              * invariant in a loop (the column of A(I,J)) can be hoisted
              * and the index register carries only the subscript that
              * varies: base+index+displacement in one operand. */
-            if (!(f77_sty[s] == TY_CHAR && f77_slen[s] < 0)) {
+            if (vstride < 0 && h_kind[idx] == HI_ICONST
+                && !(f77_sty[s] == TY_CHAR && f77_slen[s] < 0)) {
+                /* a constant subscript over a constant stride joins the
+                 * displacement: A(3) is one ADDI, not four instructions */
+                coff = coff + h_val[idx] * cstride;
+                if (idx == n0 && idx == h_ninst - 1 && f77_nk > 0 && f77_kinst[f77_nk - 1] == idx
+                    && hl_cur_blk >= 0 && bb_end[hl_cur_blk] == h_ninst) {
+                    /* and the ICONST made for it, and nothing else, is taken back */
+                    f77_nk = f77_nk - 1;
+                    h_ninst = h_ninst - 1;
+                    bb_end[hl_cur_blk] = h_ninst;
+                }
+            } else if (!(f77_sty[s] == TY_CHAR && f77_slen[s] < 0)) {
                 int m;
                 int lg;
                 m = f77_esize(s);
@@ -1239,6 +1253,15 @@ static int f77_subscript_addr(int s) {
     else f77_tok();
     if (k != f77_srank[s]) f77_error("wrong number of subscripts");
 
+#ifdef F77_TARGET_S370
+    if (off < 0 && !(f77_sty[s] == TY_CHAR && f77_slen[s] < 0)) {   /* every subscript constant */
+        int cb;
+        cb = coff * f77_esize(s);
+        if (cb >= -2048 && cb <= 2047)
+            return hi_emit(HI_ADDI, HL_ADDR_TY, f77_sval[s], -1, cb, NULL);
+        return hi_emit(HI_ADD, HL_ADDR_TY, f77_sval[s], f77_iconst(cb), 0, NULL);
+    }
+#endif
     if (off < 0) off = f77_iconst(0);
 #ifdef F77_TARGET_S370
     if (!(f77_sty[s] == TY_CHAR && f77_slen[s] < 0)) byte = off;   /* already bytes */
