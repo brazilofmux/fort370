@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include "f77rt.h"
 #include "f77dtoa.h"
+#include "f77rec.h"
 #include "../../backend/s370_hfp.h"
 
 /* C89 has neither trunc nor round; libc370 is C89. */
@@ -122,6 +123,7 @@ static int   fio_uunf[FIO_MAXUNIT];      /* FORM='UNFORMATTED' */
 static int   fio_urecl[FIO_MAXUNIT];     /* RECL= in bytes */
 static int   fio_ubz[FIO_MAXUNIT];       /* BLANK='ZERO' */
 static int   fio_rec_next;               /* REC= of the statement about to begin, or 0 */
+static int   fio_ucur[FIO_MAXUNIT];      /* direct access: the record the next transfer reaches */
 static int   fio_uaeof[FIO_MAXUNIT];     /* positioned after the endfile record */
 static int   fio_recoverable;            /* ERR=/IOSTAT= present: report, do not exit */
 static int   fio_err;                    /* set when a recoverable error happened */
@@ -148,15 +150,26 @@ static FILE *fio_out;            /* stream of the WRITE in progress */
 
 static void fio_exit(int code) {
     int u;
+    f77r_closeall();
     for (u = 0; u < FIO_MAXUNIT; u++) if (fio_ufile[u]) { fclose(fio_ufile[u]); fio_ufile[u] = 0; }
     fflush(stdout);
     fflush(stderr);
     exit(code);
 }
 
+/* The unit's DD name, "dd:NAME": the one OPEN named, else FTnnF001. */
+static char fio_ddbuf[16];
+static const char *fio_ddof(int unit) {
+    if (unit > 0 && unit < FIO_MAXUNIT && fio_ufname[unit][0]) return fio_ufname[unit];
+    sprintf(fio_ddbuf, "dd:FT%02dF001", unit);
+    return fio_ddbuf;
+}
+
 static FILE *fio_resolve(int unit, int writing) {
     if (unit >= 0 && unit < FIO_MAXUNIT && fio_ufile[unit]) return fio_ufile[unit];
     if (unit == 0) return writing ? stderr : stdin;
+    if (unit > 0 && unit < FIO_MAXUNIT && fio_udirect[unit])
+        return stdout;     /* a placeholder: f77rec.c transfers direct-access records, never through it */
     if (unit > 0 && unit < FIO_MAXUNIT && fio_ufname[unit][0]) {
         /* a unit OPENed by name, or closed by REWIND: its data set,
          * opened now in the direction this statement takes */
@@ -257,8 +270,13 @@ static void fio_flush_line(void) {
             fprintf(stderr, "f77: record longer than RECL (%d > %d)\n", fio_len, recl);
             fio_exit(2);
         }
-        fputs(fio_line, f);
-        for (i = fio_len; i < recl; i++) fputc(' ', f);
+        memcpy(fio_urec, fio_line, (size_t)fio_len);
+        for (i = fio_len; i < recl; i++) fio_urec[i] = ' ';
+        if (f77d_write(fio_unit, fio_ddof(fio_unit), recl, fio_ucur[fio_unit], fio_urec, ' ') != 0) {
+            fprintf(stderr, "f77: unit %d: record %d was not written\n", fio_unit, fio_ucur[fio_unit]);
+            fio_exit(2);
+        }
+        fio_ucur[fio_unit]++;
         fio_len = 0;
         return;
     }
@@ -321,8 +339,13 @@ static int fio_getrec(void) {
         int recl = fio_urecl[fio_unit];
         size_t n;
         if (recl > FIO_MAXLINE - 1) recl = FIO_MAXLINE - 1;
-        n = fread(fio_rec, 1, (size_t)recl, fio_in);
-        if (n == 0) return 1;
+        if (f77d_read(fio_unit, fio_ddof(fio_unit), fio_urecl[fio_unit], fio_ucur[fio_unit], fio_urec) != 0) {
+            fprintf(stderr, "f77: unit %d: record %d does not exist\n", fio_unit, fio_ucur[fio_unit]);
+            fio_exit(2);
+        }
+        fio_ucur[fio_unit]++;
+        memcpy(fio_rec, fio_urec, (size_t)recl);
+        n = (size_t)recl;
         fio_rlen = (int)n;
         fio_rpos = 0;
         return 0;
@@ -685,7 +708,8 @@ static void fio_position(FILE *f, int unit) {
         fprintf(stderr, "f77: a direct-access unit needs REC=\n");
         fio_exit(2);
     }
-    fseek(f, (long)(rec - 1) * fio_urecl[unit], SEEK_SET);
+    (void)f;
+    fio_ucur[unit] = rec;
 }
 
 void f77_wr_begin(int unit, const char *fmt) {
@@ -705,10 +729,15 @@ void f77_wr_begin(int unit, const char *fmt) {
  * direct-access records are RECL bytes.  Items are raw bytes. */
 void f77_wu_begin(int unit) {
     fio_init_units();
-    fio_out = fio_resolve(unit, 1);
+    fio_out = 0;
     fio_unit = unit;
-    if (unit > 0 && unit < FIO_MAXUNIT) { fio_uunf[unit] = 1; fio_uaeof[unit] = 0; }   /* BACKSPACE needs to know */
-    fio_position(fio_out, unit);
+    if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) {
+        fprintf(stderr, "f77: unit %d cannot take unformatted records\n", unit);
+        fio_exit(2);
+    }
+    fio_uunf[unit] = 1;
+    fio_uaeof[unit] = 0;
+    fio_position(0, unit);
     fio_ulen = 0;
 }
 void f77_wu(const void *p, int n) {
@@ -721,74 +750,56 @@ void f77_wu(const void *p, int n) {
     fio_ulen += n;
 }
 void f77_wu_end(void) {
-    FILE *f = fio_out ? fio_out : stdout;
-    if (fio_unit > 0 && fio_unit < FIO_MAXUNIT && fio_udirect[fio_unit]) {
-        int recl = fio_urecl[fio_unit];
+    int u = fio_unit;
+    if (fio_udirect[u]) {
+        int recl = fio_urecl[u];
         if (fio_ulen > recl) {
             fprintf(stderr, "f77: unformatted record longer than RECL\n");
             fio_exit(2);
         }
-        fwrite(fio_urec, 1, (size_t)fio_ulen, f);
-        while (fio_ulen < recl) { fputc(0, f); fio_ulen++; }
+        while (fio_ulen < recl) fio_urec[fio_ulen++] = 0;
+        if (f77d_write(u, fio_ddof(u), recl, fio_ucur[u], fio_urec, 0) != 0) {
+            fprintf(stderr, "f77: unit %d: record %d was not written\n", u, fio_ucur[u]);
+            fio_exit(2);
+        }
+        fio_ucur[u]++;
         return;
     }
-    {
-        unsigned char lw[4];
-        int n = fio_ulen;
-        lw[0] = (unsigned char)n; lw[1] = (unsigned char)(n >> 8);
-        lw[2] = (unsigned char)(n >> 16); lw[3] = (unsigned char)(n >> 24);
-        fwrite(lw, 1, 4, f);
-        fwrite(fio_urec, 1, (size_t)n, f);
-        fwrite(lw, 1, 4, f);
-        if (fio_unit > 0 && fio_unit < FIO_MAXUNIT) fio_uend[fio_unit] = ftell(f);
-    }
+    if (f77s_write(u, fio_ddof(u), fio_urec, fio_ulen) != 0) fio_exit(2);
 }
 /* flags: 1 END= present, 2 ERR=/IOSTAT= present.  0 ok, 1 eof, 2 error */
 int f77_ru_begin(int unit, int flags) {
-    FILE *f;
+    int rc;
+    int n;
     fio_init_units();
-    f = fio_resolve(unit, 0);
-    fio_in = f;
+    fio_in = 0;
     fio_unit = unit;
-    if (unit > 0 && unit < FIO_MAXUNIT) fio_uunf[unit] = 1;
-    fio_position(f, unit);
-    fio_upos = 0;
-    if (unit > 0 && unit < FIO_MAXUNIT && fio_udirect[unit]) {
-        size_t n = fread(fio_urec, 1, (size_t)fio_urecl[unit], f);
-        fio_ulen = (int)n;
-        if (n == 0) {
-            if (flags & 2) return 2;
-            fprintf(stderr, "f77: READ past the end of a direct-access file\n");
-            fio_exit(2);
-        }
-        return 0;
+    if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) {
+        if (flags & 2) return 2;
+        fprintf(stderr, "f77: unit %d cannot give unformatted records\n", unit);
+        fio_exit(2);
     }
-    if (fio_uend[unit] >= 0 && ftell(f) >= fio_uend[unit]) {
+    fio_uunf[unit] = 1;
+    fio_position(0, unit);
+    fio_upos = 0;
+    if (fio_udirect[unit]) {
+        rc = f77d_read(unit, fio_ddof(unit), fio_urecl[unit], fio_ucur[unit], fio_urec);
+        if (rc == 0) { fio_ulen = fio_urecl[unit]; fio_ucur[unit]++; return 0; }
+        if (flags & 2) return 2;
+        fprintf(stderr, "f77: unit %d: record %d does not exist\n", unit, fio_ucur[unit]);
+        fio_exit(2);
+    }
+    rc = f77s_read(unit, fio_ddof(unit), fio_urec, FIO_MAXUREC, &n);
+    if (rc == 0) { fio_ulen = n; return 0; }
+    if (rc == 1) {
         fio_uaeof[unit] = 1;
-        if (flags & 1) return 1;
-        if (flags & 2) return 1;
+        if (flags & 3) return 1;
         fprintf(stderr, "f77: end of file on READ\n");
         fio_exit(2);
     }
-    {
-        unsigned char lw[4];
-        int n;
-        if (fread(lw, 1, 4, f) != 4) {
-            fio_uaeof[unit] = 1;
-            if (flags & 3) return 1;
-            fprintf(stderr, "f77: end of file on READ\n");
-            fio_exit(2);
-        }
-        n = lw[0] | (lw[1] << 8) | (lw[2] << 16) | (lw[3] << 24);
-        if (n < 0 || n > FIO_MAXUREC) {
-            if (flags & 2) return 2;
-            fprintf(stderr, "f77: bad unformatted record\n");
-            fio_exit(2);
-        }
-        fio_ulen = (int)fread(fio_urec, 1, (size_t)n, f);
-        fread(lw, 1, 4, f);
-    }
-    return 0;
+    if (flags & 2) return 2;
+    fio_exit(2);
+    return 2;
 }
 void f77_ru(void *p, int n) {
     if (n <= 0) return;
@@ -809,6 +820,7 @@ void f77_backspace(int unit) {
     long pos;
     fio_init_units();
     if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) return;
+    if (fio_uunf[unit]) { f77s_backspace(unit); fio_uaeof[unit] = 0; return; }
     f = fio_resolve(unit, 1);
     fflush(f);
     pos = ftell(f);
@@ -1254,6 +1266,7 @@ void f77_endfile(int unit) {
     FILE *f;
     fio_init_units();
     if (unit <= 0 || unit >= FIO_MAXUNIT || unit == 5 || unit == 6) return;
+    if (fio_uunf[unit]) { f77s_endfile(unit, fio_ddof(unit)); fio_uaeof[unit] = 1; return; }
     if (fio_ufile[unit]) { fclose(fio_ufile[unit]); fio_ufile[unit] = 0; }   /* the file ends here; a READ now sees its end */
     fio_uaeof[unit] = 1;
 }
@@ -1831,6 +1844,9 @@ int f77_open(int unit, const char *name, int nlen,
     fio_uunf[unit] = unf;
     fio_urecl[unit] = recl;
     fio_ubz[unit] = (blank && blen > 0 && fio_str_is(blank, blen, "ZERO"));
+    f77d_close(unit);
+    f77s_close(unit);
+    fio_ucur[unit] = 1;
     return 0;
 }
 
@@ -1839,7 +1855,9 @@ int f77_open(int unit, const char *name, int nlen,
 void f77_close(int unit, const char *status, int slen) {
     int del;
     if (unit < 0 || unit >= FIO_MAXUNIT) return;
-    if (!fio_ufile[unit]) { fio_ufname[unit][0] = 0; return; }   /* OPENed, never used */
+    f77d_close(unit);
+    f77s_close(unit);
+    if (!fio_ufile[unit]) { fio_ufname[unit][0] = 0; return; }   /* OPENed, never used, or records only */
     del = (status && slen > 0 && fio_str_is(status, slen, "DELETE"));
     if (status && slen > 0 && !del && !fio_str_is(status, slen, "KEEP")) {
         fprintf(stderr, "f77: CLOSE STATUS value is not supported\n");
@@ -1925,10 +1943,7 @@ int f77_inquire(int unit, const char *file, int flen) {
     inq_unf = fio_uunf[unit];
     inq_recl = fio_urecl[unit];
     inq_bz = fio_ubz[unit];
-    if (inq_direct && inq_recl > 0 && fio_ufile[unit]) {
-        fflush(fio_ufile[unit]);
-        inq_nextrec = ftell(fio_ufile[unit]) / inq_recl + 1;
-    }
+    if (inq_direct) inq_nextrec = fio_ucur[unit] > 0 ? fio_ucur[unit] : 1;
     return 0;
 }
 
@@ -1968,6 +1983,7 @@ void f77_rewind(int unit) {
         fio_exit(2);
     }
     if (fio_ufile[unit]) { fclose(fio_ufile[unit]); fio_ufile[unit] = 0; }   /* reopened by the next statement, at the start */
+    f77s_rewind(unit);
     fio_uend[unit] = -1;
     fio_uaeof[unit] = 0;
 }

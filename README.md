@@ -41,12 +41,11 @@ unrolling and calls, and it is worth perhaps 10 to 35%, not multiples.
 standard OS linkage, static storage per unit and symbolic references
 the linkage editor resolves; the I/O is FORTRAN H's `IBCOM#` or the
 compiler's own runtime (`runtime/s370`, C for libc370 with its own
-libm and exact decimal conversion). All 192 FCVS programs compile,
-link and run on TK5 through that runtime: 3227 tests pass, and each of
-the 24 that fail is a runtime gap (direct access and unformatted
-records, which need record-level I/O on MVS), a discrepancy in the
-1997 data file, or by design (`bench/results-fcvs-2026-10-12.txt` has
-the accounting). The seven kernels and the programs in `tests/s370/`
+libm, exact decimal conversion, and direct access through BDAM). All
+192 FCVS programs compile, link and run on TK5 through that runtime:
+3318 tests pass, and the 2 that fail read two cards of the 1997 data
+file that their program never lists (`bench/results-fcvs-2026-10-12.txt`
+has the accounting). The seven kernels and the programs in `tests/s370/`
 print FORTRAN H's results to the digit. CPU seconds of the GO step,
 against H at OPT=2 on the same system (the last block of
 `bench/results-s370-2026-10-12d.txt`; about 2% of any figure is
@@ -68,9 +67,7 @@ counts is one `BXH`. What H does that this compiler does not yet:
 parameter lists built once in static storage, and a second base
 register for code beyond 4K (a branch to such a target here loads its
 address from the pool, `L 15,=A(L) / BC m,0(,15)`). What is not yet
-written: record-level I/O in the runtime, for direct access and
-unformatted files, and the XMIT package that would put the compiler
-on the system. `docs/BACKEND.md` has the design and the record of the
+written: the XMIT package that would put the compiler on the system. `docs/BACKEND.md` has the design and the record of the
 work.
 
 ## The larger aim

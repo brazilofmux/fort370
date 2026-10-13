@@ -240,6 +240,30 @@ program needs is fort370's own, and it is the SLOW-32 one
   the compiler emits; `tests/s370/math.sh` checks 85 values against
   mpmath, all within a few units in the last place. A REAL result is
   the long one's first word, truncated.
+- Records are `f77rec.c`'s, hand-written on libc370's access-method
+  layer (`osb*`, `osd*`), because a libc370 stream is QSAM and QSAM
+  cannot reposition (`fseek` abended S400 and S300; an output open
+  starts the data set again). **Direct access** is IBM's FORTRAN's
+  way: a data set of fixed blocks, one record each, RECL bytes. A
+  record past the end is written by BSAM -- OUTPUT on an empty data
+  set, EXTEND (an OPEN option `osbopen` does not offer, issued
+  directly) on one that has records -- with filler for the records
+  between; a record that exists is read or rewritten in place by BDAM,
+  by relative block number. The data set stays DSORG=PS, RECFM=F, so
+  QSAM reads it afterwards like any other; a new one's DCB comes from
+  the OPEN (RECL), whatever the DD says. Whether a data set holds
+  records at all is its format-1 DSCB's last-block pointer, found
+  through the JFCB: the space of a data set never written holds
+  whatever was there before. **Unformatted sequential** files are
+  records framed by a length word in a stream, and the unit's position
+  is a record count: REWIND closes the stream, a READ opens it and
+  skips to the position, BACKSPACE counts one back, a WRITE where the
+  file does not end copies the records before it and opens for output
+  again, which ends the file there, and ENDFILE ends it at the
+  position. `tests/s370/bdtest.c` tries the primitives alone,
+  `tests/s370/recio.f` the runtime's use of them (gfortran agrees with
+  every check). A direct-access unit answers INQUIRE SEQUENTIAL= with
+  NO: its records carry no length words.
 
 A program is linked **on the host**: `bench/mkload.sh prog.f` runs the
 compiler, `as370`, and `cc370` as the linker (crt0, the runtime
@@ -327,18 +351,23 @@ register pair as a BXLE's step and limit are, so daxpy's outer loop
 is `LA / LH / LA / inner / BXH`. The seven kernels then stand at 0.89
 to 1.00 of H's OPT=2, H measured the same hour.
 
-Then the runtime, and the FCVS on MVS itself (`bench/fcvs.sh`; seven
+Then the runtime, and the FCVS on MVS itself (`bench/fcvs.sh`; eight
 runs the same night, `bench/results-fcvs-2026-10-12.txt` is the last):
-192 programs build, ship and run, and their reports count 3227 tests
-passed and 24 failed, every failure accounted for. FM001's test 2 and
-FM257's STOP in its test 6 are by design; FM005, FM109 and FM500
-print for inspection; FM923's tests 22 and 23 read two cards of the
-1997 data file that the program never lists (with them removed, 27 of
-27); and the rest are the runtime's two gaps, direct access (FM407,
-FM413, FM910 and FM912 abend in `fseek` on a QSAM data set; FM916,
-FM917 and FM921 INQUIRE about such a file) and unformatted sequential
-records (FM411) -- both want record-level I/O rather than libc370's
-stream, which is the next runtime work. The runs found, in order: a
+192 programs build, ship and run, and their reports count 3318 tests
+passed and 2 failed. FM923's two read two cards of the 1997 data file
+that the program never lists (with them removed, 27 of 27); FM001's
+test 2 and FM257's STOP in its test 6 are by design; FM005, FM109 and
+FM500 print for inspection; FM910 skips its optional test 1, since a
+direct-access file is not readable as an unformatted sequential one
+here. The seventh run had 3227 and 24: direct access abended in
+`fseek` on a QSAM data set (FM407, FM413, FM910, FM912), INQUIRE about
+such a file answered NEXTREC wrongly (FM916, FM917, FM921), and
+unformatted sequential records lost their place across BACKSPACE and
+ENDFILE (FM411); the record layer of the runtime section, `f77rec.c`,
+answered all three, and writing its own test (`tests/s370/recio.f`)
+found that INQUIRE refused a unit without `UNIT=`, and that the S/370
+driver generated code for a unit the front end had already rejected,
+burying the message under an internal error. The runs found, in order: a
 COMMON item in a dimension bound read before its binding; the X'80'
 end-of-list bit on the last parameter; the callee's name and a
 format's address kept in static buffers a nested call clobbered; a
