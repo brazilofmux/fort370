@@ -43,6 +43,7 @@ double f77_dnint(double v) { return fio_round(v); }
 /* Text to HFP, exactly, truncating as the compiler does for constants. */
 static double fio_strtod(const char *text) {
     unsigned int hi, lo;
+    while (*text == ' ' || *text == '\t') text++;
     if (hfp_from_text(text, &hi, &lo) < 0) return 0.0;
     return f77_hfp_make(hi, lo);
 }
@@ -1453,6 +1454,21 @@ static int fio_list_tok(void) {
     }
     while (fio_rpos < fio_rlen) {
         c = fio_rec[fio_rpos];
+        if (c == '(') {
+            /* A complex constant, ( re , im ): blanks anywhere inside,
+             * and it may continue on the next record; taken whole,
+             * blanks dropped, through its closing parenthesis, for
+             * f77_rd_c to split at the comma.  (FCVS FM906 writes
+             * "( 2.5 , 3.5 )" and "(1.0        ," / "   2.0)".) */
+            for (;;) {
+                if (fio_rpos >= fio_rlen) { fio_next_record(); continue; }
+                c = fio_rec[fio_rpos++];
+                if (c == ' ' || c == '\t') continue;
+                if (n < (int)sizeof fio_ltok - 1) fio_ltok[n++] = (char)c;
+                if (c == ')') break;
+            }
+            break;
+        }
         if (c == ' ' || c == '\t' || c == ',' || c == '/') break;
         if (n < (int)sizeof fio_ltok - 1) fio_ltok[n++] = (char)c;
         fio_rpos++;
@@ -1676,29 +1692,18 @@ void f77_rd_c(float *p) {
         if (t == 1) { fio_ldone = 1; return; }
         if (t == 2) return;
         if (fio_ltok[0] == '(') {
-            /* ( re , im ) with blanks anywhere inside, possibly split
-             * over records: gather the text up to the ')' and parse
-             * the two numbers out of it. */
-            char buf[sizeof fio_ltok];
-            int n = 0;
-            int i;
+            /* ( re , im ): the tokenizer took it whole, through the
+             * closing parenthesis, blanks dropped. */
             char *comma;
-            /* the tokenizer stopped at a blank or comma: pull the rest */
-            for (i = 1; fio_ltok[i]; i++) if (n < (int)sizeof buf - 1) buf[n++] = fio_ltok[i];
-            while (n == 0 || buf[n - 1] != ')') {
-                int c;
-                if (fio_rpos >= fio_rlen) { fio_next_record(); continue; }
-                c = fio_rec[fio_rpos++];
-                if (n < (int)sizeof buf - 1) buf[n++] = (char)c;
-            }
-            buf[n - 1] = 0;
-            comma = strchr(buf, ',');
+            char *close;
+            close = strchr(fio_ltok, ')');
+            if (close) *close = 0;
+            comma = strchr(fio_ltok + 1, ',');
             if (comma) *comma = 0;
-            strcpy(fio_ltok, buf);
+            memmove(fio_ltok, fio_ltok + 1, strlen(fio_ltok + 1) + 1);
             p[0] = (float)fio_list_real();
             if (comma) { strcpy(fio_ltok, comma + 1); p[1] = (float)fio_list_real(); }
             else p[1] = 0.0f;
-            fio_l_after = 1;
             return;
         }
         p[0] = (float)fio_list_real();

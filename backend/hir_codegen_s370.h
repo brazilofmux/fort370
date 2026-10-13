@@ -307,7 +307,8 @@ static char *s370_gname(char *name) {
 #define S370_HDR_FTMP   96    /* floating scratch, for FPR spills around a def */
 #define S370_HDR_PHIT   104   /* phi-copy staging: 8 doublewords, the last for cycle breaking */
 #define S370_HDR_NPHIT  8
-#define S370_HDR_SIZE   168
+#define S370_HDR_CVTT   168   /* float-to-integer staging doubleword */
+#define S370_HDR_SIZE   176
 
 static int s370_area_lbl;     /* Snnnnn, the area */
 static int s370_near_limit;   /* bytes the data bases reach */
@@ -602,25 +603,38 @@ static int s370_fpr_free_at(int r, int p) {
 }
 
 static int s370_fpr_saved;    /* an FPR borrowed and parked in FTMP, or -1 */
+static char *s370_r(int r);
 
 /* Floating register to compute a spilled result in: a free one, else
  * FPR6 parked in the scratch doubleword for the duration. */
 static int s370_borrow_fpr(void) {
     int r;
+    int s1;
+    int s2;
     r = 0;
     while (r <= 6) {
         if (s370_fpr_free_at(r, s370_cur_pos)) return r;
         r = r + 2;
     }
-    f_reset(); f_s("6,"); f_s(s370_hdr(S370_HDR_FTMP));
+    /* None free: park one.  Not one the instruction reads -- its
+     * operands are taken from the registers after the parking, so a
+     * divisor parked in FPR6 was read as the dividend just loaded
+     * there (FCVS FM828, (BVC + 1 / BVC) / (2.0, 0.0) with four
+     * complex values live). */
+    s1 = s370_emitting >= 0 ? h_src1[s370_emitting] : -1;
+    s2 = s370_emitting >= 0 ? h_src2[s370_emitting] : -1;
+    r = 6;
+    while (r > 0 && ((s1 >= 0 && ra_is_fpv(s1) && ra_reg[s1] == r) ||
+                     (s2 >= 0 && ra_is_fpv(s2) && ra_reg[s2] == r))) r = r - 2;
+    f_reset(); f_s(s370_r(r)); f_c(','); f_s(s370_hdr(S370_HDR_FTMP));
     asm_ins("STD", s370_line, 4);
-    s370_fpr_saved = 6;
-    return 6;
+    s370_fpr_saved = r;
+    return r;
 }
 
 static void s370_return_fpr(void) {
     if (s370_fpr_saved >= 0) {
-        f_reset(); f_s("6,"); f_s(s370_hdr(S370_HDR_FTMP));
+        f_reset(); f_s(s370_r(s370_fpr_saved)); f_c(','); f_s(s370_hdr(S370_HDR_FTMP));
         asm_ins("LD", s370_line, 4);
         s370_fpr_saved = -1;
     }
@@ -2090,8 +2104,9 @@ static void s370_inst(int i) {
         /* work on the magnitude */
         f_reset(); f_s(s370_r(f)); f_c(','); f_s(s370_r(f)); asm_ins("LPDR", s370_line, 2);
         f_reset(); f_s(s370_r(f)); f_c(','); f_s(s370_lab('C', s370_pool(S370_PK_D, 0x4E000000u, 0, 0))); asm_ins("AW", s370_line, 4);
-        f_reset(); f_s(s370_r(f)); f_c(','); f_s(s370_hdr(S370_HDR_FTMP)); asm_ins("STD", s370_line, 4);
-        f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_hdr(S370_HDR_FTMP + 4)); asm_ins("L", s370_line, 4);
+        /* not FTMP: the borrowed register may be parked there */
+        f_reset(); f_s(s370_r(f)); f_c(','); f_s(s370_hdr(S370_HDR_CVTT)); asm_ins("STD", s370_line, 4);
+        f_reset(); f_s(s370_r(d)); f_c(','); f_s(s370_hdr(S370_HDR_CVTT + 4)); asm_ins("L", s370_line, 4);
         /* LTDR's condition code was clobbered by LPDR/AW: redo the sign test on the source */
         if (ra_reg[src] >= 0) { f_reset(); f_s(s370_r(ra_reg[src])); f_c(','); f_s(s370_r(ra_reg[src])); asm_ins("LTDR", s370_line, 2); }
         else { f_reset(); f_s(s370_r(f)); f_c(','); f_s(fm); asm_ins(dbl ? "LD" : "LE", s370_line, 4);
@@ -2149,8 +2164,23 @@ static void s370_inst(int i) {
             /* a FUNCTION result: FPR0 (and FPR2 for COMPLEX) or R0; a
              * SUBROUTINE's RETURN n: the alternate return's index in R0 */
             if (ra_is_fpv(v)) {
-                s370_copy_to_reg(0, 1, v, ty_is_double(h_ty[v]));
-                if (h_src2[i] >= 0) s370_copy_to_reg(2, 1, h_src2[i], ty_is_double(h_ty[h_src2[i]]));
+                int w;
+                w = h_src2[i];
+                if (w >= 0 && ra_reg[w] == 0 && ra_reg[v] == 2) {
+                    /* the parts sit in each other's register: swap
+                     * through FPR4, which nothing holds at a RETURN
+                     * (FCVS FM722's ZF724 returned (3,3) for (3,4)) */
+                    asm_ins(ty_is_double(h_ty[w]) ? "LDR" : "LER", "4,0", 2);
+                    s370_copy_to_reg(0, 1, v, ty_is_double(h_ty[v]));
+                    asm_ins(ty_is_double(h_ty[w]) ? "LDR" : "LER", "2,4", 2);
+                } else if (w >= 0 && ra_reg[w] == 0) {
+                    /* the imaginary part is in FPR0: move it out first */
+                    s370_copy_to_reg(2, 1, w, ty_is_double(h_ty[w]));
+                    s370_copy_to_reg(0, 1, v, ty_is_double(h_ty[v]));
+                } else {
+                    s370_copy_to_reg(0, 1, v, ty_is_double(h_ty[v]));
+                    if (w >= 0) s370_copy_to_reg(2, 1, w, ty_is_double(h_ty[w]));
+                }
             } else {
                 s370_load_into(0, v);
             }
@@ -2312,6 +2342,7 @@ static void s370_emit_area(void) {
     asm_stmt("", "DC", "D'0'");                      /* 88: ECVT */
     asm_stmt("", "DS", "D");                         /* 96: FTMP */
     asm_stmt("", "DS", "8D");                        /* 104: PHIT x 8 */
+    asm_stmt("", "DS", "D");                         /* 168: CVTT */
     off = S370_HDR_SIZE;
     /* near objects, in layout order */
     i = 0;

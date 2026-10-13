@@ -85,6 +85,7 @@ rep('#include <stdlib.h>\n', '#include <stdlib.h>\n#include "f77rt.h"\n#include 
     '\n/* Text to HFP, exactly, truncating as the compiler does for constants. */\n'
     'static double fio_strtod(const char *text) {\n'
     '    unsigned int hi, lo;\n'
+    '    while (*text == \' \' || *text == \'\\t\') text++;\n'
     '    if (hfp_from_text(text, &hi, &lo) < 0) return 0.0;\n'
     '    return f77_hfp_make(hi, lo);\n}\n'
     '\n/* OPEN FILE=name: on MVS the name is a DD name (eight characters,\n'

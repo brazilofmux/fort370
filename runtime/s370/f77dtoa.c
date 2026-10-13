@@ -221,6 +221,7 @@ void f77_fmt_f_w(unsigned int hi, unsigned int lo, int d, char *out) {
     if (d > 200) d = 200;
     nd = f77_hfp_digits(hi, lo, digits, &decpt, &neg);
     if (nd > 0) nd = f77_round_digits(digits, nd, decpt + d, &decpt);
+    if (nd == 0) neg = 0;         /* rounded away (or a negative zero): no sign on nothing; FCVS FM406 */
     q = out;
     if (neg) *q++ = '-';
     if (nd == 0 || decpt <= 0) *q++ = '0';

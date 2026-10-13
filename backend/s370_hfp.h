@@ -154,6 +154,7 @@ static int hfp_from_text(const char *s, unsigned int *hi, unsigned int *lo) {
         while (*s >= '0' && *s <= '9') { if (ev < 10000) ev = ev * 10 + (*s - '0'); s++; }
         e10 = e10 + (eneg ? -ev : ev);
     }
+    while (*s == ' ' || *s == '\t') s++;      /* list-directed input leaves blanks after a value */
     if (*s != 0) return -1;
     *hi = 0; *lo = 0;
     if (hfp_big_iszero(&num)) return 0;   /* +0 and -0 are both zero */

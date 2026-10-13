@@ -36,7 +36,9 @@ $RUNNER "$O/$n-h.jcl" "$O/$n-h.out" >/dev/null 2>&1
 grep -a '^>' "$O/$n-h.out" | sed 's/\([DE]\) \([0-9][0-9]\)/\1+\2/g' > "$O/$n-h.txt"
 x=$("$B/mkload.sh" "$p" 2>&1 | tail -1) || { echo "$n: fort370 failed to build"; exit 1; }
 python3 "$B/ship.py" --out "$O/$n-c.out" "$x" >/dev/null || { echo "$n: ship failed"; exit 1; }
-grep -a '^>' "$O/$n-c.out" > "$O/$n-c.txt"
+# the last line ends in a carriage return and a form feed, and the
+# printer's banner follows on the same line: cut it there
+grep -a '^>' "$O/$n-c.out" | tr -d '\r' | sed 's/'"$(printf '\f')"'.*$//' > "$O/$n-c.txt"
 if cmp -s "$O/$n-h.txt" "$O/$n-c.txt"; then
   echo "$n: same ($(wc -l < "$O/$n-c.txt" | tr -d ' ') lines)"
 else

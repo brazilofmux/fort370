@@ -1,0 +1,28 @@
+      IMPLICIT DOUBLE PRECISION (D), COMPLEX (Z), LOGICAL (L)
+      COMPLEX ZF724, AVC, BVC, CVC, DVC
+      REAL R2NN02(2), R2E(2)
+      EQUIVALENCE (ZVCOMP,R2NN02), (AVC, R2E)
+      EXTERNAL ZF724
+      ZVCOMP=(0.0, 0.0)
+      RVN004=1.0
+      RVN005=2.0
+      ZVCOMP=ZF724(RVN004,RVN005)
+      WRITE(6,10) R2NN02(1), R2NN02(2)
+      BVC = CEXP((-1.5, -2.75))
+      CVC = (BVC + 1 / BVC) / (2.0, 0.0)
+      DVC = (2.75, -1.5)
+      AVC = CVC - CCOS(DVC * (-1.0, 0.0))
+      WRITE(6,10) R2E(1), R2E(2)
+      AVC = 1 / BVC
+      WRITE(6,10) R2E(1), R2E(2)
+      AVC = BVC + 1 / BVC
+      WRITE(6,10) R2E(1), R2E(2)
+      AVC = CVC
+      WRITE(6,10) R2E(1), R2E(2)
+   10 FORMAT(' >', 2F12.5)
+      END
+      COMPLEX FUNCTION ZF724(RVN006,RVN007)
+        IMPLICIT COMPLEX (Z)
+        ZF724= CMPLX(RVN006,RVN007) + CMPLX(RVN007,RVN007)
+        RETURN
+        END
