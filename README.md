@@ -159,6 +159,7 @@ direct-access file is a DASD data set of fixed blocks, RECL bytes each.
     bench/mkload.sh       compile, assemble and link one program on the host
     bench/ship.py         ship load modules to the guest and run them
     bench/fcvs.sh         the FCVS on MVS; fcvs_summary.py reads the reports
+    bench/fcvs-jcl.py     the FCVS as 192 MVS jobs, compiled, linked and run there
     bench/port-sweep.py   every program compiled on the guest, diffed with the host's
     bench/clg-test.py     the MVS package installed and used on the guest
     bench/mkrtlib.py      the runtime as object decks for IEWL (F77RT.obj)

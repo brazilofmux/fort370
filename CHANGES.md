@@ -8,6 +8,14 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## Unreleased
+
+- `bench/fcvs-jcl.py` writes the NIST FCVS as MVS jobs, one per
+  program: F77CLG as an instream procedure, the program's source and
+  its data instream, and the scratch data sets the suite opens, so the
+  whole suite compiles, links and runs on the guest with no host in the
+  loop.  Asked for on H390-MVS by Doug Wegscheid, as workload.
+
 ## 2026-10-13.2
 
 The day's third release, tagged `v2026.10.13.2`, for one bug found by
