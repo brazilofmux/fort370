@@ -1,0 +1,31 @@
+A real program against FORTRAN H, 2026-10-14: Doug Wegscheid's pi spigot.
+
+The program (posted to H390-MVS by Doug Wegscheid; not in this
+repository) prints the first 9000 digits of pi with the Rabinowitz-
+Wagon spigot: an INTEGER array of 30000, and for each digit an inner
+loop over the array of a multiply-add, a MOD and a divide by 2*I-1 --
+270 million passes in all.  FORTRAN IV in style (initial values in type
+statements, Hollerith digits printed with A1), so FORTRAN H compiles
+the same text.
+
+FORTRAN H, level 21.8, on TK5: FORTHCLG, PARM.FORT='OPT=n'.  fort370:
+release 2026-10-13.3 on TK5, through F77CLG (FORT370, IFOX00, IEWL).
+CPU seconds of the GO step (IEF374I); fort370 and H OPT=2 three runs
+each.
+
+                     GO CPU seconds        vs H OPT=2
+  H OPT=0            34.95                   2.93
+  H OPT=1            16.19                   1.36
+  H OPT=2            11.86 11.94 11.98       1.00
+  fort370            12.59 12.59 12.57       1.055
+
+Every run printed the same digits, and so does gfortran on a host: all
+of H's, fort370's and gfortran's output agree digit for digit.
+
+The inner loop, per pass:
+  H OPT=2   26 instructions, two DR (the MOD and the divide), 2*I-1
+            once, Q stored to memory each pass, LEN compared in storage
+  fort370   28 instructions, two DR, Q kept in a register, but LEN
+            reloaded through an address constant (two instructions)
+            and 2*I-1 computed twice
+Neither compiler takes the quotient and the remainder from one DR.
