@@ -17,7 +17,8 @@ each.
   H OPT=0            34.95                   2.93
   H OPT=1            16.19                   1.36
   H OPT=2            11.86 11.94 11.98       1.00
-  fort370            12.59 12.59 12.57       1.055
+  fort370            12.59 12.59 12.57       1.055   (2026-10-13.3)
+  fort370            10.44 10.47 10.47       0.877   (79325fb: one divide)
 
 Every run printed the same digits, and so does gfortran on a host: all
 of H's, fort370's and gfortran's output agree digit for digit.
@@ -28,4 +29,10 @@ The inner loop, per pass:
   fort370   28 instructions, two DR, Q kept in a register, but LEN
             reloaded through an address constant (two instructions)
             and 2*I-1 computed twice
-Neither compiler takes the quotient and the remainder from one DR.
+Neither compiler took the quotient and the remainder from one DR.
+
+Then (79325fb) fort370 did: MOD(X,Y) and X/Y of the same two values
+share one DR, and CSE takes two equal integer constants as one operand
+within a block, so the two copies of 2*I-1 became one value and the two
+divides could meet.  The inner loop is 22 instructions, one DR; the
+program runs in 0.877 of H's time at OPT=2, with the same digits.
