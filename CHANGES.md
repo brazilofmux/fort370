@@ -8,6 +8,30 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-14.1
+
+Tagged `v2026.10.14.1`: two ENTRY bugs, from slow-32's copy of the front
+end.  Built from `649a2f3`: FORT370.xmit SHA256 `37e6c6ba6450a245…`,
+511,120 bytes; F77RT.obj SHA256 `7205793a0e8ce2ff…`, 570,400 bytes --
+the same runtime as 2026-10-14, its END cards now dated with this
+build (that release's carried 2026-10-13's date, a stale object the
+Makefile did not rebuild when the clock changed; it does now).  All 192
+FCVS programs, 73 tests, the 600K source, the 85-deep nesting test, a
+unit at each size limit, René Ferland's ADDAD and Doug Wegscheid's pi
+spigot compile on the guest to the host's assembler, byte for byte, in
+REGION=7168K.
+
+- An ENTRY is compiled from its parent's whole text.  It had been
+  compiled from the parent's declarations and then from the ENTRY
+  statement on, so a GO TO from after the ENTRY back into the text
+  before it had no statement to reach, and a legal program was refused
+  ("statement label 5 is referred to but never defined").
+- A subprogram and its ENTRY points share one set of static storage
+  (SAVE, DATA, EQUIVALENCE).  Each ENTRY had had its own: a SAVEd
+  variable set through one entry was not the one the other read.
+  `tests/s370/entry3.f` has both; of the FCVS, FM509, FM517 and FM719
+  change, and pass on MVS as before.
+
 ## 2026-10-14
 
 Tagged `v2026.10.14`: faster code, found by measuring a reader's real
