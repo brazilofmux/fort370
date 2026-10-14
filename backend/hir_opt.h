@@ -584,13 +584,19 @@ static int ho_phi_simplify(void) {
         if (h_kind[i] != HI_PHI) { i = i + 1; continue; }
         if (h_pbase[i] < 0 || h_pcnt[i] == 0) { i = i + 1; continue; }
 
-        /* Find unique non-self-referential arg */
-        unique = -1;
+        /* Find unique non-self-referential arg.  -3 is "none yet":
+         * -1 is an argument too, the undefined value, and as the
+         * sentinel it was passed over -- phi(undefined, x) became x,
+         * which need not dominate the phi.  JJ in a loop that sets
+         * JJ=J only sometimes became J itself, its value when the loop
+         * ended rather than when JJ was set (SYMQR in René Ferland's
+         * ADDAD/ANCORR sorted every eigenvalue to the same one). */
+        unique = -3;
         j = 0;
         while (j < h_pcnt[i]) {
             v = h_pval[h_pbase[i] + j];
             if (v != i) {
-                if (unique == -1) {
+                if (unique == -3) {
                     unique = v;
                 } else if (v != unique) {
                     unique = -2;  /* multiple distinct values */
@@ -703,8 +709,14 @@ static int ho_dead_blocks(void) {
     while (i < h_ninst) {
         b = h_blk[i];
         if (b >= 0 && b < bb_nblk && !ho_use[b]) {
-            /* Dead block: NOP this instruction */
-            if (h_kind[i] != HI_NOP) {
+            /* Dead block: NOP this instruction -- but not an ALLOCA,
+             * which is a frame slot and no code: the front end makes
+             * one where the variable is first named, and a variable
+             * kept in its slot (ssa_keep_exposed) can be named first in
+             * a block that turns out dead and used in one that does
+             * not (FCVS FM013's ASSIGN variable, when that pass
+             * looked at main programs too) */
+            if (h_kind[i] != HI_NOP && h_kind[i] != HI_ALLOCA) {
                 h_kind[i] = HI_NOP;
                 h_src1[i] = -1;
                 h_src2[i] = -1;

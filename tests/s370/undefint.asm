@@ -26,17 +26,18 @@ L00009   DS    0H
          LA    5,0
          LA    2,3
 L00010   DS    0H
+         A     3,C00019
 L00012   DS    0H
          BXH   2,4,L00010
 L00011   DS    0H
          LA    0,6
-         ST    0,P00019+0
-         L     0,C00020
-         ST    0,P00019+4
-         LA    1,P00019
-         L     15,C00021
-         BALR  14,15
+         ST    0,P00020+0
+         L     0,C00021
+         ST    0,P00020+4
+         LA    1,P00020
          L     15,C00022
+         BALR  14,15
+         L     15,C00023
          BALR  14,15
 L00013   DS    0H
          B     L00014
@@ -58,10 +59,11 @@ S00000   DS    0D
          DS    D
          DS    8D
          DS    D
-P00019   DS    2F
-C00020   DC    A(Q00001)
-C00021   DC    V(F77WRBEG)
-C00022   DC    V(F77WREND)
+P00020   DS    2F
+C00019   DC    F'1'
+C00021   DC    A(Q00001)
+C00022   DC    V(F77WRBEG)
+C00023   DC    V(F77WREND)
 C00018   DC    H'-1'
 Q00001   DC    C'(1X,''>UNDEFINT OK'')'
          END

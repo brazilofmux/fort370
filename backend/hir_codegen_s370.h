@@ -696,12 +696,13 @@ static int s370_fold_chain(int addr, int *base, int *off) {
 static int s370_gpr(int v, int s) {
     if (v < 0) cg_die("missing operand", -1);
     if (ra_reg[v] >= 0 && !ra_is_fpv(v)) return ra_reg[v];
-    /* a scratch already holding this spilled value serves as well */
+    /* the scratch asked for, already holding this spilled value, serves
+     * as well -- but no other: a caller given R15 or R1 for its first
+     * operand then used R15 as the base of its storage operand, and
+     * C 15,0(,15) compared an address with the value it addressed
+     * (René Ferland's LECAFC, IF (IFIN .GT. MEMOIR) RETURN) */
     if (ra_spill_off[v] != 0 && !(bg_fold[v] && bg_mem_lnt[v] >= 0)) {
         if (s370_scache[s] == v) return s;
-        if (s370_scache[14] == v) return 14;
-        if (s370_scache[15] == v) return 15;
-        if (s370_scache[1] == v) return 1;
     }
     s370_load_into(s, v);
     return s;
@@ -1016,6 +1017,7 @@ static int ph_phi[S370_MAX_PHI];
 static int ph_src[S370_MAX_PHI];
 static int ph_done[S370_MAX_PHI];
 static int ph_stage[S370_MAX_PHI];   /* staging doubleword index for a done==2 copy */
+static int ph_parked[S370_MAX_PHI];  /* reads the parked value (PHIT's last doubleword / R0), not its register */
 static int ph_nstage;
 
 static void s370_copy_to_reg(int dreg, int dfp, int v, int is_double) {
@@ -1064,6 +1066,7 @@ static void s370_phi_copies(int from_blk, int to_blk) {
             ph_phi[n] = i;
             ph_src[n] = ssa_phi_find_arg(i, from_blk);
             ph_done[n] = 0;
+            ph_parked[n] = 0;
             /* A phi with no argument for this edge carries an undefined
              * value along it (a variable not set on this path): nothing
              * to copy. */
@@ -1131,14 +1134,17 @@ static void s370_phi_copies(int from_blk, int to_blk) {
                 dfp = ra_is_fpv(phi);
                 j = 0;
                 while (j < n) {
-                    if (j != i && !ph_done[j]) {
+                    if (j != i && !ph_done[j] && !ph_parked[j]) {
                         v = ph_src[j];
                         if (v >= 0 && ra_reg[v] == dreg && ra_is_fpv(v) == dfp) blocked = 1;
                     }
                     j = j + 1;
                 }
                 if (!blocked) {
-                    s370_copy_to_reg(dreg, dfp, ph_src[i], ty_is_double(h_ty[phi]));
+                    if (ph_parked[i]) {
+                        if (dfp) { f_reset(); f_s(s370_r(dreg)); f_c(','); f_s(s370_hdr(S370_HDR_PHIT + 8 * (S370_HDR_NPHIT - 1))); asm_ins("LD", s370_line, 4); }
+                        else { f_reset(); f_s(s370_r(dreg)); f_s(",0"); asm_ins("LR", s370_line, 2); }
+                    } else s370_copy_to_reg(dreg, dfp, ph_src[i], ty_is_double(h_ty[phi]));
                     ph_done[i] = 1;
                     progress = 1;
                 } else remaining = 1;
@@ -1147,7 +1153,12 @@ static void s370_phi_copies(int from_blk, int to_blk) {
         }
         if (remaining && !progress) {
             /* a cycle: park one destination's current value in PHIT /
-             * R0 and let the copies that read it proceed from there */
+             * R0, and point the copies that read it there.  They are
+             * not run now: one of them writes the register the parked
+             * copy itself still reads (a swap of FPR0 and FPR2 came out
+             * STD 0 / LD 2 / LER 0,2, both registers C, and SYMQR in
+             * René Ferland's ADDAD/ANCORR lost S between the rotation
+             * and its use).  Unblocked, the parked copy runs first. */
             int parked;
             int preg;
             int pfp;
@@ -1157,19 +1168,19 @@ static void s370_phi_copies(int from_blk, int to_blk) {
             phi = ph_phi[parked];
             preg = ra_reg[phi];
             pfp = ra_is_fpv(phi);
+            j = 0;
+            while (j < n) {
+                if (!ph_done[j] && ph_parked[j] && ra_is_fpv(ph_phi[j]) == pfp)
+                    cg_die("phi copy cycles share the park", ph_phi[j]);
+                j = j + 1;
+            }
             if (pfp) { f_reset(); f_s(s370_r(preg)); f_c(','); f_s(s370_hdr(S370_HDR_PHIT + 8 * (S370_HDR_NPHIT - 1))); asm_ins("STD", s370_line, 4); }
             else { f_reset(); f_s("0,"); f_s(s370_r(preg)); asm_ins("LR", s370_line, 2); }
-            /* copies reading preg now read the parked copy */
             j = 0;
             while (j < n) {
                 if (!ph_done[j] && j != parked && ph_src[j] >= 0 && ra_reg[ph_src[j]] == preg &&
-                    ra_is_fpv(ph_src[j]) == pfp) {
-                    int dreg2;
-                    dreg2 = ra_reg[ph_phi[j]];
-                    if (pfp) { f_reset(); f_s(s370_r(dreg2)); f_c(','); f_s(s370_hdr(S370_HDR_PHIT + 8 * (S370_HDR_NPHIT - 1))); asm_ins("LD", s370_line, 4); }
-                    else { f_reset(); f_s(s370_r(dreg2)); f_s(",0"); asm_ins("LR", s370_line, 2); }
-                    ph_done[j] = 1;
-                }
+                    ra_is_fpv(ph_src[j]) == pfp)
+                    ph_parked[j] = 1;
                 j = j + 1;
             }
         }

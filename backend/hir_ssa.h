@@ -1286,6 +1286,117 @@ static void hir_ssa_construct(void) {
     free(ssa_pval); ssa_pval = 0;
     free(ssa_pprev); ssa_pprev = 0;
 }
+#ifdef F77_TARGET_S370
+/* fort370: a scalar whose value on entry can reach a use stays in its
+ * frame slot rather than a register.  The S/370 frame is static, as
+ * FORTRAN H's storage is, so the slot keeps the value from the last
+ * call -- which IBM's compilers give every local, and which old
+ * programs count on without a SAVE: René Ferland's ADDAD keeps the
+ * monitor's file table count NDEF in GRIGNO from call to call, and
+ * found unit 66 undefined when NDEF came back as whatever a register
+ * held.  A variable is exposed when a block reads it before writing it
+ * and the entry block reaches that block along blocks that never write
+ * it.  Everything else is promoted as before. */
+static int ssa_exposed_keep;        /* set per unit: a subprogram (a main program runs once) */
+static void ssa_keep_exposed(void) {
+    int *pidx;          /* alloca inst -> promo index, -1 */
+    int *seen;          /* per var: 1 + the block of its current entry */
+    int *cur;           /* per var: that entry */
+    int *head;          /* per var: first entry */
+    int *e_blk;
+    int *e_gen;         /* the block reads it before writing it */
+    int *e_next;
+    int *kmark;         /* per block: 1 + the var that block writes */
+    int *vmark;         /* per block: 1 + the var whose walk visited it */
+    int *stack;
+    int ne;
+    int b;
+    int i;
+    int v;
+    int n;
+    int keep;
+    if (ssa_npromo == 0 || !ssa_exposed_keep) return;
+    pidx = (int *)ssa_zalloc(h_ninst, sizeof(int));
+    seen = (int *)ssa_zalloc(ssa_npromo, sizeof(int));
+    cur = (int *)ssa_zalloc(ssa_npromo, sizeof(int));
+    head = (int *)ssa_zalloc(ssa_npromo, sizeof(int));
+    e_blk = (int *)ssa_zalloc(h_ninst + 1, sizeof(int));
+    e_gen = (int *)ssa_zalloc(h_ninst + 1, sizeof(int));
+    e_next = (int *)ssa_zalloc(h_ninst + 1, sizeof(int));
+    kmark = (int *)ssa_zalloc(bb_nblk, sizeof(int));
+    vmark = (int *)ssa_zalloc(bb_nblk, sizeof(int));
+    stack = (int *)ssa_zalloc(bb_nblk + 1, sizeof(int));
+    for (i = 0; i < h_ninst; i++) pidx[i] = -1;
+    for (v = 0; v < ssa_npromo; v++) { pidx[ssa_promo[v]] = v; head[v] = -1; }
+    ne = 0;
+    for (b = 0; b < bb_nblk; b++) {
+        if (bb_start[b] < 0) continue;
+        for (i = bb_start[b]; i < bb_end[b]; i++) {
+            int k;
+            k = h_kind[i];
+            if ((k == HI_LOAD || k == HI_STORE) && h_src1[i] >= 0 && h_src1[i] < h_ninst &&
+                (v = pidx[h_src1[i]]) >= 0) {
+                if (seen[v] != b + 1) {
+                    seen[v] = b + 1;
+                    e_blk[ne] = b;
+                    e_gen[ne] = (k == HI_LOAD);
+                    e_next[ne] = head[v];
+                    head[v] = ne;
+                    cur[v] = ne;
+                    ne = ne + 1;
+                }
+            }
+            if (hi_is_terminator(k)) break;
+        }
+    }
+    keep = 0;
+    for (v = 0; v < ssa_npromo; v++) {
+        int exposed;
+        int x;
+        int sp;
+        exposed = 0;
+        /* the blocks that write v; a block whose first access is a
+         * read but which writes v later still reads the entry value */
+        for (x = head[v]; x >= 0; x = e_next[x]) {
+            int bb;
+            int wr;
+            bb = e_blk[x];
+            wr = 0;
+            for (i = bb_start[bb]; i < bb_end[bb]; i++) {
+                if (h_kind[i] == HI_STORE && h_src1[i] == ssa_promo[v]) { wr = 1; break; }
+                if (hi_is_terminator(h_kind[i])) break;
+            }
+            if (wr) kmark[bb] = v + 1;
+        }
+        sp = 0;
+        for (x = head[v]; x >= 0; x = e_next[x]) {
+            if (!e_gen[x]) continue;
+            if (e_blk[x] == 0) { exposed = 1; break; }
+            if (vmark[e_blk[x]] != v + 1) { vmark[e_blk[x]] = v + 1; stack[sp++] = e_blk[x]; }
+        }
+        while (!exposed && sp > 0) {
+            int bb;
+            int j;
+            bb = stack[--sp];
+            for (j = 0; j < ssa_npred[bb]; j++) {
+                int pb;
+                pb = ssa_pred[ssa_pbase[bb] + j];
+                if (kmark[pb] == v + 1) continue;          /* v written there: not the entry value */
+                if (pb == 0) { exposed = 1; break; }
+                if (vmark[pb] == v + 1) continue;
+                vmark[pb] = v + 1;
+                stack[sp++] = pb;
+            }
+        }
+        if (!exposed) { ssa_promo[keep] = ssa_promo[v]; keep = keep + 1; }
+    }
+    ssa_npromo = keep;
+    free(pidx); free(seen); free(cur); free(head);
+    free(e_blk); free(e_gen); free(e_next);
+    free(kmark); free(vmark); free(stack);
+}
+#endif
+
 static void hir_ssa_construct_body(void) {
     int b;
 
@@ -1321,6 +1432,9 @@ static void hir_ssa_construct_body(void) {
      * re-sync; latent for C. */
     ssa_build_dtree();
     ssa_find_promo();
+#ifdef F77_TARGET_S370
+    ssa_keep_exposed();
+#endif
 
     if (ssa_npromo == 0) {
         ssa_phi_base = h_ninst;
