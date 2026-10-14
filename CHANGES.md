@@ -8,6 +8,43 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-14.2
+
+Tagged `v2026.10.14.2`: what René Ferland's ADDAD/ANCORR found when it
+ran with his own JCL and data -- four wrong-code bugs, three runtime
+gaps and IBM's static locals.  ANCORR now runs on TK5 from his OS/390
+JCL unchanged, and of about 1,830 numbers in its listing 1,808 are his
+OS/390 run's and 18 differ by 1 or 2 in the last digit.  Built from
+`be9c4d0`: FORT370.xmit SHA256 `0ec8e1f5f3c01472…`, 524,640 bytes;
+F77RT.obj SHA256 `b325ab26ed95f390…`, 576,400 bytes.  All 192 FCVS
+programs, 79 tests, the 600K source, the 85-deep nesting test, a unit
+at each size limit, ANCORR and Doug Wegscheid's pi spigot compile on
+the guest to the host's assembler, byte for byte, in REGION=7168K; the
+FCVS on MVS passes as before (3,346 tests, the 2 FM923 failures by
+design).
+
+- A compare took its first operand from a scratch register that its
+  storage operand then reloaded as a base: `IF (IFIN .GT. MEMOIR)
+  RETURN` compared MEMOIR's address with its value
+  (`tests/s370/cmpscr.f`).
+- Phi simplification took the undefined value for "no value yet", so a
+  variable set in a loop only sometimes became the loop index itself
+  (`tests/s370/phiundef.f`).
+- Registers that trade values on a loop's back edge lost one: a swap of
+  FPR0 and FPR2 left both the same (`tests/s370/phiswap.f`).
+- A dead block's ALLOCA was removed while a live block still stored
+  through it.
+- A subprogram's local variable keeps its value from one call to the
+  next, as FORTRAN H's and VS FORTRAN's do, without SAVE: one whose
+  value on entry can be used stays in its (static) frame slot.  ADDAD's
+  monitor keeps its file table that way (`tests/s370/keepvar.f`).
+- Units 0 to 99, as IBM numbers them: OPEN refused any above 31.  Unit
+  0 is DD FT00F001 when the job has one, SYSTERM otherwise
+  (`tests/s370/unit99.f`).
+- A WRITE whose items run out inside a repeated descriptor (`15A1`)
+  ends its record there; the literal that begins the next group was
+  written (`tests/s370/fmtend.f`).
+
 ## 2026-10-14.1
 
 Tagged `v2026.10.14.1`: two ENTRY bugs, from slow-32's copy of the front
