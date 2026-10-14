@@ -4377,6 +4377,30 @@ static int f77_eq_find(int s, int *off) {
     return s;
 }
 
+/* The static object `prefix`<unit>_<name> of the unit being compiled,
+ * made on first use.  A subprogram and its ENTRY points are one
+ * subprogram with one set of statics, so they are named after the
+ * parent, and an ENTRY compiled after it finds the object already
+ * there (each had had its own: a SAVEd K set through one entry was
+ * not the K the other read). */
+static int f77_static_obj(char *prefix, char *name, int size, char **out) {
+    int fam;
+    int g;
+    char *nm;
+    fam = f77_cur_unit;
+    if (fam >= 0 && f77_uentry_parent[fam] >= 0) fam = f77_uentry_parent[fam];
+    nm = f77_gpool_name(prefix, f77_uname[fam], "_", name);
+    for (g = 0; g < ps_nglobals; g++) {
+        if (strcmp(ps_gname[g], nm) == 0) {
+            if (size > ps_gsize[g]) ps_gsize[g] = size;
+            *out = ps_gname[g];
+            return g;
+        }
+    }
+    *out = nm;
+    return f77_g_add(nm, size);
+}
+
 /* Rebind symbol `s` to static storage at `name`+`off`.  The GADDR (and
  * ADDI) land in whatever block is current -- the declaration part, so
  * the entry block, which dominates every use. */
@@ -4546,8 +4570,7 @@ static void f77_layout_static(void) {
                     if (f77_cblk_gidx[k] == g && coff + maxend > boff[k]) boff[k] = coff + maxend;
                 }
             } else {
-                nm = f77_gpool_name("f77e_", f77_uname[f77_cur_unit], "_", f77_sname[i]);
-                g = f77_g_add(nm, maxend - minoff);
+                g = f77_static_obj("f77e_", f77_sname[i], maxend - minoff, &nm);
                 for (s = f77_scope_base; s < f77_nsym; s++) {
                     root = f77_eq_find(s, &o);
                     if (root != i) continue;
@@ -4579,9 +4602,8 @@ static void f77_layout_static(void) {
         }
         {
             char *nm;
-            nm = f77_gpool_name("f77s_", f77_uname[f77_cur_unit], "_",
-                                f77_sname[s]);
-            f77_sgidx[s] = f77_g_add(nm, f77_esize(s) * f77_sym_nelem(s));
+            f77_sgidx[s] = f77_static_obj("f77s_", f77_sname[s],
+                                          f77_esize(s) * f77_sym_nelem(s), &nm);
             f77_bind_static(s, nm, 0);
         }
     }
@@ -5660,6 +5682,16 @@ static void f77_stmt_call(int skip) {
  * declarations to precede executable statements, so that point is
  * exactly when every type is known. */
 static int f77_decls_open;               /* still in the declaration part */
+
+/* Compiling an ENTRY: the parent's whole text is compiled, and control
+ * goes from the declarations straight to the ENTRY statement on
+ * f77_entry_line.  A GO TO from after the ENTRY back into the text
+ * before it is legal, and that text has to be there to go to.
+ * 0 = not an ENTRY, 1 = branch not yet emitted, 2 = branched, the
+ * parent's text before the ENTRY is being compiled, 3 = past it. */
+static int f77_entry_state;
+static int f77_entry_line;
+static int f77_entry_blk;
 
 static int f77_copyin_on = -1;
 
@@ -7101,6 +7133,11 @@ static void f77_statement(void) {
      * block, and it runs once, which a labelled first statement (a
      * loop target) would not guarantee. */
     if (f77_decls_open && !f77_stmt_is_declaration(cls)) f77_emit_copyin();
+    if (f77_entry_state == 1 && !f77_decls_open) {
+        /* The text before the ENTRY: reached only by a GO TO */
+        f77_goto_blk(f77_entry_blk);
+        f77_entry_state = 2;
+    }
 
     /* A labelled statement starts (or continues into) that label's
      * block, so GOTOs and DO terminals both land correctly. */
@@ -7313,7 +7350,17 @@ static void f77_statement(void) {
         f77_call_i("f77_pause", 2, args);
         goto done;
     }
-    if (f77_starts("ENTRY")) goto done;        /* a no-op in the flow; see f77_uentry_parent */
+    if (f77_starts("ENTRY")) {
+        /* A no-op in the flow, except where the unit being compiled is
+         * this ENTRY: its code begins here (falling into an ENTRY
+         * statement goes on past it, as for any other). */
+        if (f77_entry_state == 2 && lx_stmt_line == f77_entry_line) {
+            f77_goto_blk(f77_entry_blk);
+            f77_begin_blk(f77_entry_blk);
+            f77_entry_state = 3;
+        }
+        goto done;
+    }
 
 
     if (f77_starts("SUBROUTINE") || f77_unit_header_ty() >= 0) {

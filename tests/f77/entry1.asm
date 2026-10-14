@@ -388,15 +388,15 @@ C00068   DC    X'41100000'
 * E1
 E1       CSECT
          USING *,15
-         B     L00077
+         B     L00080
          DC    AL1(2),CL7'E1'
-L00077   STM   14,12,12(13)
+L00080   STM   14,12,12(13)
          BALR  12,0
          USING *,12
          DROP  15
-         B     L00078
-L00079   DC    A(S00069)
-L00078   L     15,L00079
+         B     L00081
+L00082   DC    A(S00069)
+L00081   L     15,L00082
          ST    13,4(,15)
          ST    15,8(,13)
          MVC   76(4,15),76(13)
@@ -407,19 +407,22 @@ L00070   DS    0H
          L     4,0(,1)
          L     3,4(,1)
          LA    3,0(,3)
+L00071   DS    0H
          L     2,0(,4)
          LR    1,2
-         M     0,C00080
+         M     0,C00083
          LR    2,1
          ST    2,0(,3)
          LA    0,0
-         B     L00076
-L00071   DS    0H
+         B     L00079
 L00072   DS    0H
 L00073   DS    0H
 L00074   DS    0H
 L00075   DS    0H
 L00076   DS    0H
+L00077   DS    0H
+L00078   DS    0H
+L00079   DS    0H
          L     13,4(,13)
          L     14,12(,13)
          LM    2,12,28(13)
@@ -435,52 +438,56 @@ S00069   DS    0D
          DS    D
          DS    8D
          DS    D
-C00080   DC    F'100'
+C00083   DC    F'100'
 * E2
 E2       CSECT
          USING *,15
-         B     L00088
+         B     L00095
          DC    AL1(2),CL7'E2'
-L00088   STM   14,12,12(13)
+L00095   STM   14,12,12(13)
          BALR  12,0
          USING *,12
          DROP  15
-         B     L00089
-L00090   DC    A(S00081)
-L00089   L     15,L00090
+         B     L00096
+L00097   DC    A(S00084)
+L00096   L     15,L00097
          ST    13,4(,15)
          ST    15,8(,13)
          MVC   76(4,15),76(13)
          LR    13,15
-         USING S00081,13
-         ST    1,S00081+72
-L00082   DS    0H
+         USING S00084,13
+         ST    1,S00084+72
+L00085   DS    0H
          L     4,0(,1)
          L     3,4(,1)
          L     2,8(,1)
          LA    2,0(,2)
+L00086   DS    0H
          LR    0,4
-         ST    0,P00091+0
-         OI    P00091+0,X'80'
-         LA    1,P00091
+         ST    0,P00098+0
+         OI    P00098+0,X'80'
+         LA    1,P00098
          LR    15,2
          BALR  14,15
-         AE    0,C00092
+         AE    0,C00099
          STE   0,0(,3)
          LA    0,0
-         B     L00087
-L00083   DS    0H
-L00084   DS    0H
-L00085   DS    0H
-L00086   DS    0H
+         B     L00094
 L00087   DS    0H
+L00088   DS    0H
+L00089   DS    0H
+L00090   DS    0H
+L00091   DS    0H
+L00092   DS    0H
+L00093   DS    0H
+L00094   DS    0H
          L     13,4(,13)
          L     14,12(,13)
          LM    2,12,28(13)
          SR    15,15
          BR    14
          DROP  12
-S00081   DS    0D
+S00084   DS    0D
          DS    18F
          DS    F
          DS    F
@@ -489,48 +496,53 @@ S00081   DS    0D
          DS    D
          DS    8D
          DS    D
-P00091   DS    1F
+P00098   DS    1F
          DS    XL4
-C00092   DC    X'40800000'
+C00099   DC    X'40800000'
 * E3
 E3       CSECT
          USING *,15
-         B     L00099
+         B     L00111
          DC    AL1(2),CL7'E3'
-L00099   STM   14,12,12(13)
+L00111   STM   14,12,12(13)
          BALR  12,0
          USING *,12
          DROP  15
-         B     L00100
-L00101   DC    A(S00093)
-L00100   L     15,L00101
+         B     L00112
+L00113   DC    A(S00100)
+L00112   L     15,L00113
          ST    13,4(,15)
          ST    15,8(,13)
          MVC   76(4,15),76(13)
          LR    13,15
-         USING S00093,13
-         ST    1,S00093+72
-L00094   DS    0H
+         USING S00100,13
+         ST    1,S00100+72
+L00101   DS    0H
          L     3,0(,1)
          LA    3,0(,3)
+L00102   DS    0H
          L     2,0(,3)
-         C     2,C00102
-         BC    8,L00095
-L00096   DS    0H
+         C     2,C00114
+         BC    8,L00107
+L00108   DS    0H
          LA    0,1
-         B     L00098
-L00095   DS    0H
+         B     L00110
+L00103   DS    0H
+L00104   DS    0H
+L00105   DS    0H
+L00106   DS    0H
+L00107   DS    0H
          LA    0,2
-         B     L00098
-L00097   DS    0H
-L00098   DS    0H
+         B     L00110
+L00109   DS    0H
+L00110   DS    0H
          L     13,4(,13)
          L     14,12(,13)
          LM    2,12,28(13)
          SR    15,15
          BR    14
          DROP  12
-S00093   DS    0D
+S00100   DS    0D
          DS    18F
          DS    F
          DS    F
@@ -539,38 +551,42 @@ S00093   DS    0D
          DS    D
          DS    8D
          DS    D
-C00102   DC    F'1'
+C00114   DC    F'1'
 * EF
 EF       CSECT
          USING *,15
-         B     L00106
+         B     L00121
          DC    AL1(2),CL7'EF'
-L00106   STM   14,12,12(13)
+L00121   STM   14,12,12(13)
          BALR  12,0
          USING *,12
          DROP  15
-         B     L00107
-L00108   DC    A(S00103)
-L00107   L     15,L00108
+         B     L00122
+L00123   DC    A(S00115)
+L00122   L     15,L00123
          ST    13,4(,15)
          ST    15,8(,13)
          MVC   76(4,15),76(13)
          LR    13,15
-         USING S00103,13
-         ST    1,S00103+72
-L00104   DS    0H
+         USING S00115,13
+         ST    1,S00115+72
+L00116   DS    0H
          L     2,0(,1)
          LA    2,0(,2)
-         LE    0,C00109
+L00117   DS    0H
+         LE    0,C00124
          AE    0,0(,2)
-L00105   DS    0H
+         B     L00120
+L00118   DS    0H
+L00119   DS    0H
+L00120   DS    0H
          L     13,4(,13)
          L     14,12(,13)
          LM    2,12,28(13)
          SR    15,15
          BR    14
          DROP  12
-S00103   DS    0D
+S00115   DS    0D
          DS    18F
          DS    F
          DS    F
@@ -579,5 +595,5 @@ S00103   DS    0D
          DS    D
          DS    8D
          DS    D
-C00109   DC    X'41200000'
+C00124   DC    X'41200000'
          END

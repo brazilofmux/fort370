@@ -442,23 +442,22 @@ static void hl_func(Node *fn) {
     f77_bind_unit(u);
     fn->nparams = f77_unit_nparams;
 
+    f77_entry_state = 0;
     if (f77_uentry_parent[u] >= 0) {
-        /* An ENTRY: the parent's specification statements first, then
-         * the statements from the ENTRY onwards. */
+        /* An ENTRY: the parent's whole text, from its header on.  Its
+         * first executable statement branches to the ENTRY statement
+         * (f77_entry_state); the statements before that are reached
+         * only by a GO TO.  Compiled from the ENTRY onward alone, a
+         * GO TO back into them had nowhere to go. */
         int par;
         par = f77_uentry_parent[u];
+        f77_entry_line = f77_uline[u];
+        f77_entry_blk = hir_new_block();
+        f77_entry_state = 1;
         lx_goto(f77_upos[par], f77_uline[par]);
         if (!f77_next_stmt()) return;                 /* the parent's header */
-        for (;;) {
-            if (!f77_next_stmt()) break;
-            if (!f77_is_spec_stmt()) break;
-            f77_statement();
-        }
-        lx_goto(f77_upos[u], f77_uline[u]);
-        if (!f77_next_stmt()) return;                 /* the ENTRY statement */
-    }
-
-    if (f77_ukind[u] != F77_UNIT_PROGRAM) {
+        if (!f77_next_stmt()) { f77_emit_return(); fn->locals_size = f77_frame; return; }
+    } else if (f77_ukind[u] != F77_UNIT_PROGRAM) {
         /* The header itself emits nothing; go on to the body. */
         if (!f77_next_stmt()) { f77_emit_return(); fn->locals_size = f77_frame; return; }
     }
