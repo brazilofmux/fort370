@@ -72,8 +72,8 @@ mvs: out/mvs/FORT370.xmit out/mvs/F77RT.obj
 # deck and the module), so two builds of the same source are the same
 # bytes and a package's SHA256 reproduces; MVSDATE/MVSTIME choose it.
 MVSDATE ?= 26286
-MVSTIME ?= 200000
-MVSCLOCK = ASMDATE=10/13/26 ASMTIME=20.00 LDDATE=$(MVSDATE) LDTIME=$(MVSTIME)
+MVSTIME ?= 220000
+MVSCLOCK = ASMDATE=10/13/26 ASMTIME=22.00 LDDATE=$(MVSDATE) LDTIME=$(MVSTIME)
 out/mvs/FORT370.xmit: $(SRC) runtime/s370/millicode.c
 	@mkdir -p out/mvs
 	$(MVSCLOCK) cc370 -O1 -w -DF77_TARGET_S370 -I backend -c -o out/mvs/f77.o src/f77.c
