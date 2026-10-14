@@ -36,7 +36,9 @@
  * tenths of FORT370's time on MVS (René Ferland's AIDAFC, 3 minutes of
  * CPU on TK5, 19 seconds without them).  The environment does not
  * change while the compiler runs, so each name's answer is kept,
- * found again by the address of the name (a literal at every call). */
+ * found again by the address of the name (a literal at every call).
+ * The answer is copied: a libc may return every value in one buffer
+ * that the next getenv overwrites. */
 static char *f77_getenv(const char *name) {
     static const char *key[256];
     static char *val[256];
@@ -47,8 +49,11 @@ static char *f77_getenv(const char *name) {
     while (n < 256) {
         if (key[h] == name) return val[h];
         if (!key[h]) {
+            char *v;
             key[h] = name;
-            val[h] = getenv(name);
+            v = getenv(name);
+            val[h] = v ? (char *)malloc(strlen(v) + 1) : (char *)0;
+            if (val[h]) strcpy(val[h], v);
             return val[h];
         }
         h = (h + 1) & 255;

@@ -5374,6 +5374,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     int save_len;
     int save_label;
     int save_line;
+    int save_stmt_line;
     int save_pos;
     /* The token scanner runs over lx_stmt, so splicing a callee moves
      * the cursor into the callee's statements.  Restoring the buffer is
@@ -5422,6 +5423,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     save_len = lx_stmt_len;
     save_label = lx_stmt_label;
     save_line = lx_line;
+    save_stmt_line = lx_stmt_line;
     save_pos = lx_pos;
     save_rp = lx_rp; save_rpe = lx_rpe; save_rts = lx_rts; save_rte = lx_rte;
     save_rcs = lx_rcs; save_ract = lx_ract;
@@ -5534,6 +5536,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     memcpy(lx_stmt, save_stmt, save_len + 1);
     memcpy(lx_brk, save_brk, save_len);
     lx_stmt_len = save_len;
+    lx_stmt_line = save_stmt_line;    /* errors later in the CALL are its line's */
     lx_stmt_label = save_label;
     lx_rp = save_rp; lx_rpe = save_rpe; lx_rts = save_rts; lx_rte = save_rte;
     lx_rcs = save_rcs; lx_ract = save_ract;
