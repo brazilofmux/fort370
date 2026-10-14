@@ -67,6 +67,12 @@ run-to-run drift):
 | lll7    |   14.80 |           15.14 |
 | linpack |   12.97 |           13.64 |
 
+A real program, not a kernel: Doug Wegscheid's pi spigot (9000 digits,
+a MOD and a divide by `2*I-1` 270 million times) runs in 8.99 seconds
+to H's 11.93 at OPT=2, the same digits, because fort370 takes the
+quotient and the remainder from one `DR` where H divides twice
+(`bench/results-spigot-2026-10-14.txt`).
+
 The inner loops are H's: daxpy is `LD / MDR / AD / STD / BXLE`, and
 matmul's is five instructions to H's eight; an outer loop that only
 counts is one `BXH`. What H does that this compiler does not yet:

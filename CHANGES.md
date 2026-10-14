@@ -8,7 +8,18 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
-## Unreleased
+## 2026-10-14
+
+Tagged `v2026.10.14`: faster code, found by measuring a reader's real
+program against FORTRAN H, and a compiler that no longer ignores what it
+does not understand.  Built from `6843cec`: FORT370.xmit SHA256
+`68aba44b541f8530…`, 511,040 bytes; F77RT.obj unchanged from
+2026-10-13.3, SHA256 `1239f98ff9697452…`, 570,400 bytes.  All 192 FCVS
+programs, 72 tests, the 600K source, the 85-deep nesting test, a unit
+at each size limit, René Ferland's ADDAD and Doug Wegscheid's pi spigot
+compile on the guest to the host's assembler, byte for byte, in
+REGION=7168K.  Doug's spigot (`bench/results-spigot-2026-10-14.txt`)
+runs in 0.754 of FORTRAN H's time at OPT=2, from 1.055.
 
 - A local scalar in static storage (SAVE, or an initial value) outside
   COMMON that the unit never stores is read-only, and its load moves
