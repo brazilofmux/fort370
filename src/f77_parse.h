@@ -685,6 +685,7 @@ static void f77_realloc_sym(int s) {
 #define F77_MAX_LABEL (4096 * F77_ROOM)   /* fort370: was 512 */
 static int f77_lnum[F77_MAX_LABEL];
 static int f77_lblk[F77_MAX_LABEL];
+static signed char f77_ldef[F77_MAX_LABEL];   /* fort370: a statement carries it */
 static int f77_nlabel;
 
 /* Block for a label, created on first mention so forward GOTOs work. */
@@ -698,8 +699,25 @@ static int f77_label_blk(int n) {
     if (f77_nlabel >= F77_MAX_LABEL) { f77_error("too many labels"); return 0; }
     f77_lnum[f77_nlabel] = n;
     f77_lblk[f77_nlabel] = hir_new_block();
+    f77_ldef[f77_nlabel] = 0;
     f77_nlabel = f77_nlabel + 1;
     return f77_lblk[f77_nlabel - 1];
+}
+
+/* fort370: a label the unit refers to (GO TO, DO, IF, END=) but no
+ * statement carries is an error: its block was made on first mention
+ * and, left empty, fell through to whatever came next. */
+static void f77_label_check(void) {
+    int i;
+    char msg[64];
+    i = f77_label_base;
+    while (i < f77_nlabel) {
+        if (!f77_ldef[i]) {
+            sprintf(msg, "statement label %d is referred to but never defined", f77_lnum[i]);
+            f77_error(msg);
+        }
+        i = i + 1;
+    }
 }
 
 /* --- FORMAT statements ----------------------------------------------- */
@@ -7011,7 +7029,10 @@ static void f77_statement(void) {
      * block, so GOTOs and DO terminals both land correctly. */
     if (lx_stmt_label >= 0) {
         int b;
+        int q;
         b = f77_label_blk(lx_stmt_label);
+        for (q = f77_label_base; q < f77_nlabel; q++)
+            if (f77_lnum[q] == lx_stmt_label) f77_ldef[q] = 1;
         f77_goto_blk(b);
         f77_begin_blk(b);
     }

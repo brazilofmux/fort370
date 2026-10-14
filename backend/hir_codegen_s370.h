@@ -1912,9 +1912,19 @@ static void s370_inst(int i) {
                 m = s370_mem_operand(h_src1[i], lnt, 14);
                 f_reset(); f_s(s370_r(ra_reg[v])); f_c(','); f_s(m); asm_ins(dbl ? "STD" : "STE", s370_line, 4);
             } else if (s370_fmem(v, mem)) {
-                /* storage to storage: MVC takes a base but no index,
-                 * which our operand forms never have */
+                /* storage to storage: MVC takes a base but no index.
+                 * An operand with one (X(I) of a dummy array: "0(2,5)")
+                 * has its address formed in R14 first; the source is a
+                 * pool constant, a slot or an R15-based operand. */
                 m = s370_mem_operand(h_src1[i], lnt, 14);
+                {
+                    char *p;
+                    p = strchr(m, '(');
+                    if (p && p[1] != ',') {
+                        f_reset(); f_s("14,"); f_s(m); asm_ins("LA", s370_line, 4);
+                        m = "0(,14)";
+                    }
+                }
                 f_reset(); f_s(m);
                 /* insert the length: "D(,B)" -> "D(8,B)", "T+off" -> "T+off(8)" */
                 {
@@ -3168,6 +3178,7 @@ static void s370_loops(void) {
  * the limit in the register above it, the stepped index in a register. */
 static int s370_bxle_ok(int brc) {
     int p1;
+    int idx;
     int step;
     int lim;
     int cmp;
@@ -3177,9 +3188,12 @@ static int s370_bxle_ok(int brc) {
     if (cmp < 0) return 0;
     lim = h_src2[cmp];
     /* the ADD's operands: the index phi, and the step */
-    if (h_src1[p1] >= 0 && h_kind[h_src1[p1]] == HI_PHI) step = h_src2[p1];
-    else step = h_src1[p1];
+    if (h_src1[p1] >= 0 && h_kind[h_src1[p1]] == HI_PHI) { idx = h_src1[p1]; step = h_src2[p1]; }
+    else { idx = h_src2[p1]; step = h_src1[p1]; }
     if (ra_reg[p1] < 0 || ra_reg[step] < 0 || ra_reg[lim] < 0) return 0;
+    /* fort370: and the index -- spilled, it has no register to LR from
+     * (René Ferland's ADDAD, LECAFC: "LR 2,/") */
+    if (idx < 0 || ra_reg[idx] < 0) return 0;
     if (ra_reg[step] & 1) return 0;
     if (ra_reg[lim] != ra_reg[step] + 1) return 0;
     return 1;

@@ -10,6 +10,20 @@ with each release, built and checked by CI on their own platforms.
 
 ## Unreleased
 
+- Three code generation bugs found by René Ferland's ADDAD program (a
+  1985 correspondence-analysis library, 2,187 lines), which compiled but
+  then failed in IFOX00 with RC 8:
+  - a REAL stored storage to storage into an element of a dummy array
+    (`X(I)=-E` with `-E` spilled) gave `MVC 0(2,5)(4),...`: MVC takes no
+    index register.  The address is now formed first, `LA 14,0(2,5)`.
+  - a DO loop whose index was spilled gave `LR 2,/` in its BXLE/BXH
+    test; such a loop now tests with an add, a compare and a branch.
+  - a REAL read before anything assigned it stopped the compile with
+    "missing operand" when stored; it is now 0.0, as an integer is 0.
+  as370 accepted both bad statements; IFOX00 did not.
+  `tests/s370/mvcidx.f` and `tests/s370/bxspill.f` reproduce them.
+- A statement label that is referred to (GO TO, DO, IF, END=) but that
+  no statement carries is an error; it had compiled, falling through.
 - An integer read before anything assigned it no longer stops the
   compiler with "s370: missing operand" when it is compared or tested
   (`IF (I) 1,2,3`, `IF (I.GT.0)`): it is undefined in FORTRAN, and is

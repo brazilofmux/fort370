@@ -933,6 +933,15 @@ static void ssa_rename(void) {
                             h_src2[i] = -1;
                             h_val[i] = 0;
                         }
+                        /* and a REAL or DOUBLE PRECISION one 0.0: a
+                         * floating constant is its decimal text */
+                        if (val < 0 && ty_is_fp(h_ty[i])) {
+                            h_kind[i] = HI_FCONST;
+                            h_src1[i] = -1;
+                            h_src2[i] = -1;
+                            h_val[i] = 0;
+                            h_name[i] = "0";
+                        }
 #endif
                     }
                 } else if (k == HI_STORE) {

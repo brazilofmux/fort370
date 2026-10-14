@@ -467,6 +467,7 @@ static void hl_func(Node *fn) {
         if (!f77_next_stmt()) break;
         if (f77_unit_header_ty() >= 0 || f77_starts("SUBROUTINE")) break;
     }
+    f77_label_check();
 
     if (f77_cur_blk_live) f77_emit_return();
 
