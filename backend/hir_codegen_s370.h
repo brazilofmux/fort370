@@ -108,11 +108,20 @@ static int s370_lbl_far(int lbl) {
     return lbl >= 0 && lbl < S370_MAX_ULBL && s370_far[lbl];
 }
 
+/* fort370: the R0:R1 pair after a divide holds the remainder and the
+ * quotient of s370_dr_a / s370_dr_b, until anything that may write R0 or
+ * R1 is emitted, or a label lets control in from elsewhere: then
+ * s370_dr_ok is 0.  A REM and a DIV of the same two values take their
+ * halves of one divide (MOD(X,Y) beside X/Y). */
+static int s370_dr_ok;
+static int s370_dr_a;
+static int s370_dr_b;
+
 static void asm_stmt(char *label, char *op, char *operands) {
     int col;
     int i;
     char *p;
-    if (label && *label) s370_scache_clear();
+    if (label && *label) { s370_scache_clear(); s370_dr_ok = 0; }
     if (label && label[0] == 'L' && label[1] >= '0' && label[1] <= '9') {
         int n;
         n = atoi(label + 1) - s370_lbl_base;
@@ -167,6 +176,14 @@ static void asm_ins(char *op, char *operands, int len) {
     int r;
     asm_stmt("", op, operands);
     s370_pc = s370_pc + len;
+    /* the divide pair: any instruction whose first operand is R0 or R1
+     * (written or not -- the test is cheap and errs one way), and those
+     * that write registers they do not name */
+    r = atoi(operands);
+    if (r == 0 || r == 1 || (op[0] == 'B' && op[1] == 'A') || strcmp(op, "LM") == 0 ||
+        strcmp(op, "SVC") == 0 || strcmp(op, "EX") == 0 || strcmp(op, "TRT") == 0 ||
+        strcmp(op, "MVCL") == 0 || strcmp(op, "CLCL") == 0)
+        s370_dr_ok = 0;
     /* keep the scratch cache honest */
     if (op[0] == 'B' && op[1] == 'A') { s370_scache[14] = -1; s370_scache[15] = -1; }   /* BAL BALR */
     if (op[0] == 'B' && op[1] == 'X') { r = atoi(operands); if (r >= 0 && r < 16) s370_scache[r] = -1; }
@@ -1291,6 +1308,11 @@ static void s370_muldiv(int i, int d) {
     s1 = h_src1[i];
     s2 = h_src2[i];
     if (bg_memop[i] == 1) { s1 = h_src2[i]; s2 = h_src1[i]; }
+    if (k != HI_MUL && s370_dr_ok && s370_dr_a == s1 && s370_dr_b == s2) {
+        /* this divide is done: its other half is still in the pair */
+        f_reset(); f_s(s370_r(d)); f_s(k == HI_REM ? ",0" : ",1"); asm_ins("LR", s370_line, 2);
+        return;
+    }
     /* The second operand first: forming a storage operand may reload
      * an index into R1, which the pair is about to use. */
     have_mem = 0;
@@ -1307,6 +1329,7 @@ static void s370_muldiv(int i, int d) {
     } else {
         f_reset(); f_s("0,"); f_s(s370_r(r2)); asm_ins(k == HI_MUL ? "MR" : "DR", s370_line, 2);
     }
+    if (k != HI_MUL) { s370_dr_ok = 1; s370_dr_a = s1; s370_dr_b = s2; }
     f_reset(); f_s(s370_r(d)); f_s(k == HI_REM ? ",0" : ",1"); asm_ins("LR", s370_line, 2);
 }
 

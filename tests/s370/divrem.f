@@ -1,0 +1,35 @@
+C     MOD(X,Y) AND X/Y OF THE SAME TWO VALUES SHARE ONE DIVIDE: DR
+C     LEAVES THE REMAINDER IN R0 AND THE QUOTIENT IN R1.  THE PAIR IS
+C     TAKEN ONLY WHILE NOTHING HAS WRITTEN R0 OR R1 SINCE AND NO LABEL
+C     HAS LET CONTROL IN; A CALL, ANOTHER DIVIDE OR A LABEL BETWEEN THEM
+C     MEANS DIVIDING AGAIN.  NEGATIVE OPERANDS: MOD TAKES THE DIVIDEND'S
+C     SIGN, AS DR DOES.  GFORTRAN PRINTS THE SAME LINES.
+      INTEGER X(4), Y(4), Q, R, Q2, R2, Q3, R3, Q4, R4, I, K
+      DATA X /47, -47, 47, -47/, Y /5, 5, -5, -5/
+      K = 0
+      DO 10 I = 1, 4
+C       ADJACENT: ONE DIVIDE
+        R = MOD (X(I), Y(I))
+        Q = X(I) / Y(I)
+C       A CALL BETWEEN
+        R2 = MOD (X(I), Y(I) + 1)
+        CALL BUMP (K)
+        Q2 = X(I) / (Y(I) + 1)
+C       ANOTHER DIVIDE BETWEEN
+        R3 = MOD (X(I), Y(I) - 1)
+        K = K + X(I) / 3
+        Q3 = X(I) / (Y(I) - 1)
+C       A LABEL BETWEEN
+        R4 = MOD (X(I) + 1, Y(I))
+        IF (K .LT. -1000) GO TO 5
+    5   Q4 = (X(I) + 1) / Y(I)
+        WRITE (6,100) X(I), Y(I), Q, R, Q2, R2, Q3, R3, Q4, R4
+   10 CONTINUE
+      WRITE (6,101) K
+  100 FORMAT (1X,'>DIVREM',2I4,8I4)
+  101 FORMAT (1X,'>DIVREM K',I6)
+      END
+      SUBROUTINE BUMP (K)
+      INTEGER K
+      K = K + 1000
+      END

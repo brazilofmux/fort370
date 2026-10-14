@@ -10,6 +10,13 @@ with each release, built and checked by CI on their own platforms.
 
 ## Unreleased
 
+- MOD(X,Y) and X/Y of the same two values share one divide: DR leaves
+  the remainder and the quotient in R0:R1, and the second takes its
+  half while nothing has written the pair since.  For it, CSE now takes
+  two integer constants of one value as the same operand within a
+  block, so the two copies of 2*I-1 in Doug Wegscheid's pi spigot are
+  one value.  Its inner loop goes from 28 instructions to 22 (FORTRAN H
+  OPT=2: 26, with two divides); `tests/s370/divrem.f`.
 - Text a statement's parser leaves unread is an error, "unexpected text
   after the statement": a missing comma (`DIMENSION A(3) B(2)`) or a
   form the compiler does not take.  Ignored, it had been ignored without

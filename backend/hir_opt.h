@@ -868,8 +868,26 @@ static int ho_cse_head[HO_CSE_SLOTS];   /* slot -> first inst index, -1 if empty
 static hir_ix ho_cse_next[HIR_MAX_INST];    /* inst -> next in chain, -1 if end */
 static int ho_stat_cse;
 
+/* fort370: an operand's identity for CSE.  Two ICONSTs of one value and
+ * type are the same operand: strength reduction makes a fresh ICONST 1
+ * for each 2*I it turns into SLL I,1, and compared by index the two
+ * copies of 2*I-1 in MOD(X,2*I-1) and X/(2*I-1) never met. */
+static int ho_cse_key(int v) {
+    if (v >= 0 && h_kind[v] == HI_ICONST) return -2 - (h_val[v] & 0x3FFFFFF);
+    return v;
+}
+
+static int ho_cse_same(int a, int b) {
+    if (a == b) return 1;
+    if (a < 0 || b < 0) return 0;
+    return (h_kind[a] == HI_ICONST && h_kind[b] == HI_ICONST &&
+            h_val[a] == h_val[b] && h_ty[a] == h_ty[b]) ? 2 : 0;
+}
+
 static int ho_cse_hash(int kind, int s1, int s2, int val) {
     int h;
+    s1 = ho_cse_key(s1);
+    s2 = ho_cse_key(s2);
     h = kind * 73 + (s1 + 1) * 131 + (s2 + 1) * 257 + val * 37;
     if (h < 0) h = 0 - h;
     return h & HO_CSE_MASK;
@@ -915,7 +933,11 @@ static int ho_cse(void) {
         found = -1;
         j = ho_cse_head[slot];
         while (j >= 0) {
-            if (h_kind[j] == k && h_src1[j] == s1 && h_src2[j] == s2 &&
+            if (h_kind[j] == k && ho_cse_same(h_src1[j], s1) && ho_cse_same(h_src2[j], s2) &&
+                /* matched through equal constants: within a block only,
+                 * as the per-block constants had always kept it -- across
+                 * blocks the shared value holds a register (lll7 spilled) */
+                ((ho_cse_same(h_src1[j], s1) != 2 && ho_cse_same(h_src2[j], s2) != 2) || h_blk[j] == h_blk[i]) &&
                 h_val[j] == v && ho_dominates(h_blk[j], h_blk[i]) &&
                 /* fort370: an address over a remat base (A(3)) is one LA
                  * wherever it is used; shared across blocks it would
