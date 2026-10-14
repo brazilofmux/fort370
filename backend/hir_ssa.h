@@ -920,6 +920,20 @@ static void ssa_rename(void) {
                         val = ssa_vcur(v);
                         h_kind[i] = HI_COPY;
                         h_src1[i] = val;
+#ifdef F77_TARGET_S370
+                        /* fort370: an integer read before anything
+                         * assigned it is undefined; make it 0, an
+                         * ordinary value, rather than a copy of nothing
+                         * that a compare or branch has no register for */
+                        if (val < 0 && !ty_is_fp(h_ty[i]) &&
+                            ((h_ty[i] & TY_BASE_MASK) == TY_INT || (h_ty[i] & TY_BASE_MASK) == TY_SHORT ||
+                             (h_ty[i] & TY_BASE_MASK) == TY_CHAR) && !(h_ty[i] & TY_PTR_MASK)) {
+                            h_kind[i] = HI_ICONST;
+                            h_src1[i] = -1;
+                            h_src2[i] = -1;
+                            h_val[i] = 0;
+                        }
+#endif
                     }
                 } else if (k == HI_STORE) {
                     v = ssa_find_promo_idx(h_src1[i]);

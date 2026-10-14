@@ -10,6 +10,12 @@ with each release, built and checked by CI on their own platforms.
 
 ## Unreleased
 
+- An integer read before anything assigned it no longer stops the
+  compiler with "s370: missing operand" when it is compared or tested
+  (`IF (I) 1,2,3`, `IF (I.GT.0)`): it is undefined in FORTRAN, and is
+  now 0, an ordinary value, as it already was when passed to a call.
+  Old programs written for FORTRAN H do this often.  FCVS FM718 loads
+  its undefined argument with `LA 0,0` where it had `SR 0,0`.
 - `bench/fcvs-jcl.py` writes the NIST FCVS as MVS jobs, one per
   program: F77CLG as an instream procedure, the program's source and
   its data instream, and the scratch data sets the suite opens, so the
