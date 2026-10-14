@@ -10,6 +10,14 @@ with each release, built and checked by CI on their own platforms.
 
 ## Unreleased
 
+- Text a statement's parser leaves unread is an error, "unexpected text
+  after the statement": a missing comma (`DIMENSION A(3) B(2)`) or a
+  form the compiler does not take.  Ignored, it had been ignored without
+  a word -- the type-statement initial values of 2026-10-13.3 were lost
+  this way, with every name after them.  Handlers that stopped one token
+  short of the end (GO TO, STOP, PAUSE, ASSIGN, PARAMETER, block IF,
+  ELSE IF, BACKSPACE and ENDFILE with parentheses) now read to it; the
+  FCVS and every test compile to the same assembler.
 - `jcl/F77CLG.jcl` and `docs/INSTALL-MVS.txt` say what to do when the
   assembly step ends with RC 8: its SYSPRINT is DUMMY, so add
   `//ASM.SYSPRINT DD SYSOUT=*` to see IFOX00's messages (NOLIST would

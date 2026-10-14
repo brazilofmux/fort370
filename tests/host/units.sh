@@ -2,7 +2,8 @@
 # units.sh -- how the compiler divides a source into program units, where
 # a mistake loses a unit without a word: a PROGRAM statement inside a
 # subprogram (its END missing) and a second main program are refused,
-# each with its message; so is a GO TO to a label no statement carries.  tests/s370/mainlast.f has a main program after
+# each with its message; so is a GO TO to a label no statement carries,
+# and text a statement's parser leaves unread (a missing comma).  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -22,6 +23,8 @@ printf '      PROGRAM A\n      END\n      PROGRAM B\n      END\n' > $T/twomain.f
 expect twomain "line 3: more than one main program"
 printf '      GO TO 99\n      END\n' > $T/nolabel.f
 expect nolabel "line 2: statement label 99 is referred to but never defined"
+printf '      DIMENSION A(3) B(2)\n      END\n' > $T/leftover.f
+expect leftover "line 1: unexpected text after the statement"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program and an undefined label refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label and leftover text refused"
 [ $bad = 0 ]
