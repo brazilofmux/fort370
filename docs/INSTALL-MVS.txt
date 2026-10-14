@@ -16,11 +16,11 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 0ec8e1f5f3c014729b3c976858e413964b298bf2304a094f69aa2e223384dec6
+  FORT370.xmit  SHA256 c432a976e9f206ba4dc18ae3e37d34afe1bd416231dc032a24234dac95892ade
                 524640 bytes, FB80 when it lands on the guest
   F77RT.obj     SHA256 b325ab26ed95f390bba904eb4a49d8531e8c21ef9bf4069df2885894148a1421
                 576400 bytes, FB80
-  built         from fort370 be9c4d0 (release 2026-10-14.2) with mvslovers/cc370 and libc370
+  built         from fort370 fc71850 (release 2026-10-14.3) with mvslovers/cc370 and libc370
                 as installed 2026-09-22
   tested        all 192 FCVS programs, 79 test programs and a unit
                 at each size limit compiled on the guest by this

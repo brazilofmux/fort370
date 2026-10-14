@@ -8,6 +8,22 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-14.3
+
+Tagged `v2026.10.14.3`: FORT370 about nine times faster on MVS.  René
+Ferland's ADDAD/AIDAFC ran out of his 10-minute limit compiling; on our
+TK5 it took 3:05 of CPU, and ANCORR 2:20.  Nine tenths of that was
+libc370's getenv, which the compiler called for its debugging switches
+once per interference edge and per instruction; it now asks once per
+name, and AIDAFC compiles in 0:21.  The assembler it writes is the same,
+byte for byte.  Built from `fc71850`: FORT370.xmit SHA256
+`c432a976e9f206ba…`, 524,640 bytes; F77RT.obj unchanged (SHA256
+`b325ab26ed95f390…`, 576,400 bytes, the same bytes as 2026-10-14.2's).
+All 192 FCVS programs, 79 tests, the 600K source, the 85-deep nesting
+test, a unit at each size limit, ANCORR, AIDAFC and Doug Wegscheid's pi
+spigot compile on the guest to the host's assembler, byte for byte, in
+REGION=7168K.
+
 ## 2026-10-14.2
 
 Tagged `v2026.10.14.2`: what René Ferland's ADDAD/ANCORR found when it
