@@ -8,7 +8,17 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
-## Unreleased
+## 2026-10-13.3
+
+The day's fourth release, tagged `v2026.10.13.3`: fixes for the first
+real programs readers sent.  Built from `707f7f2`: FORT370.xmit SHA256
+`088f429cb4545e8b…`, 510,800 bytes; F77RT.obj SHA256
+`1239f98ff9697452…`, 570,400 bytes (the runtime changes, for A editing
+of numeric items).  All 192 FCVS programs, 70 tests, the 600K source,
+the 85-deep nesting test, a unit at each size limit, René Ferland's
+ADDAD and Doug Wegscheid's pi spigot compile on the guest to the host's
+assembler, byte for byte, in REGION=7168K; ADDAD assembles and links
+there, and the spigot prints pi to 100 digits as gfortran does.
 
 - Three code generation bugs found by René Ferland's ADDAD program (a
   1985 correspondence-analysis library, 2,187 lines), which compiled but
@@ -24,6 +34,30 @@ with each release, built and checked by CI on their own platforms.
   `tests/s370/mvcidx.f` and `tests/s370/bxspill.f` reproduce them.
 - A statement label that is referred to (GO TO, DO, IF, END=) but that
   no statement carries is an error; it had compiled, falling through.
+- Initial values in a type statement, IBM's extension (`INTEGER
+  N/9000/, A(3)/1,2*7/`), are the same as DATA for the whole entity.
+  They had been skipped without a word, and with them every name after
+  them in the statement: the variables were undefined and an array
+  declared later lost its dimension.  Found in Doug Wegscheid's
+  program on H390-MVS; `tests/s370/typeinit.f`.
+- A editing of INTEGER, REAL and DOUBLE PRECISION items: text kept in
+  numeric variables, as FORTRAN 66 and IBM's compilers keep it
+  (`INTEGER D/1H5/` written with `A1`).  Aw writes the item's first w
+  bytes as they lie in storage, padding on the left when w is larger,
+  and reads the same way as into CHARACTER.  The runtime had printed
+  stars on output and stopped on input.  Doug Wegscheid's program
+  prints its digits this way; `tests/s370/holtext.f`.  F77RT.obj
+  changes with this release.
+- An intrinsic function's name not followed by `(` is a variable of
+  the unit (`INTEGER LEN`), and an array of that name is the array; the
+  compiler had stopped with "intrinsic needs arguments".  Also from
+  Doug's program; `tests/s370/intrvar.f`.
+- A character or Hollerith constant continued from a line that ends
+  short of column 72 keeps the blanks out to 72, as the card had.  The
+  host compiler had joined the continuation right after the last
+  character, so a file with trimmed lines compiled differently on the
+  host than the same deck on MVS; the port sweep found it in ADDAD.
+  `tests/s370/contstr.f` checks both kinds.
 - An integer read before anything assigned it no longer stops the
   compiler with "s370: missing operand" when it is compared or tested
   (`IF (I) 1,2,3`, `IF (I.GT.0)`): it is undefined in FORTRAN, and is
