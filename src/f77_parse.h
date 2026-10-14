@@ -1974,6 +1974,12 @@ static int f77_primary(void) {
             int ds;
             ds = f77_sym_find(nm);
             if (ds >= 0 && (f77_sarg[ds] || f77_sexternal[ds])) in = IN_NONE;
+            /* fort370: an intrinsic's name is the intrinsic only where
+             * it is referenced as a function; not followed by '(' it is
+             * a local variable (INTEGER LEN/30000/), and an array of that
+             * name is the array */
+            if (in != IN_NONE && !(lx_rp < lx_rpe && *lx_rp == '(')) in = IN_NONE;
+            if (in != IN_NONE && ds >= 0 && f77_srank[ds] > 0) in = IN_NONE;
         }
         if (in != IN_NONE) {
             int a; int ahi; int aty;
@@ -3462,6 +3468,7 @@ static int f77_char_len(void) {
 }
 
 /* Type declarations, and DIMENSION (which sets shape without a type). */
+static int f77_decl_init(int s);
 static void f77_stmt_decl(int ty, int skip) {
     int s;
     int clen;
@@ -3502,6 +3509,7 @@ static void f77_stmt_decl(int ty, int skip) {
             if (lx_t == T_LP) f77_parse_dims(s);
         }
         f77_realloc_sym(s);
+        if (lx_t == T_SLASH && ty >= 0 && !f77_decl_init(s)) return;
         if (lx_t != T_COMMA) break;
         f77_tok();
     }
@@ -4143,6 +4151,75 @@ static int f77_data_target(int stop) {
     return 1;
 }
 
+/* The value list of DATA (or of a type statement's /c/), from the first
+ * value up to the closing /, poured across f77_dt_* in order.  Returns 0
+ * on error. */
+static int f77_data_values(void) {
+    int ti;       /* target index */
+    int te;       /* elements consumed within target ti */
+    int rep;
+    ti = 0;
+    te = 0;
+    for (;;) {
+        if (lx_t == T_SLASH) break;
+        f77_data_const();
+        rep = 1;
+        if (lx_t == T_STAR) {   /* r*c: what we parsed was the count */
+            if (f77_cx_ty != TY_INT || f77_cx_i <= 0) {
+                f77_error("DATA repeat count must be a positive integer");
+                return 0;
+            }
+            rep = f77_cx_i;
+            f77_tok();
+            f77_data_const();
+        }
+        while (rep > 0) {
+            while (ti < f77_dt_n && te >= f77_dt_count[ti]) { ti = ti + 1; te = 0; }
+            if (ti >= f77_dt_n) { f77_error("more DATA values than variables"); return 0; }
+            if (f77_di_n >= F77_MAX_DINIT) { f77_error("too many DATA initializers"); return 0; }
+            f77_di_sym[f77_di_n] = f77_dt_sym[ti];
+            f77_di_elem[f77_di_n] = f77_dt_sublen[ti] ? f77_dt_start[ti] : f77_dt_start[ti] + te;
+            f77_di_ty[f77_di_n] = f77_cx_ty;
+            f77_di_i[f77_di_n] = f77_cx_i;
+            f77_di_d[f77_di_n] = f77_cx_d;
+            f77_di_sidx[f77_di_n] = f77_cx_sidx;
+            f77_di_d2[f77_di_n] = f77_cx_d2;
+            f77_di_t[f77_di_n] = f77_cx_t[0] ? strdup(f77_cx_t) : 0;
+            f77_di_t2[f77_di_n] = f77_cx_t2[0] ? strdup(f77_cx_t2) : 0;
+            f77_di_sub[f77_di_n] = f77_dt_sublen[ti];
+            f77_di_n = f77_di_n + 1;
+            te = te + 1;
+            rep = rep - 1;
+        }
+        if (lx_t == T_COMMA) { f77_tok(); continue; }
+        break;
+    }
+    while (ti < f77_dt_n && te >= f77_dt_count[ti]) { ti = ti + 1; te = 0; }
+    if (ti < f77_dt_n) { f77_error("fewer DATA values than variables"); return 0; }
+        return 1;
+}
+
+/* fort370: INTEGER K/3/, A(2)/1,2/ -- initial values in a type statement
+ * (IBM's FORTRAN IV and VS FORTRAN), the same as DATA for the whole
+ * entity; lx_t is at the opening /.  They had been skipped, and with
+ * them everything after in the statement.  Returns 0 on error. */
+static int f77_decl_init(int s) {
+    if (f77_sarg[s]) { f77_error("a dummy argument cannot be given an initial value"); return 0; }
+    if (f77_srank[s] > 0 && f77_adjustable(s)) { f77_error("adjustable array given an initial value"); return 0; }
+    f77_dt_n = 1;
+    f77_cxb_n = 0;
+    f77_dt_sym[0] = s;
+    f77_dt_start[0] = 0;
+    f77_dt_count[0] = f77_srank[s] > 0 ? f77_sym_nelem(s) : 1;
+    f77_dt_sublen[0] = 0;
+    if (!f77_scom[s]) f77_ssaved[s] = 1;   /* DATA implies static storage */
+    f77_tok();
+    if (!f77_data_values()) return 0;
+    if (lx_t != T_SLASH) { f77_error("expected / after initial values"); return 0; }
+    f77_tok();
+    return 1;
+}
+
 static void f77_stmt_data(int skip) {
     int s;
     int k;
@@ -4164,50 +4241,7 @@ static void f77_stmt_data(int skip) {
         if (lx_t != T_SLASH) { f77_error("expected / before DATA values"); return; }
         f77_tok();
 
-        /* --- the value list, poured across the targets in order --- */
-        {
-            int ti;       /* target index */
-            int te;       /* elements consumed within target ti */
-            int rep;
-            ti = 0;
-            te = 0;
-            for (;;) {
-                if (lx_t == T_SLASH) break;
-                f77_data_const();
-                rep = 1;
-                if (lx_t == T_STAR) {   /* r*c: what we parsed was the count */
-                    if (f77_cx_ty != TY_INT || f77_cx_i <= 0) {
-                        f77_error("DATA repeat count must be a positive integer");
-                        return;
-                    }
-                    rep = f77_cx_i;
-                    f77_tok();
-                    f77_data_const();
-                }
-                while (rep > 0) {
-                    while (ti < f77_dt_n && te >= f77_dt_count[ti]) { ti = ti + 1; te = 0; }
-                    if (ti >= f77_dt_n) { f77_error("more DATA values than variables"); return; }
-                    if (f77_di_n >= F77_MAX_DINIT) { f77_error("too many DATA initializers"); return; }
-                    f77_di_sym[f77_di_n] = f77_dt_sym[ti];
-                    f77_di_elem[f77_di_n] = f77_dt_sublen[ti] ? f77_dt_start[ti] : f77_dt_start[ti] + te;
-                    f77_di_ty[f77_di_n] = f77_cx_ty;
-                    f77_di_i[f77_di_n] = f77_cx_i;
-                    f77_di_d[f77_di_n] = f77_cx_d;
-                    f77_di_sidx[f77_di_n] = f77_cx_sidx;
-                    f77_di_d2[f77_di_n] = f77_cx_d2;
-                    f77_di_t[f77_di_n] = f77_cx_t[0] ? strdup(f77_cx_t) : 0;
-                    f77_di_t2[f77_di_n] = f77_cx_t2[0] ? strdup(f77_cx_t2) : 0;
-                    f77_di_sub[f77_di_n] = f77_dt_sublen[ti];
-                    f77_di_n = f77_di_n + 1;
-                    te = te + 1;
-                    rep = rep - 1;
-                }
-                if (lx_t == T_COMMA) { f77_tok(); continue; }
-                break;
-            }
-            while (ti < f77_dt_n && te >= f77_dt_count[ti]) { ti = ti + 1; te = 0; }
-            if (ti < f77_dt_n) { f77_error("fewer DATA values than variables"); return; }
-        }
+        if (!f77_data_values()) return;
         if (lx_t != T_SLASH) { f77_error("expected / after DATA values"); return; }
         f77_tok();
         if (lx_t == T_COMMA) f77_tok();
