@@ -132,6 +132,16 @@ calls the Fortran main program (CSECT F77MAIN).
 F77CLG.jcl beside this file is a cataloged procedure that chains the
 whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
 
+  The assembly step's SYSPRINT is DUMMY: what FORT370 writes assembles
+  cleanly, and a listing of it is thousands of lines.  If the ASM step
+  ends with return code 8 anyway, it is a compiler bug -- please report
+  it -- and IFOX00's messages say where.  To see them, add
+
+    //ASM.SYSPRINT DD SYSOUT=*
+
+  after the EXEC F77CLG statement.  (PARM='NOLIST' is no shortcut:
+  IFOX00 then leaves out its error messages with the listing.)
+
   Give the program's step a REGION.  Its arrays and COMMON are static
   storage in the module, beside about 290K of runtime; the default
   region of a job class can be too small for that, and the program

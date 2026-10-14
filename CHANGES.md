@@ -8,6 +8,13 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## Unreleased
+
+- `jcl/F77CLG.jcl` and `docs/INSTALL-MVS.txt` say what to do when the
+  assembly step ends with RC 8: its SYSPRINT is DUMMY, so add
+  `//ASM.SYSPRINT DD SYSOUT=*` to see IFOX00's messages (NOLIST would
+  hide them too).  A reader saw only the return code.
+
 ## 2026-10-13.3
 
 The day's fourth release, tagged `v2026.10.13.3`: fixes for the first

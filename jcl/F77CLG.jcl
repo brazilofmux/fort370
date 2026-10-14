@@ -19,6 +19,12 @@
 //*  SYSPRINT), unit 5 FT05F001 (or SYSIN), and any other unit the
 //*  program uses needs its DD.
 //*
+//*  The assembly's listing is DUMMY: IFOX00 checks what FORT370
+//*  wrote, and a clean compile assembles cleanly.  If ASM ends with
+//*  RC 8 anyway, which is a compiler bug worth reporting, add
+//*  //ASM.SYSPRINT DD SYSOUT=* after the EXEC to see IFOX00's
+//*  messages; NOLIST would hide them with the listing.
+//*
 //F77CLG   PROC MEM=
 //FORT     EXEC PGM=FORT370,REGION=8192K
 //STEPLIB  DD DSN=HERC01.FORT370.LOAD,DISP=SHR
