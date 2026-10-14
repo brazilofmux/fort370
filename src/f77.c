@@ -408,7 +408,9 @@ static void hl_func(Node *fn) {
 
     u = fn->unit;
     hl_cur_fn_dbg = fn->name;
+#ifdef F77_TARGET_S370
     ssa_exposed_keep = (f77_ukind[u] != F77_UNIT_PROGRAM);   /* see ssa_keep_exposed */
+#endif
     {
         int q;
         f77_unit_entries = f77_uentry_parent[u] >= 0;
