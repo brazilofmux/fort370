@@ -704,6 +704,18 @@ static int f77_label_blk(int n) {
     return f77_lblk[f77_nlabel - 1];
 }
 
+/* A statement carries label n: its block, marked defined.  (Its own
+ * function: inline in f77_statement it pushed a branch there out of
+ * cc370's addressability.) */
+static int f77_label_def(int n) {
+    int b;
+    int q;
+    b = f77_label_blk(n);
+    for (q = f77_label_base; q < f77_nlabel; q++)
+        if (f77_lnum[q] == n) f77_ldef[q] = 1;
+    return b;
+}
+
 /* fort370: a label the unit refers to (GO TO, DO, IF, END=) but no
  * statement carries is an error: its block was made on first mention
  * and, left empty, fell through to whatever came next. */
@@ -7029,10 +7041,7 @@ static void f77_statement(void) {
      * block, so GOTOs and DO terminals both land correctly. */
     if (lx_stmt_label >= 0) {
         int b;
-        int q;
-        b = f77_label_blk(lx_stmt_label);
-        for (q = f77_label_base; q < f77_nlabel; q++)
-            if (f77_lnum[q] == lx_stmt_label) f77_ldef[q] = 1;
+        b = f77_label_def(lx_stmt_label);
         f77_goto_blk(b);
         f77_begin_blk(b);
     }
