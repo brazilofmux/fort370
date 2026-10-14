@@ -19,6 +19,7 @@ each.
   H OPT=2            11.86 11.94 11.98       1.00
   fort370            12.59 12.59 12.57       1.055   (2026-10-13.3)
   fort370            10.44 10.47 10.47       0.877   (79325fb: one divide)
+  fort370             9.00  8.99  8.99       0.754   (202fd49: LEN hoisted)
 
 Every run printed the same digits, and so does gfortran on a host: all
 of H's, fort370's and gfortran's output agree digit for digit.
@@ -36,3 +37,8 @@ share one DR, and CSE takes two equal integer constants as one operand
 within a block, so the two copies of 2*I-1 became one value and the two
 divides could meet.  The inner loop is 22 instructions, one DR; the
 program runs in 0.877 of H's time at OPT=2, with the same digits.
+
+And (202fd49) LEN stays in a register: a local in static storage that
+the unit never stores is read-only, so its load leaves the loop as a
+scalar dummy's always could.  21 instructions a pass, one DR, no load
+through an address constant: 0.754 of H's time at OPT=2.
