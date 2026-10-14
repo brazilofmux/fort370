@@ -173,10 +173,13 @@ static void f77_ldro_note(int inst, int s) {
     f77_ldro_n = f77_ldro_n + 1;
 }
 
+static int f77_unit_entries;    /* the unit being compiled is or has an ENTRY (set by hl_func) */
+static int f77_ldro_local_ok(int s);
 static void f77_ldro_finalize(void) {
     int i;
     for (i = 0; i < f77_ldro_n; i++) {
-        if (f77_sstored[f77_ldro_sym[i]])
+        if (f77_sstored[f77_ldro_sym[i]] ||
+            (!f77_sarg[f77_ldro_sym[i]] && !f77_ldro_local_ok(f77_ldro_sym[i])))
             h_ld_ro[f77_ldro_inst[i]] = 0;
     }
 }
@@ -1315,6 +1318,19 @@ static int f77_subscript_addr(int s) {
     return addr;
 }
 
+/* A static local's loads may hoist only if nothing but this unit's own
+ * stores could change it: not in an EQUIVALENCE (it could change under
+ * the other name), and not in a unit with ENTRY points (each compiles
+ * part of the parent's text against the same storage). */
+static int f77_ldro_local_ok(int s) {
+    int q;
+    if (f77_scom[s]) return 0;
+    for (q = 0; q < f77_eq_n; q++)
+        if (f77_eq_sa[q] == s || f77_eq_sb[q] == s) return 0;
+    if (f77_unit_entries) return 0;
+    return 1;
+}
+
 /* Load a scalar symbol.  When it has a paired hi slot, both halves are
  * direct loads of promotable allocas -- no address arithmetic, so
  * mem2reg can keep the whole double in registers. */
@@ -1330,7 +1346,14 @@ static int f77_load_sym(int s) {
         return v;
     }
     v = f77_load_at(f77_sval[s], f77_sty[s]);
-    if (f77_sarg[s] && f77_srank[s] == 0) {
+    /* fort370: and a local scalar in static storage (SAVE, or DATA's
+     * initial value) outside COMMON: only this unit can reach it, so if
+     * the unit never stores it its value cannot change -- LEN in
+     * INTEGER LEN/30000/, reloaded on every pass of a loop.  Retracted
+     * at unit end (f77_ldro_finalize) for a stored, equivalenced or
+     * ENTRY-shared one. */
+    if (f77_srank[s] == 0 && f77_sty[s] != TY_CHAR &&
+        (f77_sarg[s] || (f77_ssaved[s] && !f77_scom[s]))) {
         f77_ldro_note(v, s);
         if (f77_sty[s] == TY_DOUBLE && ex_hi >= 0) f77_ldro_note(ex_hi, s);
     }

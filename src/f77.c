@@ -408,6 +408,12 @@ static void hl_func(Node *fn) {
 
     u = fn->unit;
     hl_cur_fn_dbg = fn->name;
+    {
+        int q;
+        f77_unit_entries = f77_uentry_parent[u] >= 0;
+        for (q = 0; q < f77_nent; q++)
+            if (f77_ent_parent[q] == u) f77_unit_entries = 1;
+    }
 
     hir_reset();
     hl_nalloca = 0;

@@ -10,6 +10,13 @@ with each release, built and checked by CI on their own platforms.
 
 ## Unreleased
 
+- A local scalar in static storage (SAVE, or an initial value) outside
+  COMMON that the unit never stores is read-only, and its load moves
+  out of loops, as a scalar dummy's already did -- unless it is in an
+  EQUIVALENCE or the unit has ENTRY points.  LEN in Doug Wegscheid's
+  spigot (`INTEGER LEN/30000/`) was reloaded on every pass;
+  `tests/s370/ldro.f` checks each way such a variable can still
+  change in a loop.
 - MOD(X,Y) and X/Y of the same two values share one divide: DR leaves
   the remainder and the quotient in R0:R1, and the second takes its
   half while nothing has written the pair since.  For it, CSE now takes
