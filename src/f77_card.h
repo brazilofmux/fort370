@@ -403,6 +403,15 @@ static int f77_next_stmt(void) {
                     col = col + 1;
                     k = 0;
                     while (k < hcount) {
+                        if (col <= 72 && (!lx_has(p) || lx_src[p] == '\n' || lx_src[p] == '\r')) {
+                            /* fort370: a line ending short of column
+                             * 72 is blank to 72, as its card was, and
+                             * the blanks are part of the constant */
+                            lx_put(' ');
+                            col = col + 1;
+                            k = k + 1;
+                            continue;
+                        }
                         if (!lx_has(p) || lx_src[p] == '\n' || col > 72) {
                             /* The constant continues on the next
                              * continuation line (comments between are
@@ -440,6 +449,11 @@ static int f77_next_stmt(void) {
             p = p + 1;
             col = col + 1;
         }
+        /* fort370: a character constant still open at the end of a line
+         * short of column 72 keeps the blanks its card had out to 72,
+         * before the continuation line's text -- so a host file with its
+         * trailing blanks trimmed reads as the deck on MVS does */
+        if (inq) while (col <= 72) { lx_put(' '); col = col + 1; }
 
         lx_pos = lx_next_line(lx_pos);
         first = 0;
