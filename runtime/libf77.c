@@ -821,6 +821,22 @@ static void fio_wr_setup(const char *fmt) {
     if (fio_fmt[fio_pos] == '(') { fio_revert = fio_pos; fio_pos++; }
 }
 
+/* fort370: A editing of a numeric item -- FORTRAN 66 and IBM keep text
+ * in INTEGER and REAL variables (DATA D/1H5/), and A writes the item's
+ * bytes as they lie in storage: Aw with w no larger than the item takes
+ * its first w bytes, a larger w pads on the left, A alone is the item's
+ * size.  fio_want() has been called and returned 'A'. */
+void f77_rd_s(char *p, int len);
+static void fio_hol_out(const void *item, int n) {
+    const char *b = (const char *)item;
+    int len = n;
+    int i;
+    if (fio_w > 0 && fio_w < len) len = fio_w;
+    else if (fio_w > len) fio_pad(fio_w - len);
+    for (i = 0; i < len; i++) fio_putc(b[i]);
+    fio_consumed();
+}
+
 void f77_wr_i(int v) {
     char buf[32];
     int d;
@@ -833,6 +849,7 @@ void f77_wr_i(int v) {
     }
     d = fio_want();
     if (d == 0) return;
+    if (d == 'A') { fio_hol_out(&v, (int)sizeof v); return; }
     if (d == 'L') {
         if (fio_w > 1) fio_pad(fio_w - 1);
         fio_putc(v ? 'T' : 'F');
@@ -865,6 +882,7 @@ void f77_wr_d(double v) {
     if (fio_listed) { fio_list_out_real(v, 1); return; }
     d = fio_want();
     if (d == 0) return;
+    if (d == 'A') { fio_hol_out(&v, (int)sizeof v); return; }   /* DOUBLE PRECISION text, 8 bytes */
     if (d == 'I') {
         snprintf(buf, sizeof buf, "%d", (int)v);
     } else if (d == 'F') {
@@ -923,6 +941,7 @@ void f77_wr_d(double v) {
 
 void f77_wr_r(float v) {
     if (fio_listed) { fio_list_out_real((double)v, 0); return; }
+    if (fio_want() == 'A') { fio_hol_out(&v, (int)sizeof v); return; }   /* REAL text, 4 bytes */
     f77_wr_d((double)v);
 }
 
@@ -1544,10 +1563,7 @@ void f77_rd_i(int *p) {
     if (d == 0) return;
     if (d == 'L') *p = fio_in_logical(fio_w);
     else if (d == 'I') *p = fio_in_int(fio_w);
-    else if (d == 'A') {
-        fprintf(stderr, "f77: A editing on READ needs CHARACTER (not implemented)\n");
-        exit(2);
-    }
+    else if (d == 'A') { f77_rd_s((char *)p, (int)sizeof *p); return; }   /* text into an INTEGER */
     else *p = (int)fio_in_real(fio_w, fio_d);
     fio_consumed();
 }
@@ -1566,7 +1582,8 @@ void f77_rd_d(double *p) {
     d = fio_want();
     if (d == 0) return;
     if (d == 'I') *p = (double)fio_in_int(fio_w);
-    else if (d == 'A' || d == 'L') {
+    else if (d == 'A') { f77_rd_s((char *)p, (int)sizeof *p); return; }   /* text into a DOUBLE PRECISION */
+    else if (d == 'L') {
         fprintf(stderr, "f77: %c editing does not match a numeric READ item\n", d);
         exit(2);
     }
@@ -1588,7 +1605,8 @@ void f77_rd_r(float *p) {
     d = fio_want();
     if (d == 0) return;
     if (d == 'I') *p = (float)fio_in_int(fio_w);
-    else if (d == 'A' || d == 'L') {
+    else if (d == 'A') { f77_rd_s((char *)p, (int)sizeof *p); return; }   /* text into a REAL */
+    else if (d == 'L') {
         fprintf(stderr, "f77: %c editing does not match a numeric READ item\n", d);
         exit(2);
     }
