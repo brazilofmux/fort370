@@ -30,6 +30,34 @@
 #define F77_NATIVE_F64 1
 #endif
 
+/* fort370: the compiler's switches are environment variables, read
+ * where they act -- some once per interference edge or per instruction.
+ * A host's getenv is cheap; libc370's is not: those reads were nine
+ * tenths of FORT370's time on MVS (René Ferland's AIDAFC, 3 minutes of
+ * CPU on TK5, 19 seconds without them).  The environment does not
+ * change while the compiler runs, so each name's answer is kept,
+ * found again by the address of the name (a literal at every call). */
+static char *f77_getenv(const char *name) {
+    static const char *key[256];
+    static char *val[256];
+    unsigned h;
+    int n;
+    h = (unsigned)(((size_t)name >> 2) & 255);
+    n = 0;
+    while (n < 256) {
+        if (key[h] == name) return val[h];
+        if (!key[h]) {
+            key[h] = name;
+            val[h] = getenv(name);
+            return val[h];
+        }
+        h = (h + 1) & 255;
+        n = n + 1;
+    }
+    return getenv(name);
+}
+#define getenv(n) f77_getenv(n)
+
 /* fort370: how much room the tables have.  On MVS the compiler and its
  * tables share a TK5 region of 7.4MB with libc370's stack, so every
  * ceiling is the one docs/FITTING.md chose: one Fortran unit as large
