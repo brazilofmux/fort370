@@ -134,7 +134,8 @@ with [cc370](https://github.com/mvslovers/cc370), and
 `bench/mkload.sh program.f` shows the whole host path, from Fortran
 to a load module and its XMIT. The main program's CSECT is `F77MAIN`;
 libc370's startup calls it through the runtime's `main`. Units are the
-DD names `FTnnF001` (6 falls back to SYSPRINT, 5 to SYSIN), and a
+DD names `FTnnF001`, 0 to 99 (6 falls back to SYSPRINT, 5 to SYSIN,
+0 to SYSTERM), and a
 direct-access file is a DASD data set of fixed blocks, RECL bytes each.
 
 ## Layout

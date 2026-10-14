@@ -110,8 +110,8 @@ static char  fio_ltok[128];
 /* Open units.  0/5/6 are preconnected (stderr/stdin/stdout, matching
  * gfortran) and may not be OPENed; everything else goes through the
  * table.  The name is kept for CLOSE (STATUS='DELETE'). */
-#define FIO_MAXUNIT 32
-#define FIO_MAXNAME 256
+#define FIO_MAXUNIT 100                  /* units 0-99, as IBM's Fortran numbers them */
+#define FIO_MAXNAME 64
 static FILE *fio_ufile[FIO_MAXUNIT];
 static char  fio_ufname[FIO_MAXUNIT][FIO_MAXNAME];
 /* Logical end of file set by ENDFILE (-1 = the physical end): a READ
@@ -148,6 +148,7 @@ static int   fio_prev_char;
 static FILE *fio_in;             /* stream of the READ in progress */
 static FILE *fio_out;            /* stream of the WRITE in progress */
 
+static int fio_u0tried;                  /* unit 0's FT00F001 looked for */
 static void fio_exit(int code) {
     int u;
     f77r_closeall();
@@ -167,7 +168,13 @@ static const char *fio_ddof(int unit) {
 
 static FILE *fio_resolve(int unit, int writing) {
     if (unit >= 0 && unit < FIO_MAXUNIT && fio_ufile[unit]) return fio_ufile[unit];
-    if (unit == 0) return writing ? stderr : stdin;
+    if (unit == 0 && writing) {
+        /* unit 0 is the DD FT00F001 when the job has one, as VS
+         * FORTRAN has it, and SYSTERM otherwise */
+        if (!fio_u0tried) { fio_u0tried = 1; fio_ufile[0] = fopen("dd:FT00F001", "w"); }
+        return fio_ufile[0] ? fio_ufile[0] : stderr;
+    }
+    if (unit == 0) return stdin;
     if (unit > 0 && unit < FIO_MAXUNIT && fio_udirect[unit])
         return stdout;     /* a placeholder: f77rec.c transfers direct-access records, never through it */
     if (unit > 0 && unit < FIO_MAXUNIT && fio_ufname[unit][0]) {
@@ -1294,7 +1301,12 @@ void f77_wr_l(int v) {
 /* Finish the record: emit any trailing literal text, but stop at the
  * first data descriptor that has no item to feed it. */
 void f77_wr_end(void) {
-    if (!fio_listed) {
+    /* A data descriptor with repeats left (15A1 with fewer than 15
+     * items) wants the next item itself: the record ends there, and
+     * the literal after the group is not written.  Draining from a
+     * fresh descriptor wrote it -- ADDAD's histogram bars, 4('!',15A1),
+     * ended in a '!' that VS FORTRAN and gfortran do not write. */
+    if (!fio_listed && !(fio_desc && fio_rep > 0)) {
         /* Run the format out to its end or the next data descriptor
          * with no reversion: a WRITE with no items and a format ending
          * in a group, `3(/)`, reverted to that group for ever. */

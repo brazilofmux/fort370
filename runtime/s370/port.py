@@ -77,6 +77,9 @@ rep('/* COPIED from slow32-public fortran/runtime/libf77.c at 2245be78 (2026-10-
     ' * eight-character external name of f77rt.h.  Built with cc370 for\n'
     ' * libc370.  GENERATED -- edit libf77.c or port.py. */\n'
     '/* libf77.c -- Fortran 77 formatted I/O runtime for SLOW-32.')
+# a unit's name on MVS is "dd:" and a DD name: 100 units of 256 bytes
+# would be 25K of every program for nothing
+rep('#define FIO_MAXNAME 256', '#define FIO_MAXNAME 64')
 rep('#include <stdlib.h>\n', '#include <stdlib.h>\n#include "f77rt.h"\n#include "f77dtoa.h"\n#include "../../backend/s370_hfp.h"\n'
     '\n/* C89 has neither trunc nor round; libc370 is C89. */\n'
     'static double fio_trunc(double v) { return v < 0.0 ? ceil(v) : floor(v); }\n'
@@ -287,9 +290,16 @@ s = s[:o_start] + '''int f77_open(int unit, const char *name, int nlen,
 rep('''static FILE *fio_resolve(int unit, int writing) {
     if (unit >= 0 && unit < FIO_MAXUNIT && fio_ufile[unit]) return fio_ufile[unit];
     if (unit == 0) return writing ? stderr : stdin;
-''', '''static FILE *fio_resolve(int unit, int writing) {
+''', '''static int fio_u0tried;                  /* unit 0's FT00F001 looked for */
+static FILE *fio_resolve(int unit, int writing) {
     if (unit >= 0 && unit < FIO_MAXUNIT && fio_ufile[unit]) return fio_ufile[unit];
-    if (unit == 0) return writing ? stderr : stdin;
+    if (unit == 0 && writing) {
+        /* unit 0 is the DD FT00F001 when the job has one, as VS
+         * FORTRAN has it, and SYSTERM otherwise */
+        if (!fio_u0tried) { fio_u0tried = 1; fio_ufile[0] = fopen("dd:FT00F001", "w"); }
+        return fio_ufile[0] ? fio_ufile[0] : stderr;
+    }
+    if (unit == 0) return stdin;
     if (unit > 0 && unit < FIO_MAXUNIT && fio_ufname[unit][0]) {
         /* a unit OPENed by name, or closed by REWIND: its data set,
          * opened now in the direction this statement takes */

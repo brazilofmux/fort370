@@ -149,9 +149,12 @@ whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
   step asks for 4096K, which the kernels in bench/kernels fit in (the
   largest, matmul, is 525K).
 
-When the program runs, a Fortran unit n is the DD FTnnF001: unit 6 is
-FT06F001 (SYSPRINT when there is no FT06F001), unit 5 FT05F001 (SYSIN
-when there is none).  OPEN FILE='NAME' names a DD.  A direct-access
+When the program runs, a Fortran unit n, 0 to 99, is the DD FTnnF001:
+unit 6 is FT06F001 (SYSPRINT when there is no FT06F001), unit 5
+FT05F001 (SYSIN when there is none), unit 0 FT00F001 (SYSTERM when
+there is none).  OPEN FILE='NAME' names a DD.  A subprogram's local
+variables keep their values from one call to the next, as FORTRAN H's
+and VS FORTRAN's do, with or without SAVE.  A direct-access
 file is a DASD data set of fixed blocks, RECL bytes each; a new one is
 formatted as it is written.  STOP ends the program with its code as
 the step's return code.

@@ -32,7 +32,7 @@
 #include <clibdscb.h>
 #include "f77rec.h"
 
-#define RMAXU 32
+#define RMAXU 100                        /* units 0-99, as f77rt.c's FIO_MAXUNIT */
 
 static int rinit;
 
