@@ -5357,6 +5357,13 @@ static int f77_bind_actual(char *nm, int addr) {
     f77_srank[s] = 0;
     f77_sarg[s] = 1;
     f77_shi[s] = -1;                 /* by-reference: value is an address */
+    /* fort370: and taken as stored.  A dummy's loads are asserted
+     * loop-invariant (f77_ldro_note) because nothing else may change
+     * it while its own unit runs; spliced, the callee runs as part of
+     * the caller, whose loop may be changing the actual -- the DO
+     * variable in DO 30 I = ... CALL GEN(I, D), where GEN's D = FLOAT(I)
+     * was hoisted out of the loop and every D was GEN(1)'s. */
+    f77_sstored[s] = 1;
     f77_dim_row(s, 0);
     f77_sval[s] = addr;
     f77_nsym = f77_nsym + 1;
