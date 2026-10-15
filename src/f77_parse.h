@@ -5408,6 +5408,11 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     int save_result;
     int save_stf_n;
     int save_stf_pool;
+    int save_imp_map[F77_IMP_N];     /* the caller's IMPLICIT, which the */
+    int save_imp_len[F77_IMP_N];     /* callee does not share */
+    int save_imp_log[F77_IMP_N];
+    int save_imp_ready;
+    int save_imp_none;
     int b_cont;
     int skip;
     int i;
@@ -5442,6 +5447,23 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     save_result = f77_inline_result;
     save_stf_n = f77_stf_n;
     save_stf_pool = f77_stf_pool_n;
+    /* The callee is typed by its own rules: a unit with an IMPLICIT is
+     * never spliced (f77_unosplice), so its rule is the default one,
+     * whatever the caller's IMPLICIT or IMPLICIT NONE says.  Under the
+     * caller's, IMPLICIT INTEGER (A-Z) made the callee's Y = 2.5 store
+     * 2, and IMPLICIT NONE refused its undeclared names. */
+    memcpy(save_imp_map, f77_imp_map, sizeof save_imp_map);
+    memcpy(save_imp_len, f77_imp_len, sizeof save_imp_len);
+    memcpy(save_imp_log, f77_imp_log, sizeof save_imp_log);
+    save_imp_ready = f77_imp_ready;
+    save_imp_none = f77_imp_none;
+    for (i = 0; i < F77_IMP_N; i++) {
+        f77_imp_map[i] = (i >= 'I' - 'A' && i <= 'N' - 'A') ? TY_INT : TY_FLOAT;
+        f77_imp_len[i] = 1;
+        f77_imp_log[i] = 0;
+    }
+    f77_imp_ready = 1;
+    f77_imp_none = 0;
 
     b_cont = hir_new_block();
 
@@ -5512,6 +5534,11 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
      * variable of the same name must not resolve to them. */
     f77_stf_n = save_stf_n;
     f77_stf_pool_n = save_stf_pool;
+    memcpy(f77_imp_map, save_imp_map, sizeof save_imp_map);
+    memcpy(f77_imp_len, save_imp_len, sizeof save_imp_len);
+    memcpy(f77_imp_log, save_imp_log, sizeof save_imp_log);
+    f77_imp_ready = save_imp_ready;
+    f77_imp_none = save_imp_none;
     f77_inline_depth = f77_inline_depth - 1;
     f77_cur_unit = save_unit;
     f77_inline_ret_blk = save_ret;
