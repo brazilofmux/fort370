@@ -161,6 +161,23 @@ file is a DASD data set of fixed blocks, RECL bytes each; a new one is
 formatted as it is written.  STOP ends the program with its code as
 the step's return code.
 
+A REAL result can differ from FORTRAN H's in its last hexadecimal
+digit when a mathematical function made it.  fort370's runtime carries
+its own SQRT, EXP, ALOG, ALOG10, SIN, COS, ATAN, TANH and the other
+intrinsics, computed in long precision and cut to short.  For those
+eight, over 300 arguments each, the REAL result was the exact value
+truncated every time, as the machine's own short arithmetic would give
+it.  FORTLIB's short routines, which H's programs call, round SQRT and
+EXP and use their own approximations for the others: they agreed bit
+for bit with fort370 in 21 to 220 of the 300, and differed by at most
+one unit in the last digit for SQRT and EXP, two or three for most of
+the rest, and five for ALOG10.  (Where TANH is within a unit of 1, H
+returns 1.0.)  A program that feeds such results back into itself (a
+network training, an integration) carries the difference along, and
+its printed REAL values can part from H's in the seventh significant
+digit: Xortran's loss after 20 epochs is 0.197064698 here and
+0.197064757 under H.
+
 
 Rebuilding it yourself
 ----------------------

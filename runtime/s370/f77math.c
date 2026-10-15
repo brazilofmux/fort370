@@ -18,8 +18,12 @@
  * never pulled in.  A REAL argument arrives widened to double.
  *
  * Accuracy is a few units in the last place at worst, in the range of
- * the arguments the FCVS and the kernels use; FORTLIB's routines are
- * better by a bit or two, and that comparison is on the list. */
+ * the arguments the FCVS and the kernels use.  A REAL result is the
+ * long one cut to short, and so the exact value truncated: for SQRT,
+ * EXP, ALOG, ALOG10, SIN, COS, ATAN and TANH over 300 arguments each,
+ * every time (2026-10-15, on TK5).  FORTLIB's short routines round SQRT
+ * and EXP and approximate the rest their own way, up to five units from
+ * these (docs/INSTALL-MVS.txt); the long ones are not yet compared. */
 
 typedef union { double d; unsigned int w[2]; } Hfp;   /* big-endian: w[0] has the sign and exponent */
 
