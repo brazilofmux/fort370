@@ -192,7 +192,7 @@ static int f77_number(char *ts, char *te, char *pe) {
     } else {
 #ifdef __MVS__
         /* fort370: a double on MVS is HFP, so it can be had exactly from
-         * the compiler's own conversion (s370_hfp.h, truncating as the
+         * the compiler's own conversion (s370_hfp.h, rounding as the
          * constants are); libc370's strtod is not to be trusted. */
         {
             union { double d; unsigned int w[2]; } u;

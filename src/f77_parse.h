@@ -999,7 +999,7 @@ static int f77_libm_f2(char *name, int a, int b) {
 #ifdef F77_NATIVE_F64
 /* A floating constant is HI_FCONST carrying its decimal TEXT in h_name:
  * the back end converts it to the target's format exactly (S/370
- * hexadecimal float, truncated as FORTRAN H does), which a host double
+ * hexadecimal float, rounded to the nearest; s370_hfp.h), which a host double
  * could not promise.  Literals keep the source spelling; values the
  * compiler made up are printed with enough digits to be exact. */
 /* A double the compiler made as decimal text for s370_hfp.h: an integral
@@ -3953,14 +3953,14 @@ static void f77_image_fp(unsigned char *p, double d, int bytes) {
     char b[40];
     unsigned int hi, lo;
     f77_dtext(d, b);
-    if (hfp_from_text(b, &hi, &lo) < 0) { hi = 0; lo = 0; }
+    if (hfp_from_text_n(b, &hi, &lo, bytes == 8 ? 56 : 24) < 0) { hi = 0; lo = 0; }
     f77_image_int(p, hi, 4);
     if (bytes == 8) f77_image_int(p + 4, lo, 4);
 }
 /* From the constant's own text when there is one (f77_cx_t). */
 static void f77_image_fpt(unsigned char *p, const char *t, double d, int bytes) {
     unsigned int hi, lo;
-    if (t && hfp_from_text(t, &hi, &lo) >= 0) {
+    if (t && hfp_from_text_n(t, &hi, &lo, bytes == 8 ? 56 : 24) >= 0) {
         f77_image_int(p, hi, 4);
         if (bytes == 8) f77_image_int(p + 4, lo, 4);
         return;

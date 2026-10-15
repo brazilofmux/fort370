@@ -161,22 +161,77 @@ file is a DASD data set of fixed blocks, RECL bytes each; a new one is
 formatted as it is written.  STOP ends the program with its code as
 the step's return code.
 
-A REAL result can differ from FORTRAN H's in its last hexadecimal
-digit when a mathematical function made it.  fort370's runtime carries
-its own SQRT, EXP, ALOG, ALOG10, SIN, COS, ATAN, TANH and the other
-intrinsics, computed in long precision and cut to short.  For those
-eight, over 300 arguments each, the REAL result was the exact value
-truncated every time, as the machine's own short arithmetic would give
-it.  FORTLIB's short routines, which H's programs call, round SQRT and
-EXP and use their own approximations for the others: they agreed bit
-for bit with fort370 in 21 to 220 of the 300, and differed by at most
-one unit in the last digit for SQRT and EXP, two or three for most of
-the rest, and five for ALOG10.  (Where TANH is within a unit of 1, H
-returns 1.0.)  A program that feeds such results back into itself (a
-network training, an integration) carries the difference along, and
-its printed REAL values can part from H's in the seventh significant
-digit: Xortran's loss after 20 epochs is 0.197064698 here and
-0.197064757 under H.
+Floating point, measured against the exact values (2026-10-15, TK5;
+a unit is one in the last hexadecimal place of the result):
+
+  Constants and READ: a decimal number in the source and the same
+  number read by E, F, D, G or list-directed input are the same value,
+  the nearest one of the format.  FORTRAN H truncates a REAL one, so a
+  REAL constant here can be one unit above H's (0.1 is 4119999A, H's
+  41199999), and so can whatever a program computes from it; H's
+  DOUBLE PRECISION ones are up to 8 units off either way.
+
+  Output: E, F, D and G editing print the value's own digits, rounded
+  at the last one printed, to any width; a half rounds away from zero.
+  H's DOUBLE PRECISION output can be a few units off in the 16th digit
+  and pads with zeros past the 17th.
+
+  Arithmetic is the machine's own, the same as H's to the bit.  So are
+  SNGL, FLOAT, IFIX and the integer power X**I (repeated multiplication;
+  X**39 can be 150 or 200 units off, in both).  A constant expression the
+  compiler works out gives the bits the running program would.
+
+  REAL functions are computed in long precision and cut to short:
+  within a unit, and nearly always the exact value truncated, at any
+  argument.  FORTLIB's short routines, which H's programs call, round
+  SQRT and EXP and use their own approximations for the others, up to
+  nine units off (SIN, ATAN2), and X**Y over 300.  The two agree bit
+  for bit for some arguments only; a program that feeds such results
+  back into itself (a network training, an integration) carries the
+  difference along, and its printed REAL values can part from H's in
+  the seventh significant digit: Xortran's loss after 20 epochs is
+  0.197064698 here and 0.197064757 under H.  Where TANH is within a
+  unit of 1, H returns 1.0.
+
+  DOUBLE PRECISION functions: DSQRT is correctly rounded, as FORTLIB's
+  is.  DSIN and DCOS are within 2 units for any argument, DTAN within
+  12; FORTLIB's are off by thousands of units even at |x| < 20.  The
+  others are where fort370 is behind: DEXP, DLOG10, DATAN, DASIN,
+  DACOS, DATAN2, DSINH, DCOSH and DTANH are 10 to 30 units off at
+  worst, DLOG 3, against FORTLIB's 1 or 2 (DLOG10 6, DATAN2 5); D**D is
+  up to 700 units off, FORTLIB's 400.
+
+  COMPLEX functions (CSQRT, CEXP, CLOG, CSIN, CCOS, CABS) are within a
+  unit of the result's magnitude; FORTLIB's, 14.  Complex division is
+  within 21 units, FORTLIB's 12.
+
+  SIN, COS and TAN reduce any argument exactly, by the bits of 2/pi;
+  FORTLIB refuses a REAL argument of pi*2**18 or more and a DOUBLE
+  PRECISION one of pi*2**50, and below that its DOUBLE PRECISION
+  results have lost seven of their sixteen digits by 10**6.  MOD, AMOD
+  and DMOD, though, are the textbook a-INT(a/b)*b, and when a/b is past
+  an integer's range the result means nothing, in both.
+
+Errors: fort370's runtime prints no messages for floating point.  An
+overflow in arithmetic (1.0E70*1.0E70) abends with S0CC and a division
+by zero with S0CF; FORTLIB intercepts those (IHC207I, IHC209I), carries
+on with the largest number or zero, and ends the program after ten
+such errors.  Underflow is zero, as in H.  A function's argument out of
+its domain gets a value and no message, where FORTLIB prints an IHC
+message for each and carries on:
+
+  call              fort370        FORTRAN H
+  SQRT(-4.0)        2.0            2.0
+  ALOG(0.0)         -7.2E75        -7.2E75
+  ALOG(-1.0)        -7.2E75        0.0
+  EXP(200.0)        7.2E75         7.2E75
+  ASIN(1.5)         1.5707963      0.0
+  TAN(1.5707963)    3.2E6          7.2E75 (a singularity, it says)
+  (-2.0)**0.5       0.0            1.4142135
+  0.0**0.0, 0**0    1              0
+
+IBM's names ARSIN, ARCOS, DARSIN and DARCOS are ASIN, ACOS, DASIN and
+DACOS.
 
 
 Rebuilding it yourself

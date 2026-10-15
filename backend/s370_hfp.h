@@ -3,8 +3,13 @@
  * A REAL or DOUBLE PRECISION constant is converted from its source text,
  * not from a host double: going through IEEE would round twice, and the
  * host's own double is IEEE on a Mac and HFP on MVS, so the compiler
- * would not reproduce.  FORTRAN H truncates (1.0D-6 is 3C10C6F7A0B5ED8D
- * in its listings; rounding would give ...8E), and so does this.
+ * would not reproduce.  The value is rounded to the nearest number of
+ * the format, a half away from zero (as LRER rounds), and READ rounds
+ * the same way, so that 0.1 read from a card is the 0.1 in the program.
+ * FORTRAN H truncates a REAL one, in both places (0.1 is 41199999
+ * there, 4119999A here), so a REAL constant here can be one unit above
+ * H's, and then so can whatever is computed from it; H's DOUBLE
+ * PRECISION ones are up to 8 units off either way.
  *
  * Long HFP: sign bit, 7-bit characteristic (exponent of 16, excess 64),
  * 56-bit fraction in [1/16, 1) when normalized.  Short HFP is the same
@@ -111,12 +116,13 @@ static int hfp_big_bits(HfpBig *b) {
 }
 
 /* Convert decimal text (digits, optional point, optional E/D exponent,
- * optional sign) to HFP.  *hi gets the first word, *lo the second; for
- * short HFP the caller keeps *hi only, which is a truncation, as H's
- * REAL constants are.  Returns 0 on success, -1 if the text is not a
- * number, 1 if the exponent is out of HFP's range (the result is then
- * the largest or smallest magnitude, or zero). */
-static int hfp_from_text(const char *s, unsigned int *hi, unsigned int *lo) {
+ * optional sign) to HFP, rounded to nbits of fraction: 56 for long, 24
+ * for short (then *lo is zero; rounding the long form's first word
+ * would round twice).  *hi gets the first word, *lo the second.
+ * Returns 0 on success, -1 if the text is not a number, 1 if the
+ * exponent is out of HFP's range (the result is then the largest or
+ * smallest magnitude, or zero). */
+static int hfp_from_text_n(const char *s, unsigned int *hi, unsigned int *lo, int nbits) {
     HfpBig num;      /* numerator:   D * 2^shift (* 10^e10 when e10 > 0) */
     HfpBig den;      /* denominator: 10^-e10 (when e10 < 0) */
     int neg;
@@ -229,9 +235,31 @@ have_bits:
             }
         }
     }
+    /* round: up when what is dropped is a half or more -- for short,
+     * the second word's top bit; for long, twice the remainder against
+     * the divisor */
+    {
+        int up;
+        if (nbits == 24) { up = (int)(flo >> 31); flo = 0; }
+        else { hfp_big_shl(&num, 1); up = hfp_big_cmp(&num, &den) >= 0; }
+        if (up) {
+            if (nbits == 24) fhi = fhi + 1;
+            else { flo = flo + 1; if (flo == 0) fhi = fhi + 1; }
+            if (fhi == 0x01000000u) {    /* carried into a new hex digit */
+                fhi = 0x00100000u;
+                flo = 0;
+                e = e + 1;
+                if (e + 64 > 127) { *hi = (neg ? 0x80000000u : 0) | 0x7FFFFFFFu; *lo = nbits == 24 ? 0 : 0xFFFFFFFFu; return 1; }
+            }
+        }
+    }
     *hi = (neg ? 0x80000000u : 0) | ((unsigned int)(e + 64) << 24) | fhi;
     *lo = flo;
     return 0;
+}
+
+static int hfp_from_text(const char *s, unsigned int *hi, unsigned int *lo) {
+    return hfp_from_text_n(s, hi, lo, 56);
 }
 
 #endif

@@ -41,11 +41,14 @@ double f77_dnint(double v) { return fio_round(v); }
 #define trunc fio_trunc
 #define round fio_round
 
-/* Text to HFP, exactly, truncating as the compiler does for constants. */
+/* Text to HFP, exactly, rounded as the compiler rounds constants:
+ * to 24 bits while a REAL item is read (fio_rd_short), so that its
+ * conversion to float has nothing left to round. */
+static int fio_rd_short;
 static double fio_strtod(const char *text) {
     unsigned int hi, lo;
     while (*text == ' ' || *text == '\t') text++;
-    if (hfp_from_text(text, &hi, &lo) < 0) return 0.0;
+    if (hfp_from_text_n(text, &hi, &lo, fio_rd_short ? 24 : 56) < 0) return 0.0;
     return f77_hfp_make(hi, lo);
 }
 
@@ -1724,7 +1727,9 @@ void f77_rd_r(float *p) {
         t = fio_list_tok();
         if (t == 1) { fio_ldone = 1; return; }
         if (t == 2) return;
+        fio_rd_short = 1;
         *p = (float)fio_list_real();
+        fio_rd_short = 0;
         return;
     }
     d = fio_want();
@@ -1735,7 +1740,7 @@ void f77_rd_r(float *p) {
         fprintf(stderr, "f77: %c editing does not match a numeric READ item\n", d);
         fio_exit(2);
     }
-    else *p = (float)fio_in_real(fio_w, fio_d);
+    else { fio_rd_short = 1; *p = (float)fio_in_real(fio_w, fio_d); fio_rd_short = 0; }
     fio_consumed();
 }
 

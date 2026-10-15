@@ -13,7 +13,9 @@ noticed rather than silently half-applied.  What changes:
   - a unit is the DD name FTnnF001, as IBM's Fortran names them;
   - floating-point editing goes through f77dtoa.c, the exact conversion
     (libc370's printf is not exact), and input through the compiler's
-    own text-to-HFP (s370_hfp.h), truncating as H does;
+    own text-to-HFP (s370_hfp.h), rounding as the compiler does for
+    constants, and a REAL item to its own 24 bits (rounding the long
+    value to short would round twice);
   - C99's snprintf becomes sprintf, and trunc/round, which C89 lacks,
     are supplied.
 
@@ -87,11 +89,14 @@ rep('#include <stdlib.h>\n', '#include <stdlib.h>\n#include "f77rt.h"\n#include 
     'double f77_dint(double v) { return fio_trunc(v); }\n'
     'double f77_dnint(double v) { return fio_round(v); }\n'
     '#define trunc fio_trunc\n#define round fio_round\n'
-    '\n/* Text to HFP, exactly, truncating as the compiler does for constants. */\n'
+    '\n/* Text to HFP, exactly, rounded as the compiler rounds constants:\n'
+    ' * to 24 bits while a REAL item is read (fio_rd_short), so that its\n'
+    ' * conversion to float has nothing left to round. */\n'
+    'static int fio_rd_short;\n'
     'static double fio_strtod(const char *text) {\n'
     '    unsigned int hi, lo;\n'
     '    while (*text == \' \' || *text == \'\\t\') text++;\n'
-    '    if (hfp_from_text(text, &hi, &lo) < 0) return 0.0;\n'
+    '    if (hfp_from_text_n(text, &hi, &lo, fio_rd_short ? 24 : 56) < 0) return 0.0;\n'
     '    return f77_hfp_make(hi, lo);\n}\n'
     '\n/* OPEN FILE=name: on MVS the name is a DD name (eight characters,\n'
     ' * upper case), and the job supplies the data set behind it.  A\n'
@@ -225,6 +230,13 @@ rep('''    snprintf(num + k, sizeof num - k, "E%d", expv);
 rep('''    num[i] = 0;
     return strtod(num, 0);''', '''    num[i] = 0;
     return fio_strtod(num);''')
+# a REAL item is read rounded to its own 24 bits (fio_strtod)
+rep('''        *p = (float)fio_list_real();
+        return;''', '''        fio_rd_short = 1;
+        *p = (float)fio_list_real();
+        fio_rd_short = 0;
+        return;''')
+rep('''    else *p = (float)fio_in_real(fio_w, fio_d);''', '''    else { fio_rd_short = 1; *p = (float)fio_in_real(fio_w, fio_d); fio_rd_short = 0; }''')
 # OPEN on MVS: the FILE= name is a DD name (or the unit's own FTnnF001),
 # and a DD is always there, so STATUS='OLD'/'NEW' have nothing to check
 # and the data set is opened by the first READ or WRITE, in its

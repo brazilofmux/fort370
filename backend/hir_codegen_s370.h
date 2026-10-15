@@ -399,7 +399,7 @@ static int s370_str_unit[LEX_MAX_STRINGS];
 
 /* Floating constant conversion */
 static void s370_fconst_bits(int inst, unsigned int *hi, unsigned int *lo) {
-    if (h_name[inst] == 0 || hfp_from_text(h_name[inst], hi, lo) < 0)
+    if (h_name[inst] == 0 || hfp_from_text_n(h_name[inst], hi, lo, ty_is_double(h_ty[inst]) ? 56 : 24) < 0)
         cg_die("bad floating constant", inst);
 }
 
