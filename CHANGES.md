@@ -8,6 +8,26 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-15.1
+
+Tagged `v2026.10.15.1`: a program needs 320K less storage to run.
+Built from `68bb637`: FORT370.xmit SHA256 `65ee82b998c7c673…`, 524,720
+bytes (the compiler is 2026-10-15's; only its date stamp changed);
+F77RT.obj SHA256 `b9166ff3028371c8…`, 389,920 bytes.  All 192 FCVS
+programs, 80 tests, the 600K source, the 85-deep nesting test, a unit at
+each size limit, ANCORR, AIDAFC and Doug Wegscheid's pi spigot compile
+on the guest to the host's assembler, byte for byte, in REGION=7168K;
+the FCVS on MVS passes as before.
+
+- A program's GO step took 712K before its first array (FORTRAN H's
+  takes 28K), as Doug Wegscheid's measurements showed.  The C stack
+  libc370's startup allocates is now 64K, not 256K: only the runtime
+  runs on it, and the deepest any FCVS program reached was 9.3K.  The
+  runtime's two 64K buffers, for unformatted and direct access records
+  and for concatenation, are allocated by the first statement that
+  needs one.  A program with no arrays now runs in 392K; its load
+  module is 156K, not 283K.
+
 ## 2026-10-15
 
 Tagged `v2026.10.15`: an inlined subprogram is typed by its own rules.
