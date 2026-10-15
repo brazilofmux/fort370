@@ -1101,6 +1101,10 @@ float  f77i_asin(float *x)            { return (float)asin((double)*x); }
 double f77i_dasin(double *x)          { return asin(*x); }
 float  f77i_acos(float *x)            { return (float)acos((double)*x); }
 double f77i_dacos(double *x)          { return acos(*x); }
+float  f77i_arsin(float *x)           { return (float)asin((double)*x); }   /* IBM's names */
+double f77i_darsin(double *x)         { return asin(*x); }
+float  f77i_arcos(float *x)           { return (float)acos((double)*x); }
+double f77i_darcos(double *x)         { return acos(*x); }
 float  f77i_atan(float *x)            { return (float)atan((double)*x); }
 double f77i_datan(double *x)          { return atan(*x); }
 float  f77i_atan2(float *y, float *x) { return (float)atan2((double)*y, (double)*x); }

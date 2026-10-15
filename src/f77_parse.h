@@ -1499,8 +1499,11 @@ static int f77_intrinsic(char *nm) {
     if (strcmp(nm, "SIN") == 0 || strcmp(nm, "DSIN") == 0) return IN_SIN;
     if (strcmp(nm, "COS") == 0 || strcmp(nm, "DCOS") == 0) return IN_COS;
     if (strcmp(nm, "TAN") == 0 || strcmp(nm, "DTAN") == 0) return IN_TAN;
-    if (strcmp(nm, "ASIN") == 0 || strcmp(nm, "DASIN") == 0) return IN_ASIN;
-    if (strcmp(nm, "ACOS") == 0 || strcmp(nm, "DACOS") == 0) return IN_ACOS;
+    /* ARSIN, ARCOS, DARSIN and DARCOS are IBM's names for them */
+    if (strcmp(nm, "ASIN") == 0 || strcmp(nm, "DASIN") == 0 ||
+        strcmp(nm, "ARSIN") == 0 || strcmp(nm, "DARSIN") == 0) return IN_ASIN;
+    if (strcmp(nm, "ACOS") == 0 || strcmp(nm, "DACOS") == 0 ||
+        strcmp(nm, "ARCOS") == 0 || strcmp(nm, "DARCOS") == 0) return IN_ACOS;
     if (strcmp(nm, "ATAN") == 0 || strcmp(nm, "DATAN") == 0) return IN_ATAN;
     if (strcmp(nm, "ATAN2") == 0 || strcmp(nm, "DATAN2") == 0) return IN_ATAN2;
     if (strcmp(nm, "EXP") == 0 || strcmp(nm, "DEXP") == 0) return IN_EXP;
@@ -5097,6 +5100,7 @@ static char *f77_intrinsic_proc(char *nm) {
         "IABS", "ABS", "DABS", "SQRT", "DSQRT", "EXP", "DEXP", "ALOG", "DLOG",
         "ALOG10", "DLOG10", "SIN", "DSIN", "COS", "DCOS", "TAN", "DTAN",
         "ASIN", "DASIN", "ACOS", "DACOS", "ATAN", "DATAN", "ATAN2", "DATAN2",
+        "ARSIN", "DARSIN", "ARCOS", "DARCOS",
         "SINH", "DSINH", "COSH", "DCOSH", "TANH", "DTANH", "AINT", "DINT",
         "ANINT", "DNINT", "NINT", "IDNINT", "MOD", "AMOD", "DMOD", "SIGN",
         "ISIGN", "DSIGN", "DIM", "IDIM", "DDIM", "DPROD", "LEN", "INDEX",
