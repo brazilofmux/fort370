@@ -8,6 +8,30 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-15
+
+Tagged `v2026.10.15`: an inlined subprogram is typed by its own rules.
+Built from `549c6b1`: FORT370.xmit SHA256 `02461119cf3b5a56…`, 524,720
+bytes; F77RT.obj SHA256 `939fe019e61d8244…`, 576,400 bytes (the runtime
+is 2026-10-14.2's; only its date stamp changed).  All 192 FCVS
+programs, 80 tests, the 600K source, the 85-deep nesting test, a unit at
+each size limit, ANCORR, AIDAFC and Doug Wegscheid's pi spigot compile
+on the guest to the host's assembler, byte for byte, in REGION=7168K.
+
+- A short subprogram that the front end inlines took its caller's
+  IMPLICIT: a caller's IMPLICIT NONE refused the callee's own names,
+  the message naming the callee's header (Marco Verpelli's INTEGER
+  FUNCTION SUCC), and a caller's IMPLICIT INTEGER (A-Z) made the
+  callee's REAL variables INTEGER, without a word
+  (`tests/s370/implinl.f`).
+- An error later in a statement whose CALL was inlined names the
+  statement's line, not the callee's last (found first in slow32-public's
+  copy of the front end).
+- The compiler's environment switches are copied when first read: a
+  libc may return every answer in one buffer.
+- `tests/s370/cmpscr.f` uses stand-in text for the two prompts it had
+  copied from a contributor's program.
+
 ## 2026-10-14.3
 
 Tagged `v2026.10.14.3`: FORT370 about nine times faster on MVS.  René
