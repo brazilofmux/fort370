@@ -652,6 +652,63 @@ rep('''static void fio_exit(int code) {
     int u;''', '''static void fio_exit(int code) {
     int u;
     f77r_closeall();''')
+# the two 64K buffers are allocated by the first statement that needs
+# them: a program without unformatted, direct access or concatenation
+# does not carry them (on MVS every byte of static storage is in the
+# load module and in the region)
+rep('''/* Unformatted record buffer: assembled on WRITE, consumed on READ. */
+#define FIO_MAXUREC 65536
+static unsigned char fio_urec[FIO_MAXUREC];
+''', '''/* Unformatted record buffer: assembled on WRITE, consumed on READ;
+ * direct access records pass through it too.  Allocated by the first
+ * statement that needs it. */
+#define FIO_MAXUREC 65536
+static unsigned char *fio_urec;
+static void fio_exit(int code);
+static void fio_urec_need(void) {
+    if (fio_urec) return;
+    fio_urec = (unsigned char *)malloc(FIO_MAXUREC);
+    if (!fio_urec) {
+        fprintf(stderr, "f77: no storage for the record buffer (%d bytes)\\n", FIO_MAXUREC);
+        exit(2);
+    }
+}
+''')
+rep('''        memcpy(fio_urec, fio_line, (size_t)fio_len);''', '''        fio_urec_need();
+        memcpy(fio_urec, fio_line, (size_t)fio_len);''')
+rep('''        if (f77d_read(fio_unit, fio_ddof(fio_unit), fio_urecl[fio_unit], fio_ucur[fio_unit], fio_urec) != 0) {''',
+'''        fio_urec_need();
+        if (f77d_read(fio_unit, fio_ddof(fio_unit), fio_urecl[fio_unit], fio_ucur[fio_unit], fio_urec) != 0) {''')
+rep('''    fio_position(0, unit);
+    fio_ulen = 0;
+}''', '''    fio_position(0, unit);
+    fio_urec_need();
+    fio_ulen = 0;
+}''')
+rep('''    fio_position(0, unit);
+    fio_upos = 0;''', '''    fio_position(0, unit);
+    fio_urec_need();
+    fio_upos = 0;''')
+rep('''#define FIO_CATRING 65536
+static char fio_catring[FIO_CATRING];
+static int  fio_catpos;
+char *f77_cat(const char *a, int la, const char *b, int lb) {
+    char *r;
+    int n = (la > 0 ? la : 0) + (lb > 0 ? lb : 0);
+''', '''#define FIO_CATRING 65536
+static char *fio_catring;             /* allocated by the first concatenation */
+static int  fio_catpos;
+char *f77_cat(const char *a, int la, const char *b, int lb) {
+    char *r;
+    int n = (la > 0 ? la : 0) + (lb > 0 ? lb : 0);
+    if (!fio_catring) {
+        fio_catring = (char *)malloc(FIO_CATRING);
+        if (!fio_catring) {
+            fprintf(stderr, "f77: no storage for concatenation (%d bytes)\\n", FIO_CATRING);
+            exit(2);
+        }
+    }
+''')
 s = re.sub(r'\bexit\(2\);', 'fio_exit(2);', s)
 s = re.sub(r'snprintf\(buf, sizeof buf, ', 'sprintf(buf, ', s)
 s = re.sub(r'\bfopen\(nm, ', 'fio_fopen(nm, ', s)

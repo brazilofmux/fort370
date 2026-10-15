@@ -127,9 +127,20 @@ static int   fio_ucur[FIO_MAXUNIT];      /* direct access: the record the next t
 static int   fio_uaeof[FIO_MAXUNIT];     /* positioned after the endfile record */
 static int   fio_recoverable;            /* ERR=/IOSTAT= present: report, do not exit */
 static int   fio_err;                    /* set when a recoverable error happened */
-/* Unformatted record buffer: assembled on WRITE, consumed on READ. */
+/* Unformatted record buffer: assembled on WRITE, consumed on READ;
+ * direct access records pass through it too.  Allocated by the first
+ * statement that needs it. */
 #define FIO_MAXUREC 65536
-static unsigned char fio_urec[FIO_MAXUREC];
+static unsigned char *fio_urec;
+static void fio_exit(int code);
+static void fio_urec_need(void) {
+    if (fio_urec) return;
+    fio_urec = (unsigned char *)malloc(FIO_MAXUREC);
+    if (!fio_urec) {
+        fprintf(stderr, "f77: no storage for the record buffer (%d bytes)\n", FIO_MAXUREC);
+        fio_exit(2);
+    }
+}
 static int   fio_ulen;
 static int   fio_upos;
 /* Internal file in progress (NULL = external): the CHARACTER entity's
@@ -277,6 +288,7 @@ static void fio_flush_line(void) {
             fprintf(stderr, "f77: record longer than RECL (%d > %d)\n", fio_len, recl);
             fio_exit(2);
         }
+        fio_urec_need();
         memcpy(fio_urec, fio_line, (size_t)fio_len);
         for (i = fio_len; i < recl; i++) fio_urec[i] = ' ';
         if (f77d_write(fio_unit, fio_ddof(fio_unit), recl, fio_ucur[fio_unit], fio_urec, ' ') != 0) {
@@ -346,6 +358,7 @@ static int fio_getrec(void) {
         int recl = fio_urecl[fio_unit];
         size_t n;
         if (recl > FIO_MAXLINE - 1) recl = FIO_MAXLINE - 1;
+        fio_urec_need();
         if (f77d_read(fio_unit, fio_ddof(fio_unit), fio_urecl[fio_unit], fio_ucur[fio_unit], fio_urec) != 0) {
             fprintf(stderr, "f77: unit %d: record %d does not exist\n", fio_unit, fio_ucur[fio_unit]);
             fio_exit(2);
@@ -745,6 +758,7 @@ void f77_wu_begin(int unit) {
     fio_uunf[unit] = 1;
     fio_uaeof[unit] = 0;
     fio_position(0, unit);
+    fio_urec_need();
     fio_ulen = 0;
 }
 void f77_wu(const void *p, int n) {
@@ -788,6 +802,7 @@ int f77_ru_begin(int unit, int flags) {
     }
     fio_uunf[unit] = 1;
     fio_position(0, unit);
+    fio_urec_need();
     fio_upos = 0;
     if (fio_udirect[unit]) {
         rc = f77d_read(unit, fio_ddof(unit), fio_urecl[unit], fio_ucur[unit], fio_urec);
@@ -1256,11 +1271,18 @@ int f77_lstrcmp(const char *a, int la, const char *b, int lb) {
  * (an assignment, comparison or argument), so a 64 KB ring outlives
  * every live result in practice; a chain longer than that wraps. */
 #define FIO_CATRING 65536
-static char fio_catring[FIO_CATRING];
+static char *fio_catring;             /* allocated by the first concatenation */
 static int  fio_catpos;
 char *f77_cat(const char *a, int la, const char *b, int lb) {
     char *r;
     int n = (la > 0 ? la : 0) + (lb > 0 ? lb : 0);
+    if (!fio_catring) {
+        fio_catring = (char *)malloc(FIO_CATRING);
+        if (!fio_catring) {
+            fprintf(stderr, "f77: no storage for concatenation (%d bytes)\n", FIO_CATRING);
+            fio_exit(2);
+        }
+    }
     if (n > FIO_CATRING) {
         fprintf(stderr, "f77: concatenation result of %d bytes is too long\n", n);
         fio_exit(2);

@@ -4,3 +4,13 @@
  * itself. */
 extern void F77MAIN(void);
 int main(void) { F77MAIN(); return 0; }
+
+/* The C stack libc370's startup allocates (its weak external @@STKLEN;
+ * the default is 256K, all of it in the GO step's region).  Only the
+ * runtime runs on it: a Fortran unit's save area and locals are static,
+ * and a CALL passes the stack pointer along unchanged, so the depth is
+ * the runtime's own and does not grow with the program.  Painted and
+ * measured over the FCVS on MVS (2026-10-15), the deepest any program
+ * reached was 9.3K, most 1.5K-4.5K; nothing checks for overflow, so
+ * 64K leaves a wide margin and gives 192K back to the region. */
+int __stklen = 65536;
