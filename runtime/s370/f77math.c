@@ -17,13 +17,14 @@
  * calls through <math.h> resolve to; the archive's members are then
  * never pulled in.  A REAL argument arrives widened to double.
  *
- * Accuracy is a few units in the last place at worst, in the range of
- * the arguments the FCVS and the kernels use.  A REAL result is the
- * long one cut to short, and so the exact value truncated: for SQRT,
- * EXP, ALOG, ALOG10, SIN, COS, ATAN and TANH over 300 arguments each,
- * every time (2026-10-15, on TK5).  FORTLIB's short routines round SQRT
- * and EXP and approximate the rest their own way, up to five units from
- * these (docs/INSTALL-MVS.txt); the long ones are not yet compared. */
+ * A REAL result is the long one cut to short, and so within a unit and
+ * nearly always the exact value truncated.  The long results, against
+ * the exact values and FORTLIB's (2026-10-15, on TK5; the figures are
+ * in docs/INSTALL-MVS.txt): SQRT correctly rounded, as FORTLIB's is;
+ * SIN and COS within 2 units at any argument, where FORTLIB's are off
+ * by thousands; the rest 3 to 30 units, behind FORTLIB's 1 or 2, the
+ * wobble of hexadecimal precision across 1.0 in their intermediate
+ * values the usual cause. */
 
 typedef union { double d; unsigned int w[2]; } Hfp;   /* big-endian: w[0] has the sign and exponent */
 
@@ -91,20 +92,143 @@ static double c_pio2_3(void) { return hfp_make(0x2DCC5170u, 0x1B839A25u); }   /*
 static double c_pi(void)     { return hfp_make(0x413243F6u, 0xA8885A30u); }
 static double c_sqrthalf(void) { return hfp_make(0x40B504F3u, 0x33F9DE64u); }
 
-/* --- square root: Newton on the binary mantissa ----------------- */
-double f77m_sqrt(double x) __asm__("SQRT");
-double f77m_sqrt(double x) {
+/* --- big integers ---------------------------------------------- */
+
+/* Unsigned integers as 14-bit limbs, least significant first: the
+ * product of two limbs, and a few of them summed, fit an unsigned int,
+ * and the runtime has no use for cc370's 64-bit arithmetic. */
+#define LB 14
+#define LM 0x3FFFu
+
+/* a[0..n) = f << sh, f the 56 bits hi:lo (hi has 24) */
+static void bn_set(unsigned int *a, int n, unsigned int hi, unsigned int lo, int sh) {
+    unsigned int f[4];
+    int q;
+    int r;
+    int i;
+    f[0] = lo & LM;
+    f[1] = (lo >> 14) & LM;
+    f[2] = ((lo >> 28) | (hi << 4)) & LM;
+    f[3] = (hi >> 10) & LM;
+    q = sh / LB;
+    r = sh % LB;
+    for (i = 0; i < n; i++) a[i] = 0;
+    for (i = 0; i < 4; i++) {
+        if (i + q < n) a[i + q] = a[i + q] | ((f[i] << r) & LM);
+        if (r > 0 && i + q + 1 < n) a[i + q + 1] = a[i + q + 1] | (f[i] >> (LB - r));
+    }
+}
+
+/* c[0..na+nb) = a * b */
+static void bn_mul(unsigned int *c, unsigned int *a, int na, unsigned int *b, int nb) {
+    unsigned int carry;
+    int i;
+    int j;
+    for (i = 0; i < na + nb; i++) c[i] = 0;
+    for (i = 0; i < na; i++)
+        for (j = 0; j < nb; j++) {
+            c[i + j] = c[i + j] + a[i] * b[j];
+            if (c[i + j] >= 0x40000000u) { c[i + j + 1] = c[i + j + 1] + (c[i + j] >> LB); c[i + j] = c[i + j] & LM; }
+        }
+    carry = 0;
+    for (i = 0; i < na + nb; i++) { c[i] = c[i] + carry; carry = c[i] >> LB; c[i] = c[i] & LM; }
+}
+
+/* --- square root, correctly rounded ----------------------------- */
+
+/* Newton on the binary mantissa, n steps from within 3%: four give a
+ * few units in the last place. */
+static double m_sqrt_est(double x, int n) {
     double m;
     double y;
     int e;
     int i;
-    if (hfp_is_zero(x)) return 0.0;
-    x = m_fabs(x);                       /* a negative argument is taken by its magnitude, as FORTLIB does after its message */
     m = m_frexp(x, &e);                  /* [0.5, 1) */
     if (e & 1) { m = m * 2.0; e = e - 1; }   /* [0.5, 2) with an even exponent */
     y = 0.41731 + 0.59016 * m;           /* within 3% */
-    for (i = 0; i < 5; i++) y = 0.5 * (y + m / y);
+    for (i = 0; i < n; i++) y = 0.5 * (y + m / y);
     return m_ldexp(y, e / 2);
+}
+
+/* Whether (2R + 1)^2 is below 4N, R the 56 bits hi:lo and n4h the
+ * high word of 4N mod 2^64 (its low word is zero).  The two agree in
+ * all but their last 63 bits or so while R is within a dozen of the
+ * root, so the difference mod 2^64 read as signed is the difference. */
+static int m_sqrt_low(unsigned int hi, unsigned int lo, unsigned int n4h) {
+    unsigned int sh;
+    unsigned int sl;
+    unsigned int ph;
+    unsigned int p00;
+    unsigned int p01;
+    sh = (hi << 1) | (lo >> 31);         /* S = 2R + 1 */
+    sl = (lo << 1) | 1u;
+    /* S^2 mod 2^64 = sl^2 + 2 sh sl 2^32; of sl^2 only the high word
+     * matters, in halves of 16 */
+    p00 = (sl & 0xFFFFu) * (sl & 0xFFFFu);
+    p01 = (sl & 0xFFFFu) * (sl >> 16);
+    ph = (p00 >> 16) + 2u * (p01 & 0xFFFFu);
+    ph = (sl >> 16) * (sl >> 16) + 2u * (p01 >> 16) + (ph >> 16);
+    ph = ph + 2u * sh * sl;
+    ph = ph - n4h;
+    /* the sign bit by a logical shift: cc370 makes "(a - b) & 0x80000000"
+     * a signed subtraction's condition code, wrong when it overflows */
+    return (int)(ph >> 31);
+}
+
+/* x = F 16^e with F the 56-bit fraction; for e even the root's
+ * fraction is R = sqrt(F 2^56) and its exponent e/2, for e odd
+ * R = sqrt(F 2^52) and (e+1)/2 -- either way a 56-bit integer with a
+ * nonzero leading hex digit, and the root of f = F 2^-56 or F 2^-60
+ * is R 2^-56, in [1/16, 1).  Newton there, with the last step taken
+ * as a correction, puts R within a few units; then whole numbers
+ * settle it: the rounded root is the R with (2R-1)^2 < 4 F 2^k <
+ * (2R+1)^2 (never equal, the middle being odd and the outside even).
+ * FORTLIB's DSQRT is correctly rounded too. */
+double f77m_sqrt(double x) __asm__("SQRT");
+double f77m_sqrt(double x) {
+    Hfp u;
+    unsigned int hi;
+    unsigned int lo;
+    unsigned int n4h;
+    int e;
+    double f;
+    double y;
+    if (hfp_is_zero(x)) return 0.0;
+    u.d = x;                             /* a negative argument is taken by its magnitude, as FORTLIB does after its message */
+    e = (int)((u.w[0] >> 24) & 0x7F) - 64;
+    hi = u.w[0] & 0x00FFFFFFu;
+    lo = u.w[1];
+    while ((hi >> 20) == 0) {            /* unnormalized: a hex digit at a time */
+        hi = (hi << 4) | (lo >> 28);
+        lo = lo << 4;
+        e = e - 1;
+    }
+    if (e & 1) {
+        e = e + 1;
+        f = hfp_make(0x3F000000u | hi, lo);
+        n4h = (lo & 0x3FFu) << 22;       /* 4 F 2^52 = F 2^54 */
+    } else {
+        f = hfp_make(0x40000000u | hi, lo);
+        n4h = (lo & 0x3Fu) << 26;        /* F 2^58 */
+    }
+    y = m_sqrt_est(f, 3);                /* within 2^-47 */
+    y = y + 0.5 * (f / y - y);
+    u.d = y;
+    hi = u.w[0] & 0x00FFFFFFu;
+    lo = u.w[1];
+    if ((u.w[0] >> 24) >= 0x41) { hi = 0x00FFFFFFu; lo = 0xFFFFFFFFu; }
+    else while ((u.w[0] >> 24) < 0x40) { lo = (lo >> 4) | (hi << 28); hi = hi >> 4; u.w[0] = u.w[0] + 0x01000000u; }
+    while (m_sqrt_low(hi, lo, n4h)) { lo = lo + 1; if (lo == 0) hi = hi + 1; }
+    for (;;) {                           /* R - 1 when (2R - 1)^2 is over */
+        unsigned int phi;
+        unsigned int plo;
+        phi = lo == 0 ? hi - 1 : hi;
+        plo = lo - 1;
+        if (m_sqrt_low(phi, plo, n4h)) break;
+        hi = phi;
+        lo = plo;
+    }
+    return hfp_make(((unsigned int)(64 + e / 2) << 24) | hi, lo);
 }
 
 /* --- exponential ------------------------------------------------ */
@@ -196,6 +320,103 @@ static double m_cos_small(double r) {
     return 1.0 - r2 * p;
 }
 
+/* 2/pi to 392 bits, fourteen at a time, the leading bits first. */
+static const unsigned int m_2opi[28] = {
+    0x28BE, 0x1836, 0x3939, 0x0415, 0x0A7F, 0x0275, 0x1F47, 0x3534, 0x3770,
+    0x0DB6, 0x0A56, 0x193C, 0x10E4, 0x041F, 0x3945, 0x23AB, 0x37AE, 0x3C56,
+    0x06DC, 0x246E, 0x0E90, 0x24DD, 0x0B80, 0x0649, 0x0BBA, 0x209D, 0x0648,
+    0x1CFE
+};
+
+/* the 14 bits of 2/pi from bit p on (the first bit after the point is 1) */
+static unsigned int m_2opi_bits(int p) {
+    int c;
+    int o;
+    c = (p - 1) / LB;
+    o = (p - 1) % LB;
+    if (o == 0) return m_2opi[c];
+    return ((m_2opi[c] << o) | (m_2opi[c + 1] >> (LB - o))) & LM;
+}
+
+/* pi/2 times 2^68, its 69 bits fourteen at a time, the low ones first */
+static const unsigned int m_pio2_68[5] = { 0x0698, 0x3461, 0x0442, 0x3ED5, 0x1921 };
+
+/* bit i of a */
+static int bn_bit(unsigned int *a, int i) { return (int)((a[i / LB] >> (i % LB)) & 1u); }
+
+/* a[0..n) times 2^t, truncated to HFP long: the hex exponent puts the
+ * leading one in the first digit, and the 56 bits from there are read
+ * off.  Nonzero a, and a result in range. */
+static double m_from_bits(unsigned int *a, int n, int t) {
+    int l;
+    int e;
+    int b;
+    int i;
+    unsigned int hi;
+    unsigned int lo;
+    l = n * LB - 1;
+    while (l > 0 && !bn_bit(a, l)) l = l - 1;
+    e = l + t >= 0 ? (l + t) / 4 + 1 : -((-(l + t) + 3) / 4) + 1;   /* 16^(e-1) <= a 2^t < 16^e */
+    b = 4 * e - 56 - t;                  /* a's bit for the fraction's last */
+    hi = 0;
+    lo = 0;
+    for (i = 55; i >= 0; i--) {
+        int v;
+        v = b + i >= 0 && b + i < n * LB ? bn_bit(a, b + i) : 0;
+        if (i >= 32) hi = hi | ((unsigned int)v << (i - 32)); else lo = lo | ((unsigned int)v << i);
+    }
+    return hfp_make(((unsigned int)(64 + e) << 24) | hi, lo);
+}
+
+/* The reduction for x >= 2^20, where k pi/2 is no longer exact in
+ * three parts (Payne and Hanek): x = F 2^s with F the 56-bit fraction,
+ * and x 2/pi mod 4 is F times the bits of 2/pi from 2^(1-s) on, the
+ * ones before making a multiple of four; 140 of them leave 80 bits and
+ * more of the fraction below the nearest quadrant, which an argument
+ * of 56 bits comes no nearer to than 2^-62 or so. */
+#define PH_W 10                          /* limbs of 2/pi: 140 bits */
+static double m_reduce_big(double x, int *quad) {
+    Hfp u;
+    unsigned int f[4];
+    unsigned int w[PH_W];
+    unsigned int p[4 + PH_W];
+    int s;
+    int a;
+    int pb;
+    int top;
+    int i;
+    int j;
+    int neg;
+    unsigned int g[5];
+    unsigned int q[10];
+    double r;
+    u.d = x;
+    s = 4 * ((int)((u.w[0] >> 24) & 0x7F) - 64) - 56;
+    bn_set(f, 4, u.w[0] & 0x00FFFFFFu, u.w[1], 0);
+    a = s - 1 > 1 ? s - 1 : 1;
+    for (j = 0; j < PH_W; j++) w[PH_W - 1 - j] = m_2opi_bits(a + LB * j);
+    bn_mul(p, f, 4, w, PH_W);
+    pb = a + LB * PH_W - 1 - s;          /* the binary point: P / 2^pb */
+    *quad = bn_bit(p, pb) + 2 * bn_bit(p, pb + 1);
+    neg = bn_bit(p, pb - 1);
+    if (neg) {                           /* past the half: 1 - fraction, from the next quadrant */
+        unsigned int c;
+        c = 1;
+        for (i = 0; i < 4 + PH_W; i++) { p[i] = ((~p[i]) & LM) + c; c = p[i] >> LB; p[i] = p[i] & LM; }
+        *quad = (*quad + 1) & 3;
+    }
+    /* r = the fraction times pi/2, in whole numbers: 70 bits of the
+     * fraction from its leading one, times 69 of pi/2 */
+    top = pb - 1;
+    while (top > 0 && !bn_bit(p, top)) top = top - 1;
+    for (i = 0; i < 5; i++) g[i] = 0;
+    for (i = 0; i < 70 && top - i >= 0; i++)
+        if (bn_bit(p, top - i)) g[(69 - i) / LB] = g[(69 - i) / LB] | (1u << ((69 - i) % LB));
+    bn_mul(q, g, 5, (unsigned int *)m_pio2_68, 5);
+    r = m_from_bits(q, 10, top - 69 - pb - 68);
+    return neg ? -r : r;
+}
+
 /* x = k pi/2 + r, |r| <= pi/4: returns r, *quad = k mod 4.  The
  * three-part pi/2 keeps k * pi/2 exact for |k| below 2^20 (the parts
  * are 36, 36 and 56 bits; tests/s370/math.sh derives them). */
@@ -204,6 +425,12 @@ static double m_reduce(double x, int *quad) {
     double k;
     double r;
     int ki;
+    if (m_fabs(x) >= 1048576.0) {
+        r = m_reduce_big(m_fabs(x), &ki);
+        if (x < 0.0) { r = -r; ki = -ki; }
+        *quad = ki & 3;
+        return r;
+    }
     kd = x / c_pio2();
     k = (double)(long)(kd < 0.0 ? kd - 0.5 : kd + 0.5);
     r = ((x - k * c_pio2_1()) - k * c_pio2_2()) - k * c_pio2_3();
@@ -257,8 +484,8 @@ static double m_atan_unit(double t) {
     double s;
     double p;
     int n;
-    t = t / (1.0 + f77m_sqrt(1.0 + t * t));
-    t = t / (1.0 + f77m_sqrt(1.0 + t * t));
+    t = t / (1.0 + m_sqrt_est(1.0 + t * t, 5));   /* the estimate does here, and is quicker */
+    t = t / (1.0 + m_sqrt_est(1.0 + t * t, 5));
     t2 = t * t;
     s = 0.0;
     p = t;
@@ -283,14 +510,20 @@ double f77m_atan(double x) {
 
 double f77m_atan2(double y, double x) __asm__("ATAN2");
 double f77m_atan2(double y, double x) {
+    double ax;
+    double ay;
     double r;
     if (hfp_is_zero(x)) {
         if (hfp_is_zero(y)) return 0.0;
         return y < 0.0 ? -c_pio2() : c_pio2();
     }
-    r = f77m_atan(y / x);
-    if (x < 0.0) r = y < 0.0 ? r - c_pi() : r + c_pi();
-    return r;
+    /* the smaller over the larger: y / x could overflow */
+    ax = m_fabs(x);
+    ay = m_fabs(y);
+    if (ay <= ax) r = f77m_atan(ay / ax);
+    else r = c_pio2() - f77m_atan(ax / ay);
+    if (x < 0.0) r = c_pi() - r;
+    return y < 0.0 ? -r : r;
 }
 
 double f77m_asin(double x) __asm__("ASIN");
@@ -366,19 +599,37 @@ double f77m_tanh(double x) {
 double f77m_pow(double x, double y) __asm__("POW");
 double f77m_pow(double x, double y) {
     double r;
+    double l;
     int neg;
     if (hfp_is_zero(y)) return 1.0;
     if (hfp_is_zero(x)) return 0.0;
     neg = 0;
     if (x < 0.0) {
         /* a negative base needs an integral exponent; the result's
-         * sign is that of (-1)^y */
-        double yi;
-        yi = (double)(long)y;
-        if (yi != y) return 0.0;
+         * sign is that of (-1)^y.  Read from the bits: y = F 2^(4e-56),
+         * integral when the fraction's bits below 2^0 are zero, odd
+         * when the one at 2^0 is set; from 2^56 on, always even. */
+        Hfp u;
+        int b;
+        u.d = y;
+        b = 56 - 4 * ((int)((u.w[0] >> 24) & 0x7F) - 64);   /* bits below the point */
+        if (b > 56) return 0.0;          /* |y| < 1 */
+        if (b > 0) {
+            unsigned int mhi;
+            unsigned int mlo;
+            int i;
+            mhi = 0;
+            mlo = 0;
+            for (i = 0; i < b; i++) { if (i < 32) mlo = mlo | (1u << i); else mhi = mhi | (1u << (i - 32)); }
+            if ((u.w[1] & mlo) != 0 || (u.w[0] & 0x00FFFFFFu & mhi) != 0) return 0.0;
+            neg = b < 32 ? (int)((u.w[1] >> b) & 1u) : (int)((u.w[0] >> (b - 32)) & 1u);
+        }
         x = -x;
-        neg = ((long)y) & 1;
     }
-    r = f77m_exp(y * f77m_log(x));
+    /* y log x past the exponential's range would overflow the product */
+    l = f77m_log(x);
+    if (m_fabs(y) > 1.0 && m_fabs(l) > 200.0 / m_fabs(y))
+        r = (y < 0.0) == (l < 0.0) ? HFP_HUGE : 0.0;
+    else r = f77m_exp(y * l);
     return neg ? -r : r;
 }
