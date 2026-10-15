@@ -8,6 +8,39 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-15.2
+
+Tagged `v2026.10.15.2`: floating point surveyed against the exact
+values, and repaired where it was behind FORTRAN H; an inlining bug.
+Built from `d993697`: FORT370.xmit SHA256 `8263c1803849642b…`, 524,800
+bytes; F77RT.obj SHA256 `3c83408fc8844741…`, 399,120 bytes.  All 192
+FCVS programs, 82 tests, the 600K source, the 85-deep nesting test and
+a unit at each size limit compile on the guest to the host's assembler,
+byte for byte, in REGION=7168K; the FCVS on MVS passes as before.
+
+- A small subroutine inlined in a DO loop could have its work hoisted
+  out of the loop, and every call then had the first call's answer,
+  silently: when the loop's variable was passed to it and also to a
+  call in the loop that was not inlined.  Found by the survey, whose
+  generator returned one value 300 times.
+- DSQRT is correctly rounded, as FORTLIB's is; it was up to 10 units
+  in the last place off.
+- SIN, COS and TAN of a huge argument (SIN(1E20), DSIN(1D20), CEXP of
+  a huge imaginary part) abended with S0CC; any argument is now
+  reduced exactly, by the bits of 2/pi.  ATAN2 and ** no longer
+  overflow on a huge quotient or exponent.
+- A constant in the source and the same number read by READ are now
+  the same value, both rounded to the nearest; constants were
+  truncated, as H's are, and a REAL READ rounded, so 0.1 read from a
+  card was not the program's 0.1.  A REAL constant can now be one unit
+  above H's.
+- IBM's ARSIN, ARCOS, DARSIN and DARCOS are the intrinsics ASIN and
+  ACOS, not externals.
+- docs/INSTALL-MVS.txt has the survey: constants, output, arithmetic,
+  the functions against FORTLIB's (DOUBLE PRECISION DEXP, DLOG10,
+  DATAN, DASIN, DACOS, DATAN2 and the hyperbolics are still behind
+  it), large arguments, and what an error does in each.
+
 ## 2026-10-15.1
 
 Tagged `v2026.10.15.1`: a program needs 320K less storage to run.
