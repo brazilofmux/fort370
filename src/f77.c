@@ -509,6 +509,12 @@ static void hl_func(Node *fn) {
         if (!f77_next_stmt()) break;
         if (f77_unit_header_ty() >= 0 || f77_starts("SUBROUTINE")) break;
     }
+    /* fort370: a block left open at END */
+    while (ctl_n > 0) {
+        ctl_n = ctl_n - 1;
+        if (ctl_kind[ctl_n] == F77_CTL_IF) f77_error("IF block without END IF");
+        else if (ctl_label[ctl_n] < 0) f77_error("DO without END DO");
+    }
     f77_label_check();
 
     if (f77_cur_blk_live) f77_emit_return();

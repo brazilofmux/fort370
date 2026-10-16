@@ -4786,10 +4786,14 @@ static void f77_open_do(void) {
     step_hi = 0;
 
     f77_scan_from(f77_do_body);
-    if (lx_t != T_ICON) { f77_error("DO needs a terminal statement label"); return; }
-    lab = lex_ival;
-    f77_tok();
-    if (lx_t == T_COMMA) f77_tok();          /* DO 20, I = ... is accepted */
+    /* fort370: without a label the loop ends at END DO (MIL-STD-1753,
+     * 1978), its label -1, which no statement carries */
+    lab = -1;
+    if (lx_t == T_ICON) {
+        lab = lex_ival;
+        f77_tok();
+        if (lx_t == T_COMMA) f77_tok();      /* DO 20, I = ... is accepted */
+    }
     if (lx_t != T_NAME) { f77_error("DO needs a loop variable"); return; }
     s = f77_sym(lex_name);
     f77_tok();
@@ -4876,15 +4880,21 @@ static void f77_open_do(void) {
     ctl_n = ctl_n + 1;
 }
 
-/* Close every DO whose terminal label is the one just executed. */
-static void f77_close_do(int lab) {
+/* Close the innermost DO: the step and the trip count, or for a DO
+ * WHILE (ctl_var -1) back to its test. */
+static void f77_close_top_do(void) {
     int s;
     int v;
     int t;
-    while (ctl_n > f77_ctl_base && ctl_kind[ctl_n - 1] == F77_CTL_DO &&
-           ctl_label[ctl_n - 1] == lab) {
+    {
         ctl_n = ctl_n - 1;
         s = ctl_var[ctl_n];
+        if (s < 0) {
+            if (f77_cur_blk_live) hi_emit(HI_BR, TY_VOID, -1, -1, ctl_test[ctl_n], NULL);
+            f77_cur_blk_live = 0;
+            f77_begin_blk(ctl_exit[ctl_n]);
+            return;
+        }
         if (f77_cur_blk_live) {
             int vty;
             vty = f77_sty[s];
@@ -4923,6 +4933,61 @@ static void f77_close_do(int lab) {
         f77_cur_blk_live = 0;
         f77_begin_blk(ctl_exit[ctl_n]);
     }
+}
+
+/* Close every DO whose terminal label is the one just executed. */
+static void f77_close_do(int lab) {
+    while (ctl_n > f77_ctl_base && ctl_kind[ctl_n - 1] == F77_CTL_DO &&
+           ctl_label[ctl_n - 1] == lab)
+        f77_close_top_do();
+}
+
+/* fort370: DO [label [,]] WHILE (e), MIL-STD-1753's: the test block
+ * evaluates e and enters the body or leaves; the loop's end, its label
+ * or END DO, goes back to the test. */
+static void f77_open_dowhile(void) {
+    int lab;
+    int b_test;
+    int b_body;
+    int b_exit;
+    int c;
+    f77_scan_from(2);
+    lab = -1;
+    if (lx_t == T_ICON) {
+        lab = lex_ival;
+        f77_tok();
+        if (lx_t == T_COMMA) f77_tok();
+    }
+    f77_tok();                               /* WHILE */
+    b_test = hir_new_block();
+    b_body = hir_new_block();
+    b_exit = hir_new_block();
+    f77_goto_blk(b_test);
+    f77_begin_blk(b_test);
+    c = f77_expr();
+    if (ex_ty != TY_INT || !ex_log) f77_error("DO WHILE needs a logical expression");
+    hi_emit(HI_BRC, TY_VOID, c, b_body, b_exit, NULL);
+    f77_cur_blk_live = 0;
+    f77_begin_blk(b_body);
+    if (ctl_n >= F77_MAX_CTL) { f77_error("control nesting too deep"); return; }
+    ctl_kind[ctl_n] = F77_CTL_DO;
+    ctl_label[ctl_n] = lab;
+    ctl_var[ctl_n] = -1;
+    ctl_test[ctl_n] = b_test;
+    ctl_body[ctl_n] = b_body;
+    ctl_exit[ctl_n] = b_exit;
+    ctl_n = ctl_n + 1;
+}
+
+/* Is the statement DO [label [,]] WHILE (e)? */
+static int f77_is_dowhile(void) {
+    int i;
+    if (!f77_starts("DO")) return 0;
+    i = 2;
+    while (i < lx_stmt_len && lx_isdigit(lx_stmt[i])) i = i + 1;
+    if (i > 2 && i < lx_stmt_len && lx_stmt[i] == ',') i = i + 1;
+    if (i + 6 > lx_stmt_len || strncmp(lx_stmt + i, "WHILE(", 6) != 0) return 0;
+    return f77_match_paren(i + 5) == lx_stmt_len;
 }
 
 /* --- subprograms ------------------------------------------------------ */
@@ -7634,6 +7699,19 @@ static void f77_statement(void) {
         ctl_else[ctl_n - 1] = -1;
         goto done;
     }
+
+    if (f77_starts("ENDDO") && lx_stmt_len == 5) {
+        /* fort370: END DO closes the innermost unlabelled DO; with the
+         * label a labelled DO names, it is that DO's terminal statement
+         * (and closed with the label, below) */
+        if (ctl_n > f77_ctl_base && ctl_kind[ctl_n - 1] == F77_CTL_DO && ctl_label[ctl_n - 1] == -1)
+            f77_close_top_do();
+        else if (!(ctl_n > f77_ctl_base && ctl_kind[ctl_n - 1] == F77_CTL_DO &&
+                   lx_stmt_label >= 0 && ctl_label[ctl_n - 1] == lx_stmt_label))
+            f77_error("END DO without DO");
+        goto done;
+    }
+    if (f77_is_dowhile()) { f77_open_dowhile(); goto done; }
 
     if (f77_starts("ENDIF")) {
         if (ctl_n == 0 || ctl_kind[ctl_n - 1] != F77_CTL_IF) {
