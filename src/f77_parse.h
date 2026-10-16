@@ -249,13 +249,14 @@ static int f77_pairoff(int ty) { return ty == TY_DCPLX ? 8 : 4; }
 static int f77_slotty(int ty) { return f77_iscx(ty) ? f77_cxpart(ty) : ty; }
 /* A length after a type, *n: REAL*8 is DOUBLE PRECISION, COMPLEX*16
  * COMPLEX*16, and *4 and *8 take them back; any other is the type
- * itself (INTEGER*2 and LOGICAL*1 get a fullword still). */
-static int f77_lenty(int ty, int n) {
+ * itself (INTEGER*2 and LOGICAL*1 get a fullword still).  The unit scan
+ * in f77.c asks quietly (`say` 0); the statement itself reports. */
+static int f77_lenty(int ty, int n, int say) {
     if ((ty == TY_FLOAT || ty == TY_DOUBLE) && (n == 4 || n == 8)) return n == 8 ? TY_DOUBLE : TY_FLOAT;
 #ifdef F77_NATIVE_F64
     if (f77_iscx(ty) && (n == 8 || n == 16)) return n == 16 ? TY_DCPLX : TY_CPLX;
 #else
-    if (ty == TY_CPLX && n == 16) f77_error("COMPLEX*16 needs a target with native DOUBLE PRECISION");
+    if (ty == TY_CPLX && n == 16 && say) f77_error("COMPLEX*16 needs a target with native DOUBLE PRECISION");
 #endif
     return ty;
 }
@@ -603,6 +604,7 @@ static int  f77_nfamd;
 static int  f77_hdr_clen;              /* length seen by f77_function_kw_end; -2 = at f77_hdr_clen_off */
 static int  f77_hdr_clen_off;
 static int  f77_hdr_log;
+static int  f77_hdr_len;              /* REAL*8 FUNCTION: the *n seen by f77_function_kw_end, else 0 */
 static int  f77_nunit;
 
 /* Create a symbol whose storage is a by-reference dummy argument: its
@@ -3602,7 +3604,7 @@ static void f77_stmt_decl(int ty, int skip) {
         if (ty == TY_CHAR) {
             clen = f77_char_len();
         } else if (lx_t == T_ICON) {
-            ty = f77_lenty(ty, lex_ival);
+            ty = f77_lenty(ty, lex_ival, 1);
             f77_tok();
         }
         if (lx_t == T_COMMA) f77_tok();       /* CHARACTER*10, A, B */
@@ -3624,7 +3626,7 @@ static void f77_stmt_decl(int ty, int skip) {
             if (f77_sty[s] == TY_CHAR) {
                 f77_slen[s] = f77_char_len();
             } else if (lx_t == T_ICON) {
-                f77_sty[s] = f77_lenty(f77_sty[s], lex_ival);
+                f77_sty[s] = f77_lenty(f77_sty[s], lex_ival, 1);
                 f77_tok();
             }
             if (lx_t == T_LP) f77_parse_dims(s);
@@ -3871,7 +3873,7 @@ static void f77_stmt_implicit(int skip) {
             f77_tok();
             if (ty == TY_CHAR) clen = f77_char_len();
             else if (lx_t == T_ICON) {
-                ty = f77_lenty(ty, lex_ival);
+                ty = f77_lenty(ty, lex_ival, 1);
                 f77_tok();
             }
         }
@@ -5035,6 +5037,7 @@ static int f77_function_kw_end(int *ty_out) {
     off = 0;
     f77_hdr_clen = 1;
     f77_hdr_log = 0;
+    f77_hdr_len = 0;
     n = f77_type_before_function("DOUBLEPRECISION");
     if (n > 0) { off = n; ty = TY_DOUBLE; }
 #ifdef F77_NATIVE_F64
@@ -5090,7 +5093,8 @@ static int f77_function_kw_end(int *ty_out) {
         ln = 0;
         off = off + 1;
         while (off < lx_stmt_len && lx_isdigit(lx_stmt[off])) { ln = ln * 10 + (lx_stmt[off] - '0'); off = off + 1; }
-        ty = f77_lenty(ty, ln);
+        ty = f77_lenty(ty, ln, 0);
+        f77_hdr_len = ln;
     }
     fn = f77_kw_at(off, "FUNCTION");
     if (fn < 0) {
