@@ -310,6 +310,17 @@ static int lx_pending_hollerith_count(void) {
     lx_hcount_digits = n;
     if (n == 0) return -1;
     if (i >= 0 && (lx_isalpha(lx_stmt[i]) || lx_stmt[i] == '.')) return -1;
+    /* A type's length, REAL*8 H or CHARACTER*8 HUE squeezed to
+     * REAL*8H...: the statement so far is the type keyword itself (a
+     * DATA repeat count, 2*8H..., keeps its Hollerith).  From SLOW-32
+     * 4d8ecc39; DOUBLECOMPLEX is fort370's. */
+    if (i >= 0 && lx_stmt[i] == '*') {
+        static char *tys[] = { "INTEGER", "LOGICAL", "COMPLEX", "REAL", "CHARACTER",
+                               "DOUBLEPRECISION", "DOUBLECOMPLEX", 0 };
+        int k;
+        for (k = 0; tys[k]; k++)
+            if ((int)strlen(tys[k]) == i && strncmp(lx_stmt, tys[k], (size_t)i) == 0) return -1;
+    }
     v = 0;
     i = i + 1;
     while (i < lx_stmt_len) { v = v * 10 + (lx_stmt[i] - '0'); i = i + 1; }
