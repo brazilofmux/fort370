@@ -1027,20 +1027,60 @@ static int f77_libm_f2(char *name, int a, int b) {
  * hexadecimal float, rounded to the nearest; s370_hfp.h), which a host double
  * could not promise.  Literals keep the source spelling; values the
  * compiler made up are printed with enough digits to be exact. */
-/* A double the compiler made as decimal text for s370_hfp.h: an integral
- * value exactly (0, 1, the common case -- and the same on every host);
- * anything else to seventeen digits, exact for an IEEE double, which on
- * MVS's HFP doubles and inexact printf it is not.  Literals never come
- * here: they keep their source text (f77_cx_t, lex_ftext). */
+/* A double the compiler made as decimal text for s370_hfp.h, exactly:
+ * the host's double is IEEE on a Mac and HFP on MVS, and either one is
+ * M * 2^b, which is the decimal M * 5^-b * 10^b.  printf won't do: MVS's
+ * is inexact, and seventeen digits of an IEEE double are not the double.
+ * A value too small or too large for s370_hfp.h's digits (below about
+ * 1E-10 here) falls back to seventeen digits.  Literals never come here:
+ * they keep their source text (f77_cx_t, lex_ftext).  Only 32-bit
+ * arithmetic: cc370 gets 64-bit wrong. */
+static int f77_dec_muladd(unsigned char *g, int n, int m, int a) {
+    int i;
+    for (i = 0; i < n; i++) { a = a + g[i] * m; g[i] = (unsigned char)(a % 10); a = a / 10; }
+    while (a) { if (n >= 300) return -1; g[n] = (unsigned char)(a % 10); a = a / 10; n = n + 1; }
+    return n;
+}
 static void f77_dtext(double d, char *b) {
+    unsigned int w[2], hi, lo;
+    int bexp, nbits, neg, n, i, k;
+    unsigned char g[300];
     if (d == (double)(int)d && d > -1.0e9 && d < 1.0e9) { sprintf(b, "%d", (int)d); return; }
-    sprintf(b, "%.17g", d);
+    memcpy(w, &d, 8);
+#ifdef __MVS__
+    hi = w[0]; lo = w[1];
+    neg = (int)(hi >> 31);
+    bexp = 4 * (int)((hi >> 24) & 0x7F) - 256 - 56;
+    hi = hi & 0xFFFFFFu; nbits = 56;
+#else
+    { unsigned int one = 1;
+      if (*(unsigned char *)&one) { hi = w[1]; lo = w[0]; } else { hi = w[0]; lo = w[1]; } }
+    neg = (int)(hi >> 31);
+    bexp = (int)((hi >> 20) & 0x7FF);
+    if (bexp == 0x7FF) { sprintf(b, "%.17g", d); return; }
+    if (bexp == 0) bexp = -1074; else { bexp = bexp - 1075; hi = (hi & 0xFFFFFu) | 0x100000u; }
+    hi = hi & 0x1FFFFFu; nbits = 53;
+#endif
+    while (bexp < 0 && (lo & 1u) == 0 && (hi | lo) != 0) {
+        lo = (lo >> 1) | (hi << 31); hi = hi >> 1; bexp = bexp + 1; nbits = nbits - 1;
+    }
+    if (bexp < -90) { sprintf(b, "%.17g", d); return; }
+    n = 0;
+    for (i = nbits - 1; i >= 0; i--)
+        n = f77_dec_muladd(g, n, 2, (int)((i >= 32 ? hi >> (i - 32) : lo >> i) & 1u));
+    for (k = 0; n >= 0 && k < (bexp < 0 ? -bexp : bexp); k++) n = f77_dec_muladd(g, n, bexp < 0 ? 5 : 2, 0);
+    if (n < 0 || n > 120) { sprintf(b, "%.17g", d); return; }
+    k = 0;
+    if (neg) b[k++] = '-';
+    if (n == 0) b[k++] = '0';
+    for (i = n - 1; i >= 0; i--) b[k++] = (char)('0' + g[i]);
+    if (bexp < 0) sprintf(b + k, "E-%d", -bexp); else b[k] = 0;
 }
 static int f77_fconst_text(char *text, int ty) {
     return hi_emit(HI_FCONST, ty, -1, -1, 0, strdup(text));
 }
 static int f77_dconst(double d, int *hi) {
-    char b[40];
+    char b[160];
     *hi = -1;
     f77_dtext(d, b);
     return f77_fconst_text(b, TY_DOUBLE);
@@ -1184,7 +1224,7 @@ static int f77_iconst(int v) {
  * how the C compiler represents them too. */
 #ifdef F77_NATIVE_F64
 static int f77_rconst(double d) {
-    char b[40];
+    char b[160];
     f77_dtext(d, b);
     return f77_fconst_text(b, TY_FLOAT);
 }
@@ -4194,7 +4234,7 @@ static void f77_image_int(unsigned char *p, unsigned int v, int n) {
     for (k = 0; k < n; k++) p[k] = (unsigned char)((v >> ((n - 1 - k) * 8)) & 255);
 }
 static void f77_image_fp(unsigned char *p, double d, int bytes) {
-    char b[40];
+    char b[160];
     unsigned int hi, lo;
     f77_dtext(d, b);
     if (hfp_from_text_n(b, &hi, &lo, bytes == 8 ? 56 : 24) < 0) { hi = 0; lo = 0; }
