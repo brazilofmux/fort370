@@ -3307,6 +3307,7 @@ static int  f77_cxb_n;
 
 static void f77_cexpr(void);
 
+static void f77_cpower(void);
 static void f77_cprimary(void) {
     if (lx_t == T_SCON) {
         f77_cx_ty = TY_CHAR; f77_cx_sidx = lex_sidx; f77_cx_i = lex_slen; f77_cx_d = 0.0;
@@ -3352,7 +3353,7 @@ static void f77_cprimary(void) {
     }
     if (lx_t == T_MINUS) {
         f77_tok();
-        f77_cprimary();
+        f77_cpower();                    /* -2**2 is -(2**2) */
         f77_cx_i = 0 - f77_cx_i;
         f77_cx_d = 0.0 - f77_cx_d;
         if (f77_cx_ty == TY_INT) sprintf(f77_cx_t, "%d", f77_cx_i);
@@ -3360,7 +3361,7 @@ static void f77_cprimary(void) {
         else f77_cx_negtext(f77_cx_t);
         return;
     }
-    if (lx_t == T_PLUS) { f77_tok(); f77_cprimary(); return; }
+    if (lx_t == T_PLUS) { f77_tok(); f77_cpower(); return; }
     if (lx_t == T_NAME) {
         int s;
         int b;
@@ -3400,6 +3401,64 @@ static void f77_cprimary(void) {
     f77_cx_ty = TY_INT; f77_cx_i = 1; f77_cx_d = 1.0;
 }
 
+/* fort370: ** in a constant expression, right-associative; F77 (6.1.2,
+ * 7.1.2) lets a constant expression raise to an INTEGER power only, so
+ * it is repeated multiplication.  It was refused: PARAMETER (N =
+ * 2**10) said "expected ) after PARAMETER list". */
+static void f77_cpower(void) {
+    int bty;
+    int bi;
+    double bd;
+    double bd2;
+    int n;
+    int k;
+    f77_cprimary();
+    if (lx_t != T_POWER) return;
+    bty = f77_cx_ty; bi = f77_cx_i; bd = f77_cx_d; bd2 = f77_iscx(bty) ? f77_cx_d2 : 0.0;
+    f77_tok();
+    f77_cpower();
+    if (f77_cx_ty != TY_INT) {
+        f77_error("a constant expression raises to an INTEGER power only");
+        f77_cx_ty = bty; f77_cx_i = bi; f77_cx_d = bd; f77_cx_d2 = bd2;
+        return;
+    }
+    n = f77_cx_i;
+    f77_cx_ty = bty;
+    if (bty == TY_INT) {
+        int r;
+        if (n < 0) {
+            if (bi == 0) { f77_error("zero to a negative power in constant expression"); r = 0; }
+            else r = (bi == 1) ? 1 : (bi == -1) ? ((-n) % 2 ? -1 : 1) : 0;
+        } else {
+            r = 1;
+            for (k = 0; k < n; k++) r = r * bi;
+        }
+        f77_cx_i = r;
+        f77_cx_d = (double)r;
+    } else if (f77_iscx(bty)) {
+        double rr; double ri; double t;
+        rr = 1.0; ri = 0.0;
+        for (k = 0; k < (n < 0 ? -n : n); k++) { t = rr * bd - ri * bd2; ri = rr * bd2 + ri * bd; rr = t; }
+        if (n < 0) {
+            double den;
+            den = rr * rr + ri * ri;
+            if (den == 0.0) { f77_error("zero to a negative power in constant expression"); den = 1.0; }
+            rr = rr / den; ri = 0.0 - ri / den;
+        }
+        f77_cx_d = rr; f77_cx_d2 = ri; f77_cx_i = (int)rr;
+    } else {
+        double r;
+        r = 1.0;
+        for (k = 0; k < (n < 0 ? -n : n); k++) r = r * bd;
+        if (n < 0) {
+            if (r == 0.0) { f77_error("zero to a negative power in constant expression"); r = 1.0; }
+            r = 1.0 / r;
+        }
+        f77_cx_d = r; f77_cx_i = (int)r;
+    }
+    f77_cx_arith_text();
+}
+
 static int f77_cx_promote(int a, int b) {
     if (a == TY_DCPLX || b == TY_DCPLX) return TY_DCPLX;
     if (f77_iscx(a) || f77_iscx(b)) return (a == TY_DOUBLE || b == TY_DOUBLE) ? TY_DCPLX : TY_CPLX;
@@ -3409,15 +3468,39 @@ static int f77_cx_promote(int a, int b) {
 }
 
 static void f77_cterm(void) {
-    int ty; int iv; double dv; int mul;
-    f77_cprimary();
+    int ty; int iv; double dv; int mul; double d2v;
+    f77_cpower();
     for (;;) {
         if (lx_t == T_STAR) mul = 1;
         else if (lx_t == T_SLASH) mul = 0;
         else return;
         ty = f77_cx_ty; iv = f77_cx_i; dv = f77_cx_d;
+        d2v = f77_iscx(ty) ? f77_cx_d2 : 0.0;
         f77_tok();
-        f77_cprimary();
+        f77_cpower();
+        if (f77_iscx(ty) || f77_iscx(f77_cx_ty)) {
+            /* fort370: both parts (#11); the evaluator took the real
+             * parts alone, and (1,2)*(3,4) came out (3,4) */
+            double br; double bi; double re; double im;
+            br = f77_cx_d;
+            bi = f77_iscx(f77_cx_ty) ? f77_cx_d2 : 0.0;
+            f77_cx_ty = f77_cx_promote(ty, f77_cx_ty);
+            if (mul) {
+                re = dv * br - d2v * bi;
+                im = dv * bi + d2v * br;
+            } else {
+                double den;
+                den = br * br + bi * bi;
+                if (den == 0.0) { f77_error("division by zero in constant expression"); den = 1.0; }
+                re = (dv * br + d2v * bi) / den;
+                im = (d2v * br - dv * bi) / den;
+            }
+            f77_cx_d = re;
+            f77_cx_d2 = im;
+            f77_cx_i = (int)re;
+            f77_cx_arith_text();
+            continue;
+        }
         f77_cx_ty = f77_cx_promote(ty, f77_cx_ty);
         if (mul) {
             f77_cx_i = iv * f77_cx_i;
@@ -3436,15 +3519,26 @@ static void f77_cterm(void) {
 }
 
 static void f77_cexpr(void) {
-    int ty; int iv; double dv; int add;
+    int ty; int iv; double dv; int add; double d2v;
     f77_cterm();
     for (;;) {
         if (lx_t == T_PLUS) add = 1;
         else if (lx_t == T_MINUS) add = 0;
         else return;
         ty = f77_cx_ty; iv = f77_cx_i; dv = f77_cx_d;
+        d2v = f77_iscx(ty) ? f77_cx_d2 : 0.0;
         f77_tok();
         f77_cterm();
+        if (f77_iscx(ty) || f77_iscx(f77_cx_ty)) {
+            double bi;
+            bi = f77_iscx(f77_cx_ty) ? f77_cx_d2 : 0.0;
+            f77_cx_ty = f77_cx_promote(ty, f77_cx_ty);
+            f77_cx_d = add ? dv + f77_cx_d : dv - f77_cx_d;
+            f77_cx_d2 = add ? d2v + bi : d2v - bi;
+            f77_cx_i = (int)f77_cx_d;
+            f77_cx_arith_text();
+            continue;
+        }
         f77_cx_ty = f77_cx_promote(ty, f77_cx_ty);
         if (add) { f77_cx_i = iv + f77_cx_i; f77_cx_d = dv + f77_cx_d; }
         else     { f77_cx_i = iv - f77_cx_i; f77_cx_d = dv - f77_cx_d; }
@@ -3559,6 +3653,25 @@ static void f77_parse_dims(int s) {
 /* A CHARACTER length after the `*`: n, (cexpr), or (*) for an
  * assumed-length dummy (returned as -1). */
 static void f77_cexpr(void);
+/* fort370: a numeric type's length after the `*` (the current token),
+ * read as digits from the text and the scan resumed after them -- the
+ * scanner would take COMPLEX*16D1 as the constant 16D1 and REAL*8E1 as
+ * 8E1.  Returns 1 with *n, or 0 (no digits; the scan moved past the
+ * star). */
+static int f77_star_len(int *n) {
+    int off;
+    int k;
+    int v;
+    off = (int)(lx_rte - lx_stmt);
+    k = 0;
+    v = 0;
+    while (off + k < lx_stmt_len && lx_isdigit(lx_stmt[off + k])) { v = v * 10 + (lx_stmt[off + k] - '0'); k = k + 1; }
+    if (k == 0) { f77_tok(); return 0; }
+    *n = v;
+    f77_scan_from(off + k);
+    return 1;
+}
+
 static int f77_char_len(void) {
     int n;
     if (lx_t == T_ICON) { n = lex_ival; f77_tok(); return n; }
@@ -3600,12 +3713,12 @@ static void f77_stmt_decl(int ty, int skip) {
     /* Type-level length: REAL*8 X, CHARACTER*10 S.  Per-name forms
      * (REAL X*8, CHARACTER S*10) are below. */
     if (lx_t == T_STAR) {
-        f77_tok();
+        int n;
         if (ty == TY_CHAR) {
-            clen = f77_char_len();
-        } else if (lx_t == T_ICON) {
-            ty = f77_lenty(ty, lex_ival, 1);
             f77_tok();
+            clen = f77_char_len();
+        } else if (f77_star_len(&n)) {
+            ty = f77_lenty(ty, n, 1);
         }
         if (lx_t == T_COMMA) f77_tok();       /* CHARACTER*10, A, B */
     }
@@ -3622,12 +3735,12 @@ static void f77_stmt_decl(int ty, int skip) {
         /* name*len(dims) and name(dims)*len are both F77. */
         if (lx_t == T_LP) f77_parse_dims(s);
         if (lx_t == T_STAR) {           /* REAL*8 X -- length specifier */
-            f77_tok();
+            int n;
             if (f77_sty[s] == TY_CHAR) {
-                f77_slen[s] = f77_char_len();
-            } else if (lx_t == T_ICON) {
-                f77_sty[s] = f77_lenty(f77_sty[s], lex_ival, 1);
                 f77_tok();
+                f77_slen[s] = f77_char_len();
+            } else if (f77_star_len(&n)) {
+                f77_sty[s] = f77_lenty(f77_sty[s], n, 1);
             }
             if (lx_t == T_LP) f77_parse_dims(s);
         }
@@ -3870,12 +3983,9 @@ static void f77_stmt_implicit(int skip) {
         else { f77_error("IMPLICIT type not supported"); return; }
         f77_tok();
         if (lx_t == T_STAR) {
-            f77_tok();
-            if (ty == TY_CHAR) clen = f77_char_len();
-            else if (lx_t == T_ICON) {
-                ty = f77_lenty(ty, lex_ival, 1);
-                f77_tok();
-            }
+            int n;
+            if (ty == TY_CHAR) { f77_tok(); clen = f77_char_len(); }
+            else if (f77_star_len(&n)) ty = f77_lenty(ty, n, 1);
         }
         if (clen < 0) { f77_error("IMPLICIT CHARACTER*(*) is not allowed"); return; }
         if (lx_t != T_LP) { f77_error("IMPLICIT needs (letter-ranges)"); return; }

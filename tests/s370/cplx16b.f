@@ -15,7 +15,7 @@ C     and reaches STOP 0.
       P = (0.25D0, -0.5D0)
       IF (DREAL(P) .NE. 0.25D0 .OR. DIMAG(P) .NE. -0.5D0) STOP 1
       Z = PB
-      IF (Z .NE. (4.D0, 3.D0)) STOP 2
+      IF (Z .NE. (4.D0, 6.D0)) STOP 2
       NOK = NOK + 2
       ZZ = (1.D0, -1.D0)
       IF (D(1) .NE. 1.D0 .OR. D(2) .NE. -1.D0) STOP 3

@@ -387,12 +387,9 @@ static void f77_scan_units(void) {
             if (ty >= 0) {
                 f77_scan_from(skip);
                 if (lx_t == T_STAR) {
-                    f77_tok();
-                    if (ty == TY_CHAR) clen = f77_char_len();
-                    else if (lx_t == T_ICON) {
-                        ty = f77_lenty(ty, lex_ival, 0);
-                        f77_tok();
-                    }
+                    int n;
+                    if (ty == TY_CHAR) { f77_tok(); clen = f77_char_len(); }
+                    else if (f77_star_len(&n)) ty = f77_lenty(ty, n, 0);
                     if (lx_t == T_COMMA) f77_tok();
                 }
                 while (lx_t == T_NAME) {
@@ -405,11 +402,8 @@ static void f77_scan_units(void) {
                         l = f77_char_len();
                         if (is_fn) { f77_urty[f77_nunit - 1] = TY_CHAR; f77_urlen[f77_nunit - 1] = l; }
                     } else if (lx_t == T_STAR) {
-                        f77_tok();
-                        if (lx_t == T_ICON) {
-                            if (is_fn) f77_urty[f77_nunit - 1] = f77_lenty(ty, lex_ival, 0);
-                            f77_tok();
-                        }
+                        int n;
+                        if (f77_star_len(&n) && is_fn) f77_urty[f77_nunit - 1] = f77_lenty(ty, n, 0);
                     } else if (is_fn) {
                         f77_urty[f77_nunit - 1] = ty;
                         f77_urlog[f77_nunit - 1] = lg;
