@@ -4,7 +4,8 @@
 # subprogram (its END missing) and a second main program are refused,
 # each with its message; so is a GO TO to a label no statement carries,
 # and text a statement's parser leaves unread (a missing comma), on its
-# own line even after a CALL whose callee was spliced in its place.  tests/s370/mainlast.f has a main program after
+# own line even after a CALL whose callee was spliced in its place; a
+# DO or block IF still open at END, and a stray END DO.  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -28,6 +29,14 @@ printf '      DIMENSION A(3) B(2)\n      END\n' > $T/leftover.f
 expect leftover "line 1: unexpected text after the statement"
 printf '      X = 1.0\n      CALL FOO(X) Z\n      END\n      SUBROUTINE FOO(Y)\n      Y = 2.0\n      END\n' > $T/callline.f
 expect callline "line 2: unexpected text after the statement"
+printf '      DO 10 I = 1, 3\n      J = I\n      END\n' > $T/dolabel.f
+expect dolabel "line 3: DO 10 is never closed by a statement labelled 10"
+printf '      DO I = 1, 3\n      J = I\n      END\n' > $T/noenddo.f
+expect noenddo "line 3: DO without END DO"
+printf '      IF (J .GT. 0) THEN\n      J = 1\n      END\n' > $T/noendif.f
+expect noendif "line 3: IF block without END IF"
+printf '      J = 1\n      END DO\n      END\n' > $T/strayenddo.f
+expect strayenddo "line 2: END DO without DO"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label and leftover text refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text and open DO and IF blocks refused"
 [ $bad = 0 ]

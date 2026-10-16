@@ -514,6 +514,12 @@ static void hl_func(Node *fn) {
         ctl_n = ctl_n - 1;
         if (ctl_kind[ctl_n] == F77_CTL_IF) f77_error("IF block without END IF");
         else if (ctl_label[ctl_n] < 0) f77_error("DO without END DO");
+        else {
+            /* a labelled DO whose terminal statement never came (#14) */
+            char m[64];
+            sprintf(m, "DO %d is never closed by a statement labelled %d", ctl_label[ctl_n], ctl_label[ctl_n]);
+            f77_error(m);
+        }
     }
     f77_label_check();
 
