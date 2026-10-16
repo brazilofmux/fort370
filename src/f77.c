@@ -333,13 +333,16 @@ static void f77_scan_units(void) {
             else if (f77_starts("REAL")) { ty = TY_FLOAT; skip = 4; }
             else if (f77_starts("CHARACTER")) { ty = TY_CHAR; skip = 9; }
             else if (f77_starts("COMPLEX")) { ty = TY_CPLX; skip = 7; }
+#ifdef F77_NATIVE_F64
+            else if (f77_starts("DOUBLECOMPLEX")) { ty = TY_DCPLX; skip = 13; }
+#endif
             if (ty >= 0) {
                 f77_scan_from(skip);
                 if (lx_t == T_STAR) {
                     f77_tok();
                     if (ty == TY_CHAR) clen = f77_char_len();
                     else if (lx_t == T_ICON) {
-                        if (lex_ival == 8 && ty == TY_FLOAT) ty = TY_DOUBLE;
+                        ty = f77_lenty(ty, lex_ival);
                         f77_tok();
                     }
                     if (lx_t == T_COMMA) f77_tok();
@@ -356,12 +359,7 @@ static void f77_scan_units(void) {
                     } else if (lx_t == T_STAR) {
                         f77_tok();
                         if (lx_t == T_ICON) {
-                            if (is_fn) {
-                                if (lex_ival == 8 && ty == TY_FLOAT)
-                                    f77_urty[f77_nunit - 1] = TY_DOUBLE;
-                                else
-                                    f77_urty[f77_nunit - 1] = ty;
-                            }
+                            if (is_fn) f77_urty[f77_nunit - 1] = f77_lenty(ty, lex_ival);
                             f77_tok();
                         }
                     } else if (is_fn) {

@@ -161,6 +161,16 @@ file is a DASD data set of fixed blocks, RECL bytes each; a new one is
 formatted as it is written.  STOP ends the program with its code as
 the step's return code.
 
+The language is FORTRAN 77 with IBM's COMPLEX*16 (DOUBLE COMPLEX
+too): its constants, a complex constant with a DOUBLE PRECISION part,
+(1.D0,2.D0); FORTRAN H's DCMPLX, DCONJG, CDABS, CDSQRT, CDEXP, CDLOG,
+CDSIN and CDCOS, later IBM's DIMAG and DREAL, and the generic names
+(ABS, SQRT, REAL, AIMAG, CONJG...) taking it as gfortran's do.  As in
+H, COMPLEX with DOUBLE PRECISION is COMPLEX*16.  REAL*8 and COMPLEX*16
+may be written in type statements, IMPLICIT, after a name (COMPLEX
+Z*16) and before FUNCTION.  Other lengths, INTEGER*2 and LOGICAL*1,
+are accepted and get a fullword.
+
 Floating point, measured against the exact values (2026-10-15, TK5;
 a unit is one in the last hexadecimal place of the result):
 

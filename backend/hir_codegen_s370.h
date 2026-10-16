@@ -2255,9 +2255,12 @@ static void s370_inst(int i) {
         return;
     }
     if (k == HI_CALLHI) {
-        /* the imaginary part of a COMPLEX function result, FPR2 */
-        if (ra_reg[i] >= 0) { if (ra_reg[i] != 2) { f_reset(); f_s(s370_r(ra_reg[i])); f_s(",2"); asm_ins("LER", s370_line, 2); } }
-        else if (ra_spill_off[i] != 0) { f_reset(); f_s("2,"); f_s(s370_slot(i)); asm_ins("STE", s370_line, 4); }
+        /* the imaginary part of a COMPLEX function result, FPR2 (long
+         * for COMPLEX*16) */
+        int dbl;
+        dbl = ty_is_double(h_ty[i]);
+        if (ra_reg[i] >= 0) { if (ra_reg[i] != 2) { f_reset(); f_s(s370_r(ra_reg[i])); f_s(",2"); asm_ins(dbl ? "LDR" : "LER", s370_line, 2); } }
+        else if (ra_spill_off[i] != 0) { f_reset(); f_s("2,"); f_s(s370_slot(i)); asm_ins(dbl ? "STD" : "STE", s370_line, 4); }
         return;
     }
     cg_die("unhandled instruction kind", i);

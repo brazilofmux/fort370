@@ -946,7 +946,10 @@ void f77_wr_r(float v) {
 }
 
 /* A COMPLEX item: two edit descriptors, or "(re,im)" list-directed. */
-void f77_wr_c(float re, float im) {
+/* A complex item: "(re,im)" when list-directed, right-justified as
+ * gfortran does (35 columns after the blank, 53 for COMPLEX*16); two
+ * items under a format.  (fort370: shared with COMPLEX*16.) */
+static void fio_wr_pair(double re, double im, int dbl) {
     if (fio_listed) {
         int save;
         int start0;
@@ -954,7 +957,7 @@ void f77_wr_c(float re, float im) {
         start0 = fio_len;
         fio_putc('(');
         save = fio_len;
-        fio_list_out_real((double)re, 0);
+        fio_list_out_real(re, dbl);
         /* trim the field to the number: drop the leading blank and the padding */
         {
             int i, j;
@@ -968,7 +971,7 @@ void f77_wr_c(float re, float im) {
         }
         fio_putc(',');
         save = fio_len;
-        fio_list_out_real((double)im, 0);
+        fio_list_out_real(im, dbl);
         {
             int i, j;
             int start = save;
@@ -984,7 +987,7 @@ void f77_wr_c(float re, float im) {
         /* gfortran right-justifies the pair in 35 columns after the blank */
         {
             int n = fio_len - start0;
-            int pad = 35 - n;
+            int pad = (dbl ? 53 : 35) - n;
             if (pad > 0 && fio_len + pad < FIO_MAXLINE - 1) {
                 memmove(fio_line + start0 + pad, fio_line + start0, (size_t)n);
                 memset(fio_line + start0, ' ', (size_t)pad);
@@ -996,9 +999,11 @@ void f77_wr_c(float re, float im) {
         fio_prev_char = 0;
         return;
     }
-    f77_wr_d((double)re);
-    f77_wr_d((double)im);
+    f77_wr_d(re);
+    f77_wr_d(im);
 }
+void f77_wr_c(float re, float im) { fio_wr_pair((double)re, (double)im, 0); }
+void f77_wr_z(double re, double im) { fio_wr_pair(re, im, 1); }
 
 void f77_wr_a(const char *s, int len) {
     int d;
@@ -1041,6 +1046,74 @@ void f77_cdiv(float *out, float ar, float ai, float br, float bi) {
     den = c * c + d * d;
     out[0] = (float)((ar * c + ai * d) / den * sc);
     out[1] = (float)((ai * c - ar * d) / den * sc);
+}
+
+/* fort370: COMPLEX*16, in double, where the products are not exact:
+ * division by Smith's way (the smaller part of the divisor over the
+ * larger), the modulus scaled so that its square cannot overflow.  The
+ * result's address comes last, after the doubles, which then sit on
+ * doublewords in the parameter list. */
+static double fio_zmod(double re, double im) {
+    double a = fabs(re), b = fabs(im), t;
+    if (a < b) { t = a; a = b; b = t; }
+    if (a == 0.0) return 0.0;
+    t = b / a;
+    return a * sqrt(1.0 + t * t);
+}
+double f77_zabs(double re, double im) { return fio_zmod(re, im); }
+void f77_zdiv(double ar, double ai, double br, double bi, double *out) {
+    double r, d;
+    if (fabs(br) >= fabs(bi)) {
+        r = bi / br; d = br + bi * r;
+        out[0] = (ar + ai * r) / d;
+        out[1] = (ai - ar * r) / d;
+    } else {
+        r = br / bi; d = bi + br * r;
+        out[0] = (ar * r + ai) / d;
+        out[1] = (ai * r - ar) / d;
+    }
+}
+void f77_zpow_i(double re, double im, int n, double *out) {
+    double rr = 1.0, ri = 0.0;
+    double br = re, bi = im;
+    int neg = n < 0;
+    unsigned k = (unsigned)(neg ? -n : n);
+    while (k) {
+        if (k & 1) { double t = rr * br - ri * bi; ri = rr * bi + ri * br; rr = t; }
+        k >>= 1;
+        if (k) { double t = br * br - bi * bi; bi = 2.0 * br * bi; br = t; }
+    }
+    if (neg) { double q[2]; f77_zdiv(1.0, 0.0, rr, ri, q); rr = q[0]; ri = q[1]; }
+    out[0] = rr; out[1] = ri;
+}
+void f77_zlog(double re, double im, double *out) {
+    out[0] = log(fio_zmod(re, im));
+    out[1] = atan2(im, re);
+}
+void f77_zexp(double re, double im, double *out) {
+    double e = exp(re);
+    out[0] = e * cos(im);
+    out[1] = e * sin(im);
+}
+void f77_zpow_c(double ar, double ai, double br, double bi, double *out) {
+    double l[2];
+    if (ar == 0.0 && ai == 0.0) { out[0] = 0.0; out[1] = 0.0; return; }
+    f77_zlog(ar, ai, l);
+    f77_zexp(br * l[0] - bi * l[1], br * l[1] + bi * l[0], out);
+}
+void f77_zsqrt(double re, double im, double *out) {
+    double m = fio_zmod(re, im);
+    double r = sqrt((m + fabs(re)) / 2.0);
+    if (re >= 0.0) { out[0] = r; out[1] = r == 0.0 ? 0.0 : im / (2.0 * r); }
+    else { out[0] = r == 0.0 ? 0.0 : fabs(im) / (2.0 * r); out[1] = im < 0.0 ? -r : r; }
+}
+void f77_zsin(double re, double im, double *out) {
+    out[0] = sin(re) * cosh(im);
+    out[1] = cos(re) * sinh(im);
+}
+void f77_zcos(double re, double im, double *out) {
+    out[0] = cos(re) * cosh(im);
+    out[1] = -sin(re) * sinh(im);
 }
 
 void f77_cpow_i(float *out, float re, float im, int n) {
@@ -1711,6 +1784,35 @@ void f77_rd_c(float *p) {
     }
     f77_rd_r(p);
     f77_rd_r(p + 1);
+}
+
+/* fort370: COMPLEX*16, as COMPLEX in doubles */
+void f77_rd_z(double *p) {
+    if (fio_listed) {
+        int t;
+        if (fio_ldone) return;
+        t = fio_list_tok();
+        if (t == 1) { fio_ldone = 1; return; }
+        if (t == 2) return;
+        if (fio_ltok[0] == '(') {
+            char *comma;
+            char *close;
+            close = strchr(fio_ltok, ')');
+            if (close) *close = 0;
+            comma = strchr(fio_ltok + 1, ',');
+            if (comma) *comma = 0;
+            memmove(fio_ltok, fio_ltok + 1, strlen(fio_ltok + 1) + 1);
+            p[0] = fio_list_real();
+            if (comma) { strcpy(fio_ltok, comma + 1); p[1] = fio_list_real(); }
+            else p[1] = 0.0;
+            return;
+        }
+        p[0] = fio_list_real();
+        p[1] = 0.0;
+        return;
+    }
+    f77_rd_d(p);
+    f77_rd_d(p + 1);
 }
 
 void f77_rd_end(void) {
