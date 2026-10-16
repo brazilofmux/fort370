@@ -16,13 +16,13 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 4986b8ca24d85bce30dba4e30f55f4c148445797a1161fa900be0fea5fa6a23f
-                525680 bytes, FB80 when it lands on the guest
+  FORT370.xmit  SHA256 f4dfde88a08d234af5d8f08e305ee59fc1786c3361c2d2ba74a1f76a133e13c4
+                539440 bytes, FB80 when it lands on the guest
   F77RT.obj     SHA256 315a8cf953377cd9505a4acbe21dd08ad275161cbeb36c2150725c81c53a0999
                 422480 bytes, FB80
-  built         from fort370 39a90b5 (release 2026-10-16.2) with mvslovers/cc370 and libc370
+  built         from fort370 ef5b843 (release 2026-10-16.3) with mvslovers/cc370 and libc370
                 as installed 2026-09-22
-  tested        all 192 FCVS programs, 90 test programs and a unit
+  tested        all 192 FCVS programs, 91 test programs and a unit
                 at each size limit compiled on the guest by this
                 module in REGION=7168K, the assembler byte for
                 byte the host compiler's (bench/port-sweep.py);

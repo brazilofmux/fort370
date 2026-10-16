@@ -8,6 +8,36 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-16.3
+
+Tagged `v2026.10.16.3`: four mistakes that compiled without a word now
+refused, and constant expressions computed.  Built from `ef5b843`:
+FORT370.xmit SHA256 `f4dfde88a08d234a…`, 539,440 bytes; F77RT.obj
+unchanged, SHA256 `315a8cf953377cd9…`, 422,480 bytes.  All 192 FCVS
+programs, 91 tests, the 600K source, the 85-deep nesting test, a unit at
+each size limit, ANCORR, AIDAFC and Doug Wegscheid's pi spigot compile
+on the guest to the host's assembler, byte for byte, in REGION=7168K;
+the FCVS programs' assembler is what it was, which passed on MVS.  The
+known gaps and the work not yet started are issues on GitHub now.
+
+- Complex arithmetic in a PARAMETER or DATA constant took the real
+  parts alone: (1.0,2.0)*(3.0,4.0) was (3.0,4.0), not (-5.0,10.0)
+  (#11).  ** was missing from constant expressions altogether --
+  PARAMETER (N = 2**10) was refused -- and works now, with an INTEGER
+  power as F77 allows, in array bounds too.
+- COMPLEX*16 D1 and REAL*8 E1 were refused: squeezed, 16D1 and 8E1
+  looked like numbers.
+- Refused now, where they compiled silently: a labelled DO that its
+  label never closes (#14); two subprograms, or a subprogram and an
+  ENTRY, of one name, and on MVS two names that are one external name
+  in eight characters (#13); a function whose type in a caller is not
+  its type where it is defined (#21).
+- A floating constant the compiler computed, such as a PARAMETER
+  expression's value, could come out a few units off on MVS, since it
+  went through MVS's inexact printf; it is exact now, as on a host.
+- INSTALL.txt: running a program with the loader, PGM=LOADER, and the
+  SIZE it needs (Ed Liss met IEW1194 without it).
+
 ## 2026-10-16.2
 
 Tagged `v2026.10.16.2`: format reversion and the empty record, two
