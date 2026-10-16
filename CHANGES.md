@@ -8,6 +8,37 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-16
+
+Tagged `v2026.10.16`: the DOUBLE PRECISION functions correctly rounded
+but for about one argument in a hundred; COMPLEX*16; COMPLEX division
+in double precision.  Built from `ef404d9`: FORT370.xmit SHA256
+`f0a55547e10c1da9…`, 525,360 bytes; F77RT.obj SHA256
+`594bddcda2e8d8cf…`, 422,160 bytes.  All 192 FCVS programs, 86 tests,
+the 600K source, the 85-deep nesting test, a unit at each size limit,
+ANCORR, AIDAFC and Doug Wegscheid's pi spigot compile on the guest to
+the host's assembler, byte for byte, in REGION=7168K; the FCVS on MVS
+passes as before.
+
+- DEXP, DLOG, DLOG10, DATAN, DATAN2, DASIN, DACOS, DSINH, DCOSH, DTANH,
+  DTAN and D**D are within 0.7 of a unit in the last place, where they
+  were 3 to 700 units off (DTAN 12); FORTLIB's are within 1 or 2, D**D
+  400.  Each ends in a sum of nearly exact terms added in extended
+  precision and rounded once.  They cost more than before (DEXP 0.43
+  seconds for 200,000 calls, 0.28 before, DTAN 0.99), and FORTLIB's
+  assembler routines a fifth to a tenth of either.
+- COMPLEX division was done in single precision and could be 21 units
+  off (FORTLIB's 12); it is within a unit now.
+- COMPLEX*16 and DOUBLE COMPLEX, IBM's: FORTRAN H's rules (a constant
+  with a D part is COMPLEX*16, and so is COMPLEX with DOUBLE
+  PRECISION) and its DCMPLX, DCONJG, CDABS, CDSQRT, CDEXP, CDLOG, CDSIN
+  and CDCOS, with DIMAG, DREAL and the generic names.  COMPLEX*16 was
+  accepted before and compiled as COMPLEX, without a word.
+- REAL*8 FUNCTION F(X) was refused ("more than one main program"), and
+  so were REAL*8 H and CHARACTER*8 HUE (a length before a name that
+  begins with H was read as a Hollerith count; found in SLOW-32).
+- A program's runtime is about 20K larger, 412K without arrays.
+
 ## 2026-10-15.2
 
 Tagged `v2026.10.15.2`: floating point surveyed against the exact

@@ -16,13 +16,13 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 8263c1803849642b318501f59f18593345daa8be74fe22cc63750dda495abb84
-                524800 bytes, FB80 when it lands on the guest
-  F77RT.obj     SHA256 3c83408fc88447419c51f4880518263a369cf9cf99700556963aebd147cf98dc
-                399120 bytes, FB80
-  built         from fort370 d993697 (release 2026-10-15.2) with mvslovers/cc370 and libc370
+  FORT370.xmit  SHA256 f0a55547e10c1da9143247b4f0646aa940536a2d063f910ce49b263e6606088f
+                525360 bytes, FB80 when it lands on the guest
+  F77RT.obj     SHA256 594bddcda2e8d8cf59b78e881f4e30bea4d4cdb28f18b895db47ebf5b180c987
+                422160 bytes, FB80
+  built         from fort370 ef404d9 (release 2026-10-16) with mvslovers/cc370 and libc370
                 as installed 2026-09-22
-  tested        all 192 FCVS programs, 80 test programs and a unit
+  tested        all 192 FCVS programs, 86 test programs and a unit
                 at each size limit compiled on the guest by this
                 module in REGION=7168K, the assembler byte for
                 byte the host compiler's (bench/port-sweep.py);
@@ -143,9 +143,9 @@ whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
   IFOX00 then leaves out its error messages with the listing.)
 
   Give the program's step a REGION.  Its arrays and COMMON are static
-  storage in the module, beside about 160K of runtime, and the runtime
+  storage in the module, beside about 175K of runtime, and the runtime
   takes about 230K more when it starts (its C stack and libc370's own
-  storage): a program with no arrays runs in 392K.  The default
+  storage): a program with no arrays runs in 412K.  The default
   region of a job class can be too small for that, and the program
   then ends at once with return code 12 and no output.  F77CLG's GO
   step asks for 4096K, which the kernels in bench/kernels fit in with
