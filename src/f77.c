@@ -18,6 +18,9 @@
 #ifndef __MVS__
 #include <unistd.h>
 #include <fcntl.h>
+#else
+/* SYSPRINT, SYSTERM and SYSIN opened when first used (src/f77start.c) */
+#include "../runtime/s370/f77std.h"
 #endif
 
 /* Windows opens files in text mode unless told; the output must be the
@@ -727,7 +730,11 @@ int __stklen = 131072;
  * made in SYSUT1 is read back. */
 static char *f77_inname;
 static FILE *f77_reopen_file(void) {
+#ifdef __MVS__
+    if (lx_fp && !f77_is_stdin(lx_fp)) fclose(lx_fp);
+#else
     if (lx_fp && lx_fp != stdin) fclose(lx_fp);
+#endif
 #ifdef __MVS__
     return fopen("dd:SYSUT1", "r");
 #else

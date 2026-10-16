@@ -56,7 +56,7 @@ test: out/f77
 RT := f77rt f77dtoa f77main f77math f77rec millicode
 runtime: $(RT:%=out/crt/%.o) out/crt/f77ishim.o out/crt/f77xsum.o
 
-out/crt/%.o: runtime/s370/%.c runtime/s370/f77rt.h runtime/s370/f77rec.h Makefile
+out/crt/%.o: runtime/s370/%.c runtime/s370/f77rt.h runtime/s370/f77rec.h runtime/s370/f77std.h Makefile
 	@mkdir -p out/crt
 	$(MVSCLOCK) cc370 -O1 -c -o $@ $<
 
@@ -78,11 +78,12 @@ mvs: out/mvs/FORT370.xmit out/mvs/F77RT.obj
 MVSDATE ?= 26289
 MVSTIME ?= 220000
 MVSCLOCK = ASMDATE=10/16/26 ASMTIME=22.00 LDDATE=$(MVSDATE) LDTIME=$(MVSTIME)
-out/mvs/FORT370.xmit: $(SRC) runtime/s370/millicode.c Makefile
+out/mvs/FORT370.xmit: $(SRC) runtime/s370/millicode.c runtime/s370/f77std.h Makefile
 	@mkdir -p out/mvs
 	$(MVSCLOCK) cc370 -O1 -w -DF77_TARGET_S370 -I backend -c -o out/mvs/f77.o src/f77.c
+	$(MVSCLOCK) cc370 -O1 -c -o out/mvs/f77start.o src/f77start.c
 	$(MVSCLOCK) cc370 -O1 -c -o out/mvs/millicode.o runtime/s370/millicode.c
-	cd out/mvs && $(MVSCLOCK) cc370 -o FORT370 f77.o millicode.o -Wl,--sparse-text -flinker-output=xmit
+	cd out/mvs && $(MVSCLOCK) cc370 -o FORT370 f77.o f77start.o millicode.o -Wl,--sparse-text -flinker-output=xmit
 
 # The runtime as object decks for IEWL on MVS (bench/mkrtlib.py)
 out/mvs/F77RT.obj: runtime bench/mkrtlib.py out/f77

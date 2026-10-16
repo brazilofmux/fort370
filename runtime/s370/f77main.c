@@ -39,37 +39,3 @@ int __start(char *p, char *pgmname, int tsojbid, void **pgmr1) {
     __exit(main());
     return 0;
 }
-
-int f77_nofile __asm__("F77@NOFL");
-int f77_nofile;
-
-/* libc370's own anchors, as <stdio.h> names them: (*__gtout()) is
- * stdout.  Opened as libc370's startup opened them, and closed by its
- * exit with the other files. */
-FILE **f77_gtout(void) __asm__("F77@SOUT");
-FILE **f77_gtout(void) {
-    FILE **f = __gtout();
-    if (f && !*f) *f = fopen("*SYSPRINT", "w");
-    return f;
-}
-FILE **f77_gterr(void) __asm__("F77@SERR");
-FILE **f77_gterr(void) {
-    FILE **f = __gterr();
-    if (f && !*f) *f = fopen("*SYSTERM", "w");
-    if (f && !*f) f = f77_gtout();          /* no SYSTERM: the messages go to SYSPRINT */
-    return f;
-}
-FILE **f77_gtin(void) __asm__("F77@SIN");
-FILE **f77_gtin(void) {
-    FILE **f = __gtin();
-    if (f && !*f) *f = fopen("dd:SYSIN", "r");
-    if (f && !*f) *f = fopen("'NULLFILE'", "r");
-    return f;
-}
-/* Flush the ones that are open, opening none. */
-void f77_flush_std(void) __asm__("F77@SFLU");
-void f77_flush_std(void) {
-    FILE **f;
-    f = __gtout(); if (f && *f) fflush(*f);
-    f = __gterr(); if (f && *f) fflush(*f);
-}
