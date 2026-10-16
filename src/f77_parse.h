@@ -5202,6 +5202,9 @@ static int f77_unosplice[F77_MAX_UNIT]; /* unit holds scope-stateful
     an executable context: never inline it.  A false positive (DATAX=5
     prefix-matches DATA) only costs a missed inline. */
 static int f77_inline_count;         /* diagnostics */
+static signed char f77_urelies[F77_MAX_UNIT]; /* fort370: the unit may read a
+    local before setting it, counting on the value from its last call
+    (f77_check_persistence): never inline it (#15) */
 
 
 
@@ -5704,6 +5707,7 @@ static int f77_can_inline(int u) {
     if (f77_inline_depth >= F77_MAX_INLINE_DEPTH) return 0;
     if (f77_ustmts[u] > f77_inline_max) return 0;
     if (f77_unosplice[u]) return 0;
+    if (f77_urelies[u]) return 0;
     if (u == f77_cur_unit) return 0;
     i = 0;
     while (i < f77_inline_depth) {

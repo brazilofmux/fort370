@@ -109,7 +109,9 @@ typedef char f77_alloca_room[HL_MAX_ALLOCA >= HIR_MAX_INST ? 1 : -1];   /* see f
 #include "hir_codegen.h"
 #endif
 
+static int f77_quiet;     /* f77_check_persistence's trial compile: errors are its own */
 static void f77_error(char *msg) {
+    if (f77_quiet) { f77_quiet = f77_quiet + 1; return; }
     fdputs("f77: line ", 2);
     fdputuint(2, (unsigned int)lx_stmt_line);
     fdputs(": ", 2);
@@ -572,6 +574,144 @@ static void hl_func(Node *fn) {
     fn->locals_size = f77_frame;
 }
 
+#ifdef F77_TARGET_S370
+/* fort370: a subprogram's locals keep their values from one call to the
+ * next, as under FORTRAN H (ssa_keep_exposed); a spliced copy's locals
+ * are the caller's, fresh at each splice, so a small subroutine counting
+ * its calls in a local would count wrongly inlined (#15).  Before code
+ * generation, each unit the inliner might take is compiled once alone,
+ * with inlining off, and the compile thrown away: if a local's value on
+ * entry can reach a use, or its address is taken (an array, an actual
+ * argument, an I/O item), the unit is never spliced. */
+static int f77_locals_exposed(void) {
+    char *want;
+    int *mark;
+    int *stack;
+    int s, i, k, v, b, sp, x, exposed;
+    want = (char *)calloc((size_t)h_ninst + 1, 1);
+    mark = (int *)calloc((size_t)bb_nblk + 1, sizeof(int));
+    stack = (int *)calloc((size_t)bb_nblk + 1, sizeof(int));
+    if (!want || !mark || !stack) { free(want); free(mark); free(stack); return 1; }
+    for (s = 0; s < f77_nsym; s++) {
+        if (f77_sarg[s] || f77_scom[s] || f77_sexternal[s] || f77_sintrinsic[s] ||
+            f77_sparam[s] || f77_sname[s][0] == '%') continue;
+        if (f77_sval[s] >= 0 && f77_sval[s] < h_ninst && h_kind[f77_sval[s]] == HI_ALLOCA)
+            want[f77_sval[s]] = 1;
+        if (f77_shi[s] >= 0 && f77_shi[s] < h_ninst && h_kind[f77_shi[s]] == HI_ALLOCA)
+            want[f77_shi[s]] = 1;
+    }
+    exposed = 0;
+    /* an address taken: anything but a LOAD or STORE through it */
+    for (i = 0; i < h_ninst && !exposed; i++) {
+        k = h_kind[i];
+        if (k == HI_BR || k == HI_BRC || k == HI_JMPTAB || k == HI_ALLOCA ||
+            k == HI_ICONST || k == HI_FCONST || k == HI_PARAM || k == HI_NOP) continue;
+        if (h_src1[i] >= 0 && h_src1[i] < h_ninst && want[h_src1[i]] &&
+            k != HI_LOAD && k != HI_STORE) exposed = 1;
+        if (h_src2[i] >= 0 && h_src2[i] < h_ninst && want[h_src2[i]]) exposed = 1;
+    }
+    for (i = 0; i < h_ncarg && !exposed; i++)
+        if (h_carg[i] >= 0 && h_carg[i] < h_ninst && want[h_carg[i]]) exposed = 1;
+    /* a read reached from the entry along blocks that never write it */
+    for (v = 0; v < h_ninst && !exposed; v++) {
+        if (!want[v]) continue;
+        sp = 0;
+        stack[sp++] = 0;
+        mark[0] = v + 1;
+        while (sp > 0 && !exposed) {
+            int term;
+            int first;
+            b = stack[--sp];
+            if (bb_start[b] < 0 || bb_start[b] >= bb_end[b]) { exposed = 1; break; }
+            first = 0;
+            term = -1;
+            for (i = bb_start[b]; i < bb_end[b]; i++) {
+                k = h_kind[i];
+                if (!first && (k == HI_LOAD || k == HI_STORE) && h_src1[i] == v)
+                    first = k == HI_LOAD ? 1 : 2;
+                if (hi_is_terminator(k)) { term = i; break; }
+            }
+            if (first == 1 || term < 0) { exposed = 1; break; }
+            if (first == 2) continue;
+            k = h_kind[term];
+            for (x = 0; x < 2; x++) {
+                int t;
+                t = -1;
+                if (k == HI_BR && x == 0) t = h_val[term];
+                if (k == HI_BRC) t = x == 0 ? h_src2[term] : h_val[term];
+                if (t >= 0 && t < bb_nblk && mark[t] != v + 1) { mark[t] = v + 1; stack[sp++] = t; }
+            }
+            if (k == HI_JMPTAB) {
+                int j;
+                j = h_val[term];
+                if (j >= 0 && j < bb_nblk && mark[j] != v + 1) { mark[j] = v + 1; stack[sp++] = j; }
+                for (j = 0; j < hjt_span[term]; j++) {
+                    int t;
+                    t = hjt_target[hjt_base[term] + j];
+                    if (t >= 0 && t < bb_nblk && mark[t] != v + 1) { mark[t] = v + 1; stack[sp++] = t; }
+                }
+            }
+        }
+    }
+    free(want); free(mark); free(stack);
+    return exposed;
+}
+
+static void f77_check_persistence(void) {
+    int u;
+    int save_dis;
+    int save_strs;
+    int save_pool;
+    char *save_src;
+    int save_len;
+    int save_streaming;
+    int save_pos;
+    int save_line;
+    Node fn;
+    f77_inline_probe();
+    if (f77_inline_disabled) return;
+    save_dis = f77_inline_disabled;
+    for (u = 0; u < f77_nunit; u++) {
+        f77_urelies[u] = 0;
+        if (!f77_keep_candidate(u)) continue;
+        if (lx_streaming && !f77_utext[u]) { f77_urelies[u] = 1; continue; }
+        save_strs = lex_str_count;
+        save_pool = lex_strpool_len;
+        save_src = lx_src;
+        save_len = lx_len;
+        save_streaming = lx_streaming;
+        save_pos = lx_pos;
+        save_line = lx_line;
+        if (f77_utext[u]) {
+            lx_streaming = 0;
+            lx_src = f77_utext[u] - f77_upos[u];
+            lx_len = f77_uend[u];
+        }
+        memset(&fn, 0, sizeof fn);
+        fn.name = f77_uname[u];
+        fn.unit = u;
+        f77_inline_disabled = 1;
+        f77_quiet = 1;
+        hl_func(&fn);
+        /* a unit in error is refused when it is compiled for real */
+        f77_urelies[u] = (char)(f77_quiet > 1 || f77_locals_exposed());
+        f77_quiet = 0;
+        f77_inline_disabled = save_dis;
+        lex_str_count = save_strs;
+        lex_strpool_len = save_pool;
+        lx_src = save_src;
+        lx_len = save_len;
+        lx_streaming = save_streaming;
+        lx_pos = save_pos;
+        lx_line = save_line;
+    }
+    if (getenv("F77_RELIES")) {
+        for (u = 0; u < f77_nunit; u++)
+            if (f77_urelies[u]) { fdputs("f77: not inlined, may keep a local: ", 2); fdputs(f77_uname[u], 2); fdputc('\n', 2); }
+    }
+}
+#endif
+
 #ifdef __MVS__
 /* fort370: the C stack libc370's startup allocates (its weak external
  * @@STKLEN; the default is 256K).  The compiler's frames are small --
@@ -671,6 +811,7 @@ int main(int argc, char **argv) {
     f77_scan_units();
     if (f77_nunit == 0) { fdputs("f77: empty source\n", 2); return 1; }
 #ifdef F77_TARGET_S370
+    if (f77_nerr == 0) f77_check_persistence();
     if (lx_spool) { fclose(lx_spool); lx_spool = 0; }
     if (!keepall) {
         FILE *again;

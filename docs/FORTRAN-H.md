@@ -109,7 +109,10 @@ These aren't flaws, just the places where a later compiler has room:
    and DAXPY's guard tests each time. Small leaf routines in the same
    compilation could be inlined. (fort370 does this: a unit of up to 12
    statements is spliced into its callers in the same source file, and
-   DGEFA's DAXPY loop is `LDR / MD / AD / STD / BXLE`.)
+   DGEFA's DAXPY loop is `LDR / MD / AD / STD / BXLE`. A unit that may
+   read a local before setting it, counting on the value its last call
+   left, as H allows, is not spliced, nor one whose local has its address
+   taken, such as an array.)
 
 Hercules charges per instruction, not per pipeline stall, so instruction
 count is the right measure on these systems. Tricks for real pipelines,
