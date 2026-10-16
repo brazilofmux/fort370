@@ -121,6 +121,51 @@ static void f77_error(char *msg) {
     f77_nerr = f77_nerr + 1;
 }
 
+/* fort370: two subprograms (or ENTRY points) of one name -- the CALL
+ * reached whichever came first, without a word (#13) -- and, on MVS,
+ * two names that are one external name there, the first eight
+ * characters, which IEWL would take for one. */
+static void f77_report_at(int line, char *msg) {
+    fdputs("f77: line ", 2);
+    fdputuint(2, (unsigned int)line);
+    fdputs(": ", 2);
+    fdputs(msg, 2);
+    fdputc('\n', 2);
+    f77_nerr = f77_nerr + 1;
+}
+static void f77_check_unit_names(void) {
+    int i;
+    int j;
+    char m[160];
+    for (j = 0; j < f77_nunit; j++) {
+        if (f77_ukind[j] != F77_UNIT_SUBR && f77_ukind[j] != F77_UNIT_FUNC) continue;
+        for (i = 0; i < j; i++) {
+            if (f77_ukind[i] != F77_UNIT_SUBR && f77_ukind[i] != F77_UNIT_FUNC) continue;
+            {
+                int a;
+                int b;
+                /* report at the later of the two in the source (ENTRY
+                 * points are units after the ordinary ones) */
+                a = f77_uline[i] <= f77_uline[j] ? i : j;
+                b = a == i ? j : i;
+                if (strcmp(f77_uname[i], f77_uname[j]) == 0) {
+                    sprintf(m, "%s is already a subprogram or ENTRY name (line %d)", f77_uname[b], f77_uline[a]);
+                    f77_report_at(f77_uline[b], m);
+                    break;
+                }
+#ifdef F77_TARGET_S370
+                if ((strlen(f77_uname[i]) > 8 || strlen(f77_uname[j]) > 8) && strncmp(f77_uname[i], f77_uname[j], 8) == 0) {
+                    sprintf(m, "%s and %s (line %d) are one external name, %.8s: MVS keeps eight characters",
+                            f77_uname[b], f77_uname[a], f77_uline[a], f77_uname[b]);
+                    f77_report_at(f77_uline[b], m);
+                    break;
+                }
+#endif
+            }
+        }
+    }
+}
+
 static Node f77_units[F77_MAX_UNIT];
 static Node f77_program;
 
@@ -433,6 +478,7 @@ static void f77_scan_units(void) {
             f77_nunit = f77_nunit + 1;
         }
     }
+    f77_check_unit_names();
 }
 
 /* Phase 2: the backend asks for one unit's HIR. */
