@@ -31,6 +31,7 @@
 #include <osjfcb.h>
 #include <clibdscb.h>
 #include "f77rec.h"
+#include "f77std.h"
 
 #define RMAXU 100                        /* units 0-99, as f77rt.c's FIO_MAXUNIT */
 

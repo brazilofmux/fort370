@@ -732,6 +732,31 @@ char *f77_cat(const char *a, int la, const char *b, int lb) {
         }
     }
 ''')
+# The standard streams are opened on first use (f77std.h, f77main.c):
+# what only stands in for a stream must not open one, and flushing them
+# must not either.
+rep('#include "../../backend/s370_hfp.h"\n', '#include "../../backend/s370_hfp.h"\n#include "f77std.h"\n')
+rep('''    fflush(stdout);
+    fflush(stderr);
+    exit(code);''', '''    f77_flush_std();
+    exit(code);''')
+rep('''    fflush(stdout);
+    fprintf(stderr, "PAUSE''', '''    f77_flush_std();
+    fprintf(stderr, "PAUSE''')
+rep('        return stdout;     /* a placeholder:', '        return F77_NOFILE; /* a placeholder:')
+rep('''    fio_out = stdout;
+    fio_unit = -1;''', '''    fio_out = F77_NOFILE;
+    fio_unit = -1;''')
+rep('''    fio_in = stdin;
+    fio_unit = -1;''', '''    fio_in = F77_NOFILE;
+    fio_unit = -1;''')
+rep('''    FILE *f = fio_out ? fio_out : stdout;
+    fio_line[fio_len] = 0;''', '''    FILE *f;
+    fio_line[fio_len] = 0;''')
+rep('''    if (fio_len == 0) fputc(' ', f);
+    fputs(fio_line, f);''', '''    f = fio_out ? fio_out : stdout;
+    if (fio_len == 0) fputc(' ', f);
+    fputs(fio_line, f);''')
 s = re.sub(r'\bexit\(2\);', 'fio_exit(2);', s)
 s = re.sub(r'snprintf\(buf, sizeof buf, ', 'sprintf(buf, ', s)
 s = re.sub(r'\bfopen\(nm, ', 'fio_fopen(nm, ', s)

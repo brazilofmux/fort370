@@ -32,6 +32,7 @@
 #include "f77dtoa.h"
 #include "f77rec.h"
 #include "../../backend/s370_hfp.h"
+#include "f77std.h"
 
 /* C89 has neither trunc nor round; libc370 is C89. */
 static double fio_trunc(double v) { return v < 0.0 ? ceil(v) : floor(v); }
@@ -167,8 +168,7 @@ static void fio_exit(int code) {
     int u;
     f77r_closeall();
     for (u = 0; u < FIO_MAXUNIT; u++) if (fio_ufile[u]) { fclose(fio_ufile[u]); fio_ufile[u] = 0; }
-    fflush(stdout);
-    fflush(stderr);
+    f77_flush_std();
     exit(code);
 }
 
@@ -190,7 +190,7 @@ static FILE *fio_resolve(int unit, int writing) {
     }
     if (unit == 0) return stdin;
     if (unit > 0 && unit < FIO_MAXUNIT && fio_udirect[unit])
-        return stdout;     /* a placeholder: f77rec.c transfers direct-access records, never through it */
+        return F77_NOFILE; /* a placeholder: f77rec.c transfers direct-access records, never through it */
     if (unit > 0 && unit < FIO_MAXUNIT && fio_ufname[unit][0]) {
         /* a unit OPENed by name, or closed by REWIND: its data set,
          * opened now in the direction this statement takes */
@@ -265,7 +265,7 @@ static void fio_puts(const char *s) {
 static int fio_unit;             /* unit of the statement in progress */
 
 static void fio_flush_line(void) {
-    FILE *f = fio_out ? fio_out : stdout;
+    FILE *f;
     fio_line[fio_len] = 0;
     fio_col = 0;
     if (fio_ibuf) {
@@ -302,6 +302,7 @@ static void fio_flush_line(void) {
         fio_len = 0;
         return;
     }
+    f = fio_out ? fio_out : stdout;
     if (fio_len == 0) fputc(' ', f);
     fputs(fio_line, f);
     fputc('\n', f);
@@ -876,7 +877,7 @@ void f77_backspace(int unit) {
  * records of len bytes. */
 void f77_wr_begin_int(char *buf, int len, int nrec, const char *fmt) {
     fio_init_units();
-    fio_out = stdout;
+    fio_out = F77_NOFILE;
     fio_unit = -1;
     fio_ibuf = buf;
     fio_ilen = len;
@@ -1458,7 +1459,7 @@ void f77_endfile(int unit) {
 
 /* PAUSE [n | 'text']: report and continue (there is no operator). */
 void f77_pause(const char *s, int len) {
-    fflush(stdout);
+    f77_flush_std();
     fprintf(stderr, "PAUSE %.*s\n", len, s);
 }
 
@@ -1723,7 +1724,7 @@ int f77_rd_begin(int unit, const char *fmt, int has_end) {
 
 int f77_rd_begin_int(char *buf, int len, int nrec, const char *fmt, int has_end) {
     fio_init_units();
-    fio_in = stdin;
+    fio_in = F77_NOFILE;
     fio_unit = -1;
     fio_ibuf = buf;
     fio_ilen = len;
