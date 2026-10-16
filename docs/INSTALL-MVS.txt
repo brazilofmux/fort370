@@ -129,6 +129,25 @@ calls the Fortran main program (CSECT F77MAIN).
   storage follows FORTRAN's rule instead: undefined until assigned or
   given by DATA, as with IBM's compilers.
 
+The loader (PGM=LOADER, IEWLDRGO) takes the same SYSLIN and runs the
+program without a load module, but it builds the whole program in the
+storage its SIZE option gives it, whatever the REGION: the default is
+too small for the runtime and a program of any size, which ends with
+IEW1194 AVAILABLE STORAGE EXCEEDED.  Give it SIZE, the program's size
+and room (a program with a 1MB array loads in SIZE=3072K), and a
+REGION with the runtime's 230K more:
+
+    //GO       EXEC PGM=LOADER,PARM='NOCALL,SIZE=1024K',REGION=4096K
+    //SYSLIN   DD DSN=&&OBJ,DISP=(OLD,DELETE)
+    //         DD DSN=your.FORT370.F77RT,DISP=SHR
+    //SYSLOUT  DD SYSOUT=*
+    //FT06F001 DD SYSOUT=*,DCB=(RECFM=FBA,LRECL=133,BLKSIZE=133)
+
+  The loader reads F77RT's last card, ENTRY @@CRT0, as "not an object
+  record" (IEW1141) and finds the entry itself; leave EP= out (with
+  EP=@@CRT0 it refused to load).  NOCALL keeps it from looking for a
+  SYSLIB the program does not need.
+
 F77CLG.jcl beside this file is a cataloged procedure that chains the
 whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
 
