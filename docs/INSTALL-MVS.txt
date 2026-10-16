@@ -16,13 +16,13 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 f0a55547e10c1da9143247b4f0646aa940536a2d063f910ce49b263e6606088f
-                525360 bytes, FB80 when it lands on the guest
+  FORT370.xmit  SHA256 85c0a714f8b35a695e20de96fd75c47fe4d17852d4f2a855df23b3732fe214aa
+                525680 bytes, FB80 when it lands on the guest
   F77RT.obj     SHA256 594bddcda2e8d8cf59b78e881f4e30bea4d4cdb28f18b895db47ebf5b180c987
                 422160 bytes, FB80
-  built         from fort370 ef404d9 (release 2026-10-16) with mvslovers/cc370 and libc370
+  built         from fort370 356c477 (release 2026-10-16.1) with mvslovers/cc370 and libc370
                 as installed 2026-09-22
-  tested        all 192 FCVS programs, 86 test programs and a unit
+  tested        all 192 FCVS programs, 88 test programs and a unit
                 at each size limit compiled on the guest by this
                 module in REGION=7168K, the assembler byte for
                 byte the host compiler's (bench/port-sweep.py);
@@ -170,9 +170,10 @@ H, COMPLEX with DOUBLE PRECISION is COMPLEX*16.  REAL*8 and COMPLEX*16
 may be written in type statements, IMPLICIT, after a name (COMPLEX
 Z*16) and before FUNCTION.  Other lengths, INTEGER*2 and LOGICAL*1,
 are accepted and get a fullword.
-From MIL-STD-1753 (1978): a DO without a label, ended by END DO, and
-DO WHILE (e), labelled or not; END DO may also be a labelled DO's
-terminal statement.
+From MIL-STD-1753 (1978): END DO, as a labelled DO's terminal
+statement, and DO WHILE (e), labelled or not.  And, as VAX FORTRAN and
+later Fortran 90 have it, a DO without a label ended by END DO, and a
+labelled DO WHILE ended by any statement bearing the label.
 
 Floating point, measured against the exact values (2026-10-15, TK5;
 a unit is one in the last hexadecimal place of the result):

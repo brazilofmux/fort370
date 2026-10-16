@@ -8,6 +8,27 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-16.1
+
+Tagged `v2026.10.16.1`: END DO and DO WHILE; whole-array I/O of an
+adjustable array.  Built from `356c477`: FORT370.xmit SHA256
+`85c0a714f8b35a69…`, 525,680 bytes; F77RT.obj unchanged, SHA256
+`594bddcda2e8d8cf…`, 422,160 bytes.  All 192 FCVS programs, 88 tests,
+the 600K source, the 85-deep nesting test, a unit at each size limit,
+ANCORR, AIDAFC and Doug Wegscheid's pi spigot compile on the guest to
+the host's assembler, byte for byte, in REGION=7168K; the FCVS
+programs' assembler is what it was, which passed on MVS.
+
+- END DO and DO WHILE, as Marco Verpelli suggested: from MIL-STD-1753
+  (1978), END DO as a labelled DO's terminal statement and DO WHILE
+  (e), labelled or not; and, as VAX FORTRAN and later Fortran 90 have
+  it, a DO without a label, ended by END DO.  A unit that ends with a DO
+  waiting for its END DO, or a block IF without END IF, is refused
+  now; before, it compiled without a word.
+- An adjustable array written or read whole -- REAL A(M,N) and then
+  WRITE (6,100) A -- was refused ("whole-array I/O needs constant
+  extents").  F77 allows it, and it works now.
+
 ## 2026-10-16
 
 Tagged `v2026.10.16`: the DOUBLE PRECISION functions correctly rounded
