@@ -8,6 +8,28 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-16.2
+
+Tagged `v2026.10.16.2`: format reversion and the empty record, two
+silent output and input bugs.  Built from `39a90b5`: FORT370.xmit SHA256
+`4986b8ca24d85bce…`, 525,680 bytes (the compiler is 2026-10-16.1's;
+only its date stamp changed); F77RT.obj SHA256 `315a8cf953377cd9…`,
+422,480 bytes.  The FCVS on MVS passes as before (3346 tests, and
+FM923's two by design), and the new tests below.
+
+- When a format ran out before the list and started over, the second
+  restart read on past the format's end, on MVS: WRITE (6,'(1X,I3)')
+  with five items printed two lines and lost three, and READ with
+  '(A)' and three items left the third blank -- silently, in every
+  release.  Run again any program that writes or reads more items
+  than its format holds.  (The shared runtime set the restart at the
+  format's outer parenthesis; on a host a NUL after the format hid
+  it.)
+- An empty record -- a slash at the end of a format, two slashes,
+  FORMAT(/) -- was not written at all: a printed blank line vanished,
+  as Marco Verpelli found, and a file lost the record.  It is a blank
+  record now, as IBM's compilers write it.
+
 ## 2026-10-16.1
 
 Tagged `v2026.10.16.1`: END DO and DO WHILE; whole-array I/O of an
