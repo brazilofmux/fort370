@@ -1112,6 +1112,23 @@ void f77_wr_a(const char *s, int len) {
  * and takes results back through an 8-byte frame temporary (`out`). */
 float f77_cabs(float re, float im) { return (float)sqrt((double)re * re + (double)im * im); }
 
+/* a / b: the textbook (ar br + ai bi, ai br - ar bi) / (br^2 + bi^2),
+ * in double, where a product of two floats is exact -- so only the
+ * sums and the quotients are rounded, and the result once more to
+ * float.  A divisor far from 1 is first scaled by 2^64 at a time (a
+ * power of 16 as well: exact in either arithmetic) so that its square
+ * stays in range.  (fort370: was inline in float, 2026-10-15.) */
+void f77_cdiv(float *out, float ar, float ai, float br, float bi) {
+    double k = 18446744073709551616.0;
+    double c = br, d = bi, sc = 1.0, m, den;
+    m = fabs(c) > fabs(d) ? fabs(c) : fabs(d);
+    while (m > k) { c = c / k; d = d / k; m = m / k; sc = sc / k; }
+    while (m > 0.0 && m < 1.0 / k) { c = c * k; d = d * k; m = m * k; sc = sc * k; }
+    den = c * c + d * d;
+    out[0] = (float)((ar * c + ai * d) / den * sc);
+    out[1] = (float)((ai * c - ar * d) / den * sc);
+}
+
 void f77_cpow_i(float *out, float re, float im, int n) {
     double rr = 1.0, ri = 0.0;
     double br = re, bi = im;

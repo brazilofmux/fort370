@@ -21,6 +21,7 @@ void f77_wr_r(float v) __asm__("F77WRR");
 void f77_wr_c(float re, float im) __asm__("F77WRC");
 void f77_wr_a(const char *s, int len) __asm__("F77WRA");
 float f77_cabs(float re, float im) __asm__("F77CABS");
+void f77_cdiv(float *out, float ar, float ai, float br, float bi) __asm__("F77CDIV");
 void f77_cpow_i(float *out, float re, float im, int n) __asm__("F77CPOWI");
 void f77_clog(float *out, float re, float im) __asm__("F77CLOG");
 void f77_cexp(float *out, float re, float im) __asm__("F77CEXP");

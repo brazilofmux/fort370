@@ -2461,19 +2461,15 @@ static int f77_term(void) {
                 t2 = hi_emit(HI_FMUL, TY_FLOAT, ahi, b, 0, NULL);
                 im = hi_emit(HI_FADD, TY_FLOAT, t1, t2, 0, NULL);
             } else {
-                /* ((ar*br + ai*bi) / d, (ai*br - ar*bi) / d), d = br*br + bi*bi */
-                int d;
-                t1 = hi_emit(HI_FMUL, TY_FLOAT, b, b, 0, NULL);
-                t2 = hi_emit(HI_FMUL, TY_FLOAT, bhi, bhi, 0, NULL);
-                d = hi_emit(HI_FADD, TY_FLOAT, t1, t2, 0, NULL);
-                t1 = hi_emit(HI_FMUL, TY_FLOAT, a, b, 0, NULL);
-                t2 = hi_emit(HI_FMUL, TY_FLOAT, ahi, bhi, 0, NULL);
-                re = hi_emit(HI_FADD, TY_FLOAT, t1, t2, 0, NULL);
-                re = hi_emit(HI_FDIV, TY_FLOAT, re, d, 0, NULL);
-                t1 = hi_emit(HI_FMUL, TY_FLOAT, ahi, b, 0, NULL);
-                t2 = hi_emit(HI_FMUL, TY_FLOAT, a, bhi, 0, NULL);
-                im = hi_emit(HI_FSUB, TY_FLOAT, t1, t2, 0, NULL);
-                im = hi_emit(HI_FDIV, TY_FLOAT, im, d, 0, NULL);
+                /* in the runtime, in double (f77_cdiv): in float, the
+                 * products' roundings cost up to 21 units */
+                int args[5];
+                int out;
+                out = f77_char_temp(8);
+                args[0] = out; args[1] = a; args[2] = ahi; args[3] = b; args[4] = bhi;
+                f77_call_i("f77_cdiv", 5, args);
+                re = f77_load_at(out, TY_CPLX);
+                im = ex_hi;
             }
             a = re; ahi = im;
         }

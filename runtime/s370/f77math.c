@@ -20,13 +20,14 @@
  * A REAL result is the long one cut to short, and so within a unit and
  * nearly always the exact value truncated.  The long results, against
  * the exact values (2026-10-15, on TK5; the figures are in
- * docs/INSTALL-MVS.txt): SQRT correctly rounded, as FORTLIB's is; EXP,
- * LOG, LOG10, ATAN, ATAN2, ASIN, ACOS, SINH, COSH, TANH and POW within
- * 0.7 of a unit, most correctly rounded -- their last step a sum
- * rounded once, in extended precision (see "sums rounded once"); SIN
- * and COS within 2 units at any argument, where FORTLIB's are off by
- * thousands.  The figures came from a model of the machine's
- * arithmetic that agreed with TK5 to the bit on 6,430 results. */
+ * docs/INSTALL-MVS.txt): SQRT correctly rounded, as FORTLIB's is;
+ * EXP, LOG, LOG10, ATAN, ATAN2, ASIN, ACOS, SINH, COSH, TANH, TAN and
+ * POW within 0.7 of a unit, most correctly rounded -- their last step
+ * a sum rounded once, in extended precision (see "sums rounded
+ * once"); SIN and COS within 2 units at any argument, where FORTLIB's
+ * are off by thousands.  The figures came from a model of the
+ * machine's arithmetic that agreed with TK5 to the bit on 8,029
+ * results. */
 
 typedef union { double d; unsigned int w[2]; } Hfp;   /* big-endian: w[0] has the sign and exponent */
 typedef union { unsigned int w[2]; double d; } Hw;    /* the same, initialisable from its words: constants in storage, not calls */
@@ -610,8 +611,21 @@ static double m_from_bits(unsigned int *a, int n, int t) {
  * ones before making a multiple of four; 140 of them leave 80 bits and
  * more of the fraction below the nearest quadrant, which an argument
  * of 56 bits comes no nearer to than 2^-62 or so. */
+/* a[] with the bits m_from_bits(a, n, t) reads, and those above, cleared */
+static void m_drop_top(unsigned int *a, int n, int t) {
+    int l;
+    int e;
+    int b;
+    int i;
+    l = n * LB - 1;
+    while (l > 0 && !bn_bit(a, l)) l = l - 1;
+    e = l + t >= 0 ? (l + t) / 4 + 1 : -((-(l + t) + 3) / 4) + 1;
+    b = 4 * e - 56 - t;
+    for (i = b > 0 ? b : 0; i < n * LB; i++) a[i / LB] = a[i / LB] & ~(1u << (i % LB));
+}
+
 #define PH_W 10                          /* limbs of 2/pi: 140 bits */
-static double m_reduce_big(double x, int *quad) {
+static double m_reduce_big(double x, int *quad, double *lo) {
     Hfp u;
     unsigned int f[4];
     unsigned int w[PH_W];
@@ -650,6 +664,11 @@ static double m_reduce_big(double x, int *quad) {
         if (bn_bit(p, top - i)) g[(69 - i) / LB] = g[(69 - i) / LB] | (1u << ((69 - i) % LB));
     bn_mul(q, g, 5, (unsigned int *)m_pio2_68, 5);
     r = m_from_bits(q, 10, top - 69 - pb - 68);
+    /* and the next bits, the fraction's 70 good for a dozen more */
+    m_drop_top(q, 10, top - 69 - pb - 68);
+    for (i = 0; i < 10 && q[i] == 0; i++) ;
+    *lo = i < 10 ? m_from_bits(q, 10, top - 69 - pb - 68) : 0.0;
+    if (neg) *lo = -*lo;
     return neg ? -r : r;
 }
 
@@ -662,7 +681,8 @@ static double m_reduce(double x, int *quad) {
     double r;
     int ki;
     if (m_fabs(x) >= 1048576.0) {
-        r = m_reduce_big(m_fabs(x), &ki);
+        double lo;
+        r = m_reduce_big(m_fabs(x), &ki, &lo);
         if (x < 0.0) { r = -r; ki = -ki; }
         *quad = ki & 3;
         return r;
@@ -697,18 +717,136 @@ double f77m_cos(double x) {
     return m_sin_small(r);
 }
 
+/* sin(j/16) and cos(j/16), j = 0..13, each in two parts */
+static const Hw m_sincost[14][4] = {
+    { {{0x00000000u, 0x00000000u}}, {{0x00000000u, 0x00000000u}}, {{0x41100000u, 0x00000000u}}, {{0x00000000u, 0x00000000u}} },
+    { {{0x3FFFD557u, 0x776A76D5u}}, {{0x31A5D259u, 0xB2F692D5u}}, {{0x40FF800Au, 0xAA4FA69Au}}, {{0x3265070Fu, 0x73284DE2u}} },
+    { {{0x401FEAAEu, 0xEE86EE35u}}, {{0x32CA069Au, 0x86721F8Au}}, {{0x40FE00AAu, 0x93EADE9Bu}}, {{0x326D1E6Au, 0x129DF6F2u}} },
+    { {{0x402FB820u, 0x5F75E56Au}}, {{0x322B56A1u, 0xC4792F85u}}, {{0x40FB835Eu, 0xFCF670DDu}}, {{0x322CE6FEu, 0x7924697Fu}} },
+    { {{0x403F55DDu, 0xA9E62AEDu}}, {{0x327513BDu, 0x7B8E6A3Du}}, {{0x40F80AA4u, 0xFBEF750Bu}}, {{0x32A783D3u, 0x3CB95F95u}} },
+    { {{0x404EB44Au, 0x5DA74F60u}}, {{0x31207AAAu, 0x090F0735u}}, {{0x40F399F5u, 0x00C9E9FDu}}, {{0x3237AE99u, 0x57263DACu}} },
+    { {{0x405DC409u, 0x55D9084Fu}}, {{0x3248A946u, 0x75A2498Eu}}, {{0x40EE35BFu, 0x5CCAC890u}}, {{0x3252CD91u, 0xDDB734D4u}} },
+    { {{0x406C760Cu, 0x14C8585Au}}, {{0x3251DBD3u, 0x4660AE6Cu}}, {{0x40E7E367u, 0xD2956CFBu}}, {{0x3216B6AAu, 0x11E5419Du}} },
+    { {{0x407ABBA1u, 0xD12C17BFu}}, {{0x32A1D92Fu, 0x0D93F60Eu}}, {{0x40E0A940u, 0x32DBEA7Cu}}, {{0x32EDBDDDu, 0x9DA2FAFBu}} },
+    { {{0x40888686u, 0x25B4E1DBu}}, {{0x32B23133u, 0x10133022u}}, {{0x40D88E82u, 0x0B152631u}}, {{0x321DD561u, 0xEFBC0C1Bu}} },
+    { {{0x4095C8EFu, 0x544210ECu}}, {{0x31B91C49u, 0xBD2AA09Fu}}, {{0x40CF9B47u, 0x6C897C25u}}, {{0x32C5BFE7u, 0x50DD3F31u}} },
+    { {{0x40A2759Cu, 0x0E79C355u}}, {{0x3282527Cu, 0x32B55F54u}}, {{0x40C5D882u, 0xD2EE4803u}}, {{0x31C7C07Du, 0x28E981E3u}} },
+    { {{0x40AE7FE0u, 0xB5FC786Bu}}, {{0x322D966Eu, 0x1D6AF141u}}, {{0x40BB4FF6u, 0x32A908F7u}}, {{0x323EC151u, 0x839CB9DAu}} },
+    { {{0x40B9DBB4u, 0x06F52BBEu}}, {{0x32DDB7CFu, 0x923ED5DFu}}, {{0x40B00C29u, 0x37AB1EFAu}}, {{0x328D94BCu, 0x1C8659F9u}} },
+};
+
+static const Hw k_pio2_4 = {{0x1F2049C1u, 0x114CF98Fu}};   /* pi/2 less the three parts */
+
+/* tan(rh + rl), quadrant q: sin r and cos r each a sum, r = j/16 + d
+ * with |d| <= 1/32 -- sin(j/16) cos d + cos(j/16) sin d and the like,
+ * sin d - d and cos d - 1 by their short series -- then one over the
+ * other by the corrected division. */
+static double m_tan_pair(double rh, double rl, int q) {
+    Sum s;
+    Sum co;
+    Sum *num;
+    Sum *den;
+    double ah;
+    double al;
+    double dh;
+    double d;
+    double d2;
+    double p;
+    double sd;
+    double cm;
+    double sh;
+    double sl;
+    double ch;
+    double cl;
+    double eh;
+    double el;
+    double qh;
+    double ql;
+    int j;
+    int i;
+    if (rh < 0.0) { ah = -rh; al = -rl; } else { ah = rh; al = rl; }
+    j = (int)(ah * 16.0 + 0.5);
+    if (j > 13) j = 13;
+    dh = ah - (double)j * 0.0625;
+    d = dh + al;
+    d2 = d * d;
+    p = 1.0 / 362880.0;
+    p = p * d2 - 1.0 / 5040.0;
+    p = p * d2 + 1.0 / 120.0;
+    p = p * d2 - 1.0 / 6.0;
+    sd = (d * d2) * p;
+    p = 1.0 / 40320.0;
+    p = p * d2 - 1.0 / 720.0;
+    p = p * d2 + 1.0 / 24.0;
+    p = p * d2 - 0.5;
+    cm = d2 * p;
+    sh = m_sincost[j][0].d;
+    sl = m_sincost[j][1].d;
+    ch = m_sincost[j][2].d;
+    cl = m_sincost[j][3].d;
+    s.n = 0;
+    s.q = 0;
+    SUM_ADD(&s, sh, 0);
+    SUM_ADD(&s, sl, 0);
+    SUM_MUL(&s, sh, cm, 0);
+    SUM_MUL(&s, ch, dh, 0);
+    SUM_MUL(&s, ch, al, 0);
+    SUM_MUL(&s, cl, dh, 0);
+    SUM_MUL(&s, ch, sd, 0);
+    co.n = 0;
+    co.q = 0;
+    SUM_ADD(&co, ch, 0);
+    SUM_ADD(&co, cl, 0);
+    SUM_MUL(&co, ch, cm, 0);
+    SUM_MUL(&co, -sh, dh, 0);
+    SUM_MUL(&co, -sh, al, 0);
+    SUM_MUL(&co, -sl, dh, 0);
+    SUM_MUL(&co, -sh, sd, 0);
+    if (q & 1) {                         /* -cos r / sin r */
+        for (i = 0; i < co.n; i++) co.a[i] = -co.a[i];
+        num = &co;
+        den = &s;
+    } else {
+        num = &s;
+        den = &co;
+    }
+    if (rh < 0.0) for (i = 0; i < num->n; i++) num->a[i] = -num->a[i];
+    eh = sum_round(den, &el);
+    if (hfp_is_zero(eh)) return HFP_HUGE;
+    m_ddiv(num, eh, el, &qh, &ql);
+    s.n = 0;
+    s.q = 0;
+    SUM_ADD(&s, qh, 0);
+    SUM_ADD(&s, ql, 0);
+    return sum_round(&s, 0);
+}
+
+/* r in two parts: below 2^20 the reduction by pi/2 in four (k times
+ * each of the last three exact in extended), above it Payne and
+ * Hanek's with its next bits */
 double f77m_tan(double x) __asm__("TAN");
 double f77m_tan(double x) {
-    int q;
-    double r;
-    double s;
-    double c;
-    r = m_reduce(x, &q);
-    s = m_sin_small(r);
-    c = m_cos_small(r);
-    if (q & 1) { double t; t = s; s = c; c = -t; }
-    if (hfp_is_zero(c)) return HFP_HUGE;
-    return s / c;
+    Sum t;
+    double kd;
+    double k;
+    double rh;
+    double rl;
+    int ki;
+    if (m_fabs(x) >= 1048576.0) {
+        rh = m_reduce_big(m_fabs(x), &ki, &rl);
+        if (x < 0.0) { rh = -rh; rl = -rl; ki = -ki; }
+        return m_tan_pair(rh, rl, ki & 3);
+    }
+    kd = x / c_pio2();
+    k = (double)(long)(kd < 0.0 ? kd - 0.5 : kd + 0.5);
+    t.n = 0;
+    t.q = 0;
+    SUM_ADD(&t, x - k * c_pio2_1(), 0);
+    SUM_MUL(&t, -k, c_pio2_2(), 0);
+    SUM_MUL(&t, -k, c_pio2_3(), 0);
+    SUM_MUL(&t, -k, k_pio2_4.d, 0);
+    rh = sum_round(&t, &rl);
+    return m_tan_pair(rh, rl, ((int)k) & 3);
 }
 
 /* --- arc tangents ----------------------------------------------- */

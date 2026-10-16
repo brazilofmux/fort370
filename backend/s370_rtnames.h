@@ -44,6 +44,7 @@ static char *s370_rt_map[] = {
     "f77_dpow_i",       "F77DPOWI",
     "f77_rpow_i",       "F77RPOWI",
     "f77_cabs",         "F77CABS",
+    "f77_cdiv",         "F77CDIV",
     "f77_cpow_i",       "F77CPOWI",
     "f77_cpow_c",       "F77CPOWC",
     "f77_clog",         "F77CLOG",

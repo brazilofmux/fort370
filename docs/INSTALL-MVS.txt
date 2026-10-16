@@ -195,16 +195,17 @@ a unit is one in the last hexadecimal place of the result):
 
   DOUBLE PRECISION functions: DSQRT is correctly rounded, as FORTLIB's
   is.  DEXP, DLOG, DLOG10, DATAN, DATAN2, DASIN, DACOS, DSINH, DCOSH,
-  DTANH and D**D are within 0.7 of a unit, and correctly rounded for
-  all but about one argument in a hundred; FORTLIB's are within 1 or 2
-  (DLOG10 6, DATAN2 5, D**D 400).  DSIN and DCOS are within 2 units for
-  any argument, DTAN within 12; FORTLIB's are off by thousands of
-  units even at |x| < 20.  FORTLIB's routines, hand-written assembler,
-  take a fifth to a tenth of the time of these.
+  DTANH, DTAN and D**D are within 0.7 of a unit, and correctly rounded
+  for all but about one argument in a hundred; FORTLIB's are within 1
+  or 2 (DLOG10 6, DATAN2 5, D**D 400; DTAN off by thousands even at
+  |x| < 20).  DSIN and DCOS are within 2 units for any argument;
+  FORTLIB's are off by thousands at |x| < 20 as well.  FORTLIB's
+  routines, hand-written assembler, take a fifth to a tenth of the
+  time of these.
 
   COMPLEX functions (CSQRT, CEXP, CLOG, CSIN, CCOS, CABS) are within a
-  unit of the result's magnitude; FORTLIB's, 14.  Complex division is
-  within 21 units, FORTLIB's 12.
+  unit of the result's magnitude; FORTLIB's, 14.  So is complex
+  division, done in double precision, where FORTLIB's is within 12.
 
   SIN, COS and TAN reduce any argument exactly, by the bits of 2/pi;
   FORTLIB refuses a REAL argument of pi*2**18 or more and a DOUBLE

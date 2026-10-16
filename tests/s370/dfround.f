@@ -6,11 +6,15 @@ C     way through: DEXP below 0; DLOG below 1, where the table's point
 C     is past 64; DATAN past 1, through 1/x; DATAN2 with x < 0, pi less
 C     it; DASIN past 0.5, where 1 - x^2 is taken as 2d - d^2; DACOS
 C     below 0; DSINH by its series, by the corrected division and by
-C     the plain one; DTANH below and past 1.75; D**D.  Success prints
-C     >DFROUND and the checks passed and reaches STOP 0.
+C     the plain one; DTANH below and past 1.75; D**D; DTAN, by the
+C     four-part pi/2 and past 2**20 by the bits of 2/pi.  And COMPLEX
+C     division, in double now: (1,2)/(3,4) is (0.44,0.08), each part
+C     rounded once.  Success prints >DFROUND and the checks passed and
+C     reaches STOP 0.
       DOUBLE PRECISION D
-      INTEGER ID(2), NOK
-      EQUIVALENCE (D, ID(1))
+      INTEGER ID(2), NOK, IC(2)
+      COMPLEX C, CA, CB
+      EQUIVALENCE (D, ID(1)), (C, IC(1))
       NOK = 0
       D = DEXP(1.D0)
       IF (ID(1) .NE. 1093369365 .OR. ID(2) .NE. 371764947) STOP 1
@@ -51,6 +55,19 @@ C     >DFROUND and the checks passed and reaches STOP 0.
       D = 2.D0 ** 0.5D0
       IF (ID(1) .NE. 1092001950 .OR. ID(2) .NE. 1719614413) STOP 18
       NOK = NOK + 7
+      D = DTAN(1.D0)
+      IF (ID(1) .NE. 1092152100 .OR. ID(2) .NE. 1556013990) STOP 19
+      D = DTAN(1.5D0)
+      IF (ID(1) .NE. 1105305450 .OR. ID(2) .NE. -2050737221) STOP 20
+      D = DTAN(-2.5D0)
+      IF (ID(1) .NE. 1086274778 .OR. ID(2) .NE. 1879431333) STOP 21
+      D = DTAN(1.D10)
+      IF (ID(1) .NE. -1064374272 .OR. ID(2) .NE. 2049047171) STOP 22
+      CA = (1.0, 2.0)
+      CB = (3.0, 4.0)
+      C = CA / CB
+      IF (IC(1) .NE. 1081123799 .OR. IC(2) .NE. 1075084001) STOP 23
+      NOK = NOK + 5
       WRITE (6, 100) NOK
   100 FORMAT (1X, '>DFROUND', I4)
       STOP 0
