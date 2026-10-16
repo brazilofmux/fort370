@@ -20,7 +20,7 @@ the offset ld370 reports.  Run from the repository root after
 import os, re, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RT = ['f77rt', 'f77dtoa', 'f77main', 'f77math', 'f77rec', 'f77ishim', 'millicode']
+RT = ['f77rt', 'f77dtoa', 'f77main', 'f77math', 'f77rec', 'f77ishim', 'f77xsum', 'millicode']
 
 
 def zerofill(deck):

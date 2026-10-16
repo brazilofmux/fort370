@@ -237,9 +237,14 @@ program needs is fort370's own, and it is the SLOW-32 one
   written against the HFP format (scaling by powers of two through the
   exponent field, constants from their hexadecimal digits, a
   three-part pi/2 for the reduction) under libm's external names, which
-  the compiler emits; `tests/s370/math.sh` checks 85 values against
-  mpmath, all within a few units in the last place. A REAL result is
-  the long one's first word, truncated.
+  the compiler emits. Most end in a sum of a few nearly exact terms --
+  a leading part held exactly, products of two longs, small
+  corrections -- added in extended precision and rounded once
+  (`f77xsum.asm`'s `M@XSUM`, extended being out of cc370's reach), so
+  HFP's truncation and wobble cost half a unit instead of one at each
+  step; the long results are within 0.7 of a unit, most correctly
+  rounded. `tests/s370/math.sh` checks 85 values against mpmath. A
+  REAL result is the long one's first word, truncated.
 - Records are `f77rec.c`'s, hand-written on libc370's access-method
   layer (`osb*`, `osd*`), because a libc370 stream is QSAM and QSAM
   cannot reposition (`fseek` abended S400 and S300; an output open

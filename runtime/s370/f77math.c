@@ -19,19 +19,22 @@
  *
  * A REAL result is the long one cut to short, and so within a unit and
  * nearly always the exact value truncated.  The long results, against
- * the exact values and FORTLIB's (2026-10-15, on TK5; the figures are
- * in docs/INSTALL-MVS.txt): SQRT correctly rounded, as FORTLIB's is;
- * SIN and COS within 2 units at any argument, where FORTLIB's are off
- * by thousands; the rest 3 to 30 units, behind FORTLIB's 1 or 2, the
- * wobble of hexadecimal precision across 1.0 in their intermediate
- * values the usual cause. */
+ * the exact values (2026-10-15, on TK5; the figures are in
+ * docs/INSTALL-MVS.txt): SQRT correctly rounded, as FORTLIB's is; EXP,
+ * LOG, LOG10, ATAN, ATAN2, ASIN, ACOS, SINH, COSH, TANH and POW within
+ * 0.7 of a unit, most correctly rounded -- their last step a sum
+ * rounded once, in extended precision (see "sums rounded once"); SIN
+ * and COS within 2 units at any argument, where FORTLIB's are off by
+ * thousands.  The figures came from a model of the machine's
+ * arithmetic that agreed with TK5 to the bit on 6,430 results. */
 
 typedef union { double d; unsigned int w[2]; } Hfp;   /* big-endian: w[0] has the sign and exponent */
+typedef union { unsigned int w[2]; double d; } Hw;    /* the same, initialisable from its words: constants in storage, not calls */
 
 static double hfp_make(unsigned int hi, unsigned int lo) { Hfp u; u.w[0] = hi; u.w[1] = lo; return u.d; }
-static int hfp_is_zero(double x) { Hfp u; u.d = x; return (u.w[0] & 0x00FFFFFFu) == 0 && u.w[1] == 0; }
+#define hfp_is_zero(x) ((x) == 0.0)                     /* a zero fraction compares equal, whatever its exponent */
 
-static double m_fabs(double x) { Hfp u; u.d = x; u.w[0] = u.w[0] & 0x7FFFFFFFu; return u.d; }
+#define m_fabs(x) ((x) < 0.0 ? -(x) : (x))               /* x a plain variable */
 
 /* x = m * 2^e with m in [0.5, 1); zero gives m = 0, e = 0.  Exact:
  * the exponent of sixteen is read, and the fraction's leading hex
@@ -78,19 +81,31 @@ static double m_ldexp(double x, int e) {
     return u.d;
 }
 
-#define HFP_HUGE  hfp_make(0x7FFFFFFFu, 0xFFFFFFFFu)   /* 16^63 (1 - 16^-14) */
+static const Hw k_huge = {{0x7FFFFFFFu, 0xFFFFFFFFu}};
+#define HFP_HUGE  (k_huge.d)   /* 16^63 (1 - 16^-14) */
 
-static double c_ln2(void)    { return hfp_make(0x40B17217u, 0xF7D1CF79u); }   /* ln 2 */
-static double c_ln2_hi(void) { return hfp_make(0x40B17217u, 0xF7D00000u); }   /* its first 36 bits */
-static double c_ln2_lo(void) { return hfp_make(0x371CF79Au, 0xBC9E3B39u); }   /* the rest */
-static double c_rln2(void)   { return hfp_make(0x41171547u, 0x652B82FEu); }   /* 1 / ln 2 */
-static double c_rln10(void)  { return hfp_make(0x406F2DECu, 0x549B9438u); }   /* 1 / ln 10 */
-static double c_pio2(void)   { return hfp_make(0x411921FBu, 0x54442D18u); }   /* pi / 2 */
-static double c_pio2_1(void) { return hfp_make(0x411921FBu, 0x54440000u); }   /* its first 36 bits */
-static double c_pio2_2(void) { return hfp_make(0x372D1846u, 0x98980000u); }   /* the next 36 */
-static double c_pio2_3(void) { return hfp_make(0x2DCC5170u, 0x1B839A25u); }   /* the rest */
-static double c_pi(void)     { return hfp_make(0x413243F6u, 0xA8885A30u); }
-static double c_sqrthalf(void) { return hfp_make(0x40B504F3u, 0x33F9DE64u); }
+static const Hw k_ln2_hi = {{0x40B17217u, 0xF7D00000u}};   /* its first 36 bits */
+#define c_ln2_hi() (k_ln2_hi.d)
+static const Hw k_ln2_lo = {{0x371CF79Au, 0xBC9E3B39u}};   /* the rest */
+#define c_ln2_lo() (k_ln2_lo.d)
+static const Hw k_rln2 = {{0x41171547u, 0x652B82FEu}};   /* 1 / ln 2 */
+#define c_rln2() (k_rln2.d)
+static const Hw k_rln10 = {{0x406F2DECu, 0x549B9438u}};   /* 1 / ln 10 */
+#define c_rln10() (k_rln10.d)
+static const Hw k_pio2 = {{0x411921FBu, 0x54442D18u}};   /* pi / 2 */
+#define c_pio2() (k_pio2.d)
+static const Hw k_pio2_1 = {{0x411921FBu, 0x54440000u}};   /* its first 36 bits */
+#define c_pio2_1() (k_pio2_1.d)
+static const Hw k_pio2_2 = {{0x372D1846u, 0x98980000u}};   /* the next 36 */
+#define c_pio2_2() (k_pio2_2.d)
+static const Hw k_pio2_3 = {{0x2DCC5170u, 0x1B839A25u}};   /* the rest */
+#define c_pio2_3() (k_pio2_3.d)
+static const Hw k_pi = {{0x413243F6u, 0xA8885A30u}};
+#define c_pi() (k_pi.d)
+
+static const Hw k_negbig = {{0xFFFFFFFFu, 0xFFFFFFFFu}};      /* the largest negative */
+static const Hw k_ln2_hi_half = {{0x4058B90Bu, 0xFBE80000u}}; /* c_ln2_hi / 2, exact */
+static const Hw k_rln10_lo = {{0x32CA9AADu, 0xD557D69Au}};    /* 1/ln 10 less c_rln10 */
 
 /* --- big integers ---------------------------------------------- */
 
@@ -231,19 +246,94 @@ double f77m_sqrt(double x) {
     return hfp_make(((unsigned int)(64 + e / 2) << 24) | hi, lo);
 }
 
+/* --- sums rounded once ------------------------------------------ */
+
+/* Most of what follows is the same device: the answer is written as a
+ * few terms whose sum is nearly exact -- a leading part held exactly,
+ * products of two longs (exact in extended), and small corrections
+ * whose own errors are far below the answer's last place -- and the
+ * terms are added in extended precision and rounded once, to nearest
+ * (M@XSUM, f77xsum.asm).  HFP's truncation and its wobble (a leading
+ * hex digit of 1 keeps three bits fewer than one of 8) are then paid
+ * once, as half a unit, instead of at every step. */
+
+#define SN 20                            /* entries at most; f77xsum.asm knows the layout */
+
+/* the sum of a[i] b[i] 2^s[i], times 16^q */
+typedef struct { double a[SN]; double b[SN]; int s[SN]; int n; int q; } Sum;
+
+double m_xsum(Sum *t, double *res) __asm__("M@XSUM");
+
+/* an entry a b 2^s, and a plain one v 2^s: macros, cc370's calls being
+ * dear; t is a Sum's address, evaluated more than once */
+#define SUM_MUL(t, a_, b_, s_) ((t)->a[(t)->n] = (a_), (t)->b[(t)->n] = (b_), (t)->s[(t)->n] = (s_), (t)->n = (t)->n + 1)
+#define SUM_ADD(t, v_, s_) SUM_MUL(t, v_, 1.0, s_)
+
+/* x 16^q, exactly, or the largest magnitude, or zero */
+static double m_hex(double x, int q) {
+    Hfp u;
+    int c;
+    if (q == 0 || hfp_is_zero(x)) return x;
+    u.d = x;
+    c = (int)((u.w[0] >> 24) & 0x7F) + q;
+    if (c > 127) { u.w[0] = (u.w[0] & 0x80000000u) | 0x7FFFFFFFu; u.w[1] = 0xFFFFFFFFu; return u.d; }
+    if (c < 0) return 0.0;
+    u.w[0] = (u.w[0] & 0x80FFFFFFu) | ((unsigned int)c << 24);
+    return u.d;
+}
+
+/* the sum, rounded; *res (if res) what the rounding left */
+static double sum_round(Sum *t, double *res) {
+    double r;
+    double rr;
+    r = m_xsum(t, res ? &rr : 0);
+    if (t->q == 0) { if (res) *res = rr; return r; }
+    if (res) *res = m_hex(rr, t->q);
+    return m_hex(r, t->q);
+}
+
+/* the entries so far by 2^k: k mod 4 into their powers of two, the
+ * rest as the sum's 16^q -- so that each entry's stays small */
+static void sum_frame(Sum *t, int k) {
+    int r;
+    int i;
+    r = k & 3;
+    for (i = 0; i < t->n; i++) t->s[i] = t->s[i] + r;
+    t->q = (k - r) / 4;
+}
+
+/* (the sum t) / (b + bl) as qh + ql: the quotient, and the remainder's
+ * own quotient (t is extended); b and bl are plain, t in its frame */
+static void m_ddiv(Sum *t, double b, double bl, double *qh, double *ql) {
+    double q;
+    q = sum_round(t, 0) / b;
+    SUM_MUL(t, -q, b, -4 * t->q);
+    SUM_MUL(t, -q, bl, -4 * t->q);
+    *qh = q;
+    *ql = sum_round(t, 0) / b;
+}
+
 /* --- exponential ------------------------------------------------ */
-double f77m_exp(double x) __asm__("EXP");
-double f77m_exp(double x) {
+
+/* exp(x 2^sc + xl) = 2^k exp(r), sc 0 or 1, k the nearest whole
+ * number to the argument over ln 2: its terms into t, plain (the
+ * caller frames them by k), and k returned.  r's leading part h is x
+ * less k times the first 36 bits of ln 2 (halved when sc is 1),
+ * exact; then exp(r) = 1 + r + r^2/2 + r^3 (1/6 + r/24 + ...), r^2/2
+ * exact as h h, the series to r^13 needing only a few digits. */
+static int m_exp_terms(Sum *t, double x, int sc, double xl) {
+    double kd;
+    double h;
+    double rl;
     double r;
     double p;
-    double kd;
     int k;
-    if (x > 174.6) return HFP_HUGE;
-    if (x < -180.2) return 0.0;
     kd = x * c_rln2();
+    if (sc) kd = kd + kd;
     k = (int)(kd < 0.0 ? kd - 0.5 : kd + 0.5);
-    r = (x - (double)k * c_ln2_hi()) - (double)k * c_ln2_lo();   /* |r| <= ln2/2 */
-    /* exp(r) by its series to r^13: the next term is below 1e-17 */
+    h = x - (double)k * (sc ? k_ln2_hi_half.d : c_ln2_hi());
+    rl = xl - (double)k * c_ln2_lo();
+    r = (sc ? h + h : h) + rl;
     p = 1.0 / 6227020800.0;
     p = p * r + 1.0 / 479001600.0;
     p = p * r + 1.0 / 39916800.0;
@@ -255,37 +345,183 @@ double f77m_exp(double x) {
     p = p * r + 1.0 / 120.0;
     p = p * r + 1.0 / 24.0;
     p = p * r + 1.0 / 6.0;
-    p = p * r + 0.5;
-    p = p * r + 1.0;
-    p = p * r + 1.0;
-    return m_ldexp(p, k);
+    SUM_ADD(t, 1.0, 0);
+    SUM_ADD(t, h, sc);
+    SUM_ADD(t, rl * (1.0 + r), 0);
+    SUM_MUL(t, h, h, 2 * sc - 1);
+    SUM_ADD(t, ((r * r) * r) * p, 0);
+    return k;
+}
+
+double f77m_exp(double x) __asm__("EXP");
+double f77m_exp(double x) {
+    Sum t;
+    if (x > 174.6) return HFP_HUGE;
+    if (x < -180.2) return 0.0;
+    t.n = 0;
+    t.q = 0;
+    sum_frame(&t, m_exp_terms(&t, x, 0, 0.0));
+    return sum_round(&t, 0);
 }
 
 /* --- logarithms ------------------------------------------------- */
-double f77m_log(double x) __asm__("LOG");
-double f77m_log(double x) {
+
+/* -log(k/64), k = 64..128: a part in whole multiples of 2^-36, so that
+ * e ln2_hi + it is exact, and the rest; k = 128 is -ln 2 in the same
+ * two parts as ln 2 itself, so that log(1 + tiny) cancels exactly. */
+static const Hw m_logt[65][2] = {
+    { {{0x00000000u, 0x00000000u}}, {{0x00000000u, 0x00000000u}} },
+    { {{0xBF3F8151u, 0x61000000u}}, {{0xB7F807C7u, 0x9F3DB4EAu}} },
+    { {{0xBF7E0A6Cu, 0x39000000u}}, {{0xB7E0CC01u, 0x33E3F04Fu}} },
+    { {{0xBFBBA2C7u, 0xB1000000u}}, {{0xB796E7E2u, 0x31A7950Fu}} },
+    { {{0xBFF85186u, 0x00000000u}}, {{0xB78B1533u, 0x0BE64B8Bu}} },
+    { {{0xC01341D7u, 0x96100000u}}, {{0xB7BD1D09u, 0x29983761u}} },
+    { {{0xC016F0D2u, 0x8AE00000u}}, {{0xB756B4B9u, 0xBE499B9Fu}} },
+    { {{0xC01A926Du, 0x3A400000u}}, {{0xB7AD5636u, 0x50BD22AAu}} },
+    { {{0xC01E2707u, 0x6E200000u}}, {{0xB7AF2E5Eu, 0x9EA87FFEu}} },
+    { {{0xC021AEFCu, 0xF9A00000u}}, {{0xB711CB2Cu, 0xD2EE2F48u}} },
+    { {{0xC0252AA5u, 0xF0300000u}}, {{0xB7FEA469u, 0x80BB8E20u}} },
+    { {{0xC0289A56u, 0xD9900000u}}, {{0xB76FA3CCu, 0xFA7B2A1Fu}} },
+    { {{0xC02BFE60u, 0xE1400000u}}, {{0xB7F27A79u, 0x0E7C4141u}} },
+    { {{0xC02F5712u, 0x04200000u}}, {{0xB71B2123u, 0x7C6D65ADu}} },
+    { {{0xC032A4B5u, 0x39E00000u}}, {{0xB78AD68Eu, 0xC8260EA7u}} },
+    { {{0xC035E792u, 0x9D000000u}}, {{0xB717FE5Bu, 0x19CC0327u}} },
+    { {{0xC0391FEFu, 0x8F300000u}}, {{0xB7534435u, 0x84BB03DEu}} },
+    { {{0xC03C4E0Eu, 0xDC500000u}}, {{0xB75E5CBDu, 0x3D50FFFCu}} },
+    { {{0xC03F7230u, 0xDAB00000u}}, {{0xB7C7C551u, 0xAAA8CD87u}} },
+    { {{0xC0428C93u, 0x89C00000u}}, {{0xB7E438D7u, 0xDCFDE806u}} },
+    { {{0xC0459D72u, 0xAEA00000u}}, {{0xB7E98380u, 0xE731F55Cu}} },
+    { {{0xC048A507u, 0xEF300000u}}, {{0xB7DE5968u, 0x90A14F6Au}} },
+    { {{0xC04BA38Au, 0xEB800000u}}, {{0xB7474C27u, 0x0B3246A1u}} },
+    { {{0xC04E9931u, 0x55A00000u}}, {{0xB7517A71u, 0xCBCD735Du}} },
+    { {{0xC051862Fu, 0x08700000u}}, {{0xB717B09Fu, 0x42DECDEDu}} },
+    { {{0xC0546AB6u, 0x1CB00000u}}, {{0xB77E0B42u, 0x724F5834u}} },
+    { {{0xC05746F6u, 0xFD600000u}}, {{0xB6272942u, 0x36383DC8u}} },
+    { {{0xC05A1B20u, 0x7A600000u}}, {{0xB7C52BB1u, 0x10AF8405u}} },
+    { {{0xC05CE75Fu, 0xDAE00000u}}, {{0xB7F401A7u, 0x389314FFu}} },
+    { {{0xC05FABE0u, 0xEE000000u}}, {{0xB7ABF0D9u, 0x2CE979EDu}} },
+    { {{0xC06268CEu, 0x1B000000u}}, {{0xB75096ADu, 0x69C62044u}} },
+    { {{0xC0651E50u, 0x70800000u}}, {{0xB745BEAEu, 0x9337451Fu}} },
+    { {{0xC067CC8Fu, 0xB2F00000u}}, {{0xB7E612FCu, 0xADA35D9Cu}} },
+    { {{0xC06A73B2u, 0x6A600000u}}, {{0xB7821263u, 0x5213FD4Cu}} },
+    { {{0xC06D13DDu, 0xEF300000u}}, {{0xB723D8A3u, 0x2FBB6ABAu}} },
+    { {{0xC06FAD36u, 0x76900000u}}, {{0xB7C6DEFDu, 0xE1874DEBu}} },
+    { {{0xC0723FDFu, 0x1E600000u}}, {{0xB7A6886Bu, 0x097607BDu}} },
+    { {{0xC074CBF9u, 0xF8000000u}}, {{0xB73AF558u, 0x77B232FBu}} },
+    { {{0xC07751A8u, 0x13000000u}}, {{0xB771282Fu, 0xB989A927u}} },
+    { {{0xC079D109u, 0x87500000u}}, {{0xB7A1E1F8u, 0xDF68DBCFu}} },
+    { {{0xC07C4A3Du, 0x7EB00000u}}, {{0xB7C1BB2Cu, 0xD720EC45u}} },
+    { {{0xC07EBD62u, 0x3DE00000u}}, {{0xB73CC7B6u, 0x6BECF93Bu}} },
+    { {{0xC0812A95u, 0x2D200000u}}, {{0xB7E87F63u, 0x4E34AEBFu}} },
+    { {{0xC08391F2u, 0xE0E00000u}}, {{0xB76FA027u, 0x2BCB1C49u}} },
+    { {{0xC085F397u, 0x21200000u}}, {{0xB795415Bu, 0x4C4BDD9Au}} },
+    { {{0xC0884F9Cu, 0xF1600000u}}, {{0xB7A64B7Eu, 0xF1F64D86u}} },
+    { {{0xC08AA61Eu, 0x97A00000u}}, {{0xB76AF4D4u, 0xC799D1CBu}} },
+    { {{0xC08CF735u, 0xA3300000u}}, {{0xB7E4B766u, 0x2E5EEBBCu}} },
+    { {{0xC08F42FAu, 0xF3800000u}}, {{0xB720681Eu, 0xF62CD2FAu}} },
+    { {{0xC0918986u, 0xBDF00000u}}, {{0xB75FA141u, 0x6F1B4391u}} },
+    { {{0xC093CAF0u, 0x94400000u}}, {{0xB7D88D75u, 0xBC1F9EDDu}} },
+    { {{0xC096074Fu, 0x6A200000u}}, {{0xB74745DCu, 0xBD4E18DDu}} },
+    { {{0xC0983EB9u, 0x9A700000u}}, {{0xB7885F0Fu, 0xDAC850FBu}} },
+    { {{0xC09A7144u, 0xECE00000u}}, {{0xB770E98Bu, 0x75C96C43u}} },
+    { {{0xC09C9F06u, 0x9AB00000u}}, {{0xB7150CD4u, 0xE221301Bu}} },
+    { {{0xC09EC813u, 0x53800000u}}, {{0xB7AB7D52u, 0x02131E85u}} },
+    { {{0xC0A0EC7Fu, 0x42300000u}}, {{0xB7395732u, 0x325E617Au}} },
+    { {{0xC0A30C5Eu, 0x10E00000u}}, {{0xB72F613Eu, 0x85BD9BDAu}} },
+    { {{0xC0A527C2u, 0xED800000u}}, {{0xB71F5D81u, 0x13DFA3D3u}} },
+    { {{0xC0A73EC0u, 0x8DB00000u}}, {{0xB7ADD84Eu, 0x584C2B23u}} },
+    { {{0xC0A95169u, 0x32D00000u}}, {{0xB7E2D577u, 0x3BE4578Bu}} },
+    { {{0xC0AB5FCEu, 0xAD900000u}}, {{0xB7F9CCA0u, 0x8E310B9Bu}} },
+    { {{0xC0AD6A02u, 0x61A00000u}}, {{0xB7CF967Du, 0x94D552F8u}} },
+    { {{0xC0AF7015u, 0x49200000u}}, {{0xB6B3AB86u, 0xB04AFE92u}} },
+    { {{0xC0B17217u, 0xF7D00000u}}, {{0xB71CF79Au, 0xBC9E3B39u}} }
+};
+
+/* atan(k/8), k = 0..8, in two parts */
+static const Hw m_atant[9][2] = {
+    { {{0x00000000u, 0x00000000u}}, {{0x00000000u, 0x00000000u}} },
+    { {{0x401FD5BAu, 0x9AAC2F6Du}}, {{0x32C65912u, 0xF313E7D1u}} },
+    { {{0x403EB6EBu, 0xF25901BAu}}, {{0x32C55B71u, 0xE7BD7DE9u}} },
+    { {{0x405BD865u, 0x07937BC2u}}, {{0x3239C551u, 0x90916E7Fu}} },
+    { {{0x4076B19Cu, 0x1586ED3Du}}, {{0x32A2B7F2u, 0x22F65E1Du}} },
+    { {{0x408F005Du, 0x5EF7F59Fu}}, {{0x329B5C83u, 0x5E1665C4u}} },
+    { {{0x40A4BC7Du, 0x1934F709u}}, {{0x322419A8u, 0x7F2A457Eu}} },
+    { {{0x40B8053Eu, 0x2BC2319Eu}}, {{0x3273CB2Du, 0xA55210A4u}} },
+    { {{0x40C90FDAu, 0xA22168C2u}}, {{0x3234C4C6u, 0x628B80DCu}} }
+};
+
+/* log x = e ln 2 - log(k/64) + log(1 + f), x = m 2^e with m in
+ * [0.5, 1), k the nearest whole number to 64/m and f = m k/64 - 1,
+ * under 1/128: exact in two parts, m being split into its first
+ * seven hex digits and the rest.  e ln2_hi and the table's first part
+ * add exactly; log(1 + f) = f - f^2/2 + f^3 (1/3 - f/4 + ...), the
+ * series to f^11. */
+static void m_log_terms(Sum *t, double x) {
+    Hfp u;
     double m;
-    double u;
-    double u2;
-    double s;
-    double t;
+    double inv;
+    double mh;
+    double fh;
+    double fl;
+    double f;
+    double p;
     int e;
-    int n;
-    if (x <= 0.0) return hfp_make(0xFFFFFFFFu, 0xFFFFFFFFu);   /* FORTLIB: a message, and the largest negative */
-    m = m_frexp(x, &e);                  /* [0.5, 1) */
-    if (m < c_sqrthalf()) { m = m * 2.0; e = e - 1; }   /* [0.7071, 1.4142) */
-    u = (m - 1.0) / (m + 1.0);           /* |u| <= 0.1716 */
-    u2 = u * u;
-    /* log m = 2 (u + u^3/3 + u^5/5 + ...), to u^23 */
-    s = 0.0;
-    t = u;
-    n = 1;
-    while (n <= 23) { s = s + t / (double)n; t = t * u2; n = n + 2; }
-    return (double)e * c_ln2() + 2.0 * s;
+    int k;
+    m = m_frexp(x, &e);
+    k = (int)(64.0 / m + 0.5);
+    inv = (double)k * 0.015625;
+    u.d = m;
+    u.w[1] = u.w[1] & 0xF0000000u;
+    mh = u.d;
+    fh = mh * inv - 1.0;
+    fl = (m - mh) * inv;
+    f = fh + fl;
+    p = 1.0 / 11.0;
+    p = p * f - 1.0 / 10.0;
+    p = p * f + 1.0 / 9.0;
+    p = p * f - 1.0 / 8.0;
+    p = p * f + 1.0 / 7.0;
+    p = p * f - 1.0 / 6.0;
+    p = p * f + 1.0 / 5.0;
+    p = p * f - 1.0 / 4.0;
+    p = p * f + 1.0 / 3.0;
+    SUM_ADD(t, (double)e * c_ln2_hi() + m_logt[k - 64][0].d, 0);
+    SUM_ADD(t, (double)e * c_ln2_lo() + m_logt[k - 64][1].d, 0);
+    SUM_ADD(t, fh, 0);
+    SUM_ADD(t, fl, 0);
+    SUM_MUL(t, -fh, fh, -1);
+    SUM_MUL(t, -fh, fl, 0);
+    SUM_MUL(t, -fl, fl, -1);
+    SUM_ADD(t, ((f * f) * f) * p, 0);
 }
 
+double f77m_log(double x) __asm__("LOG");
+double f77m_log(double x) {
+    Sum t;
+    if (x <= 0.0) return k_negbig.d;   /* FORTLIB: a message, and the largest negative */
+    t.n = 0;
+    t.q = 0;
+    m_log_terms(&t, x);
+    return sum_round(&t, 0);
+}
+
+/* log x in two parts, times 1/ln 10 in two */
 double f77m_log10(double x) __asm__("LOG10");
-double f77m_log10(double x) { return f77m_log(x) * c_rln10(); }
+double f77m_log10(double x) {
+    Sum t;
+    double r;
+    double res;
+    if (x <= 0.0) return f77m_log(x) * c_rln10();   /* as before */
+    t.n = 0;
+    t.q = 0;
+    m_log_terms(&t, x);
+    r = sum_round(&t, &res);
+    t.n = 0;
+    SUM_MUL(&t, r, c_rln10(), 0);
+    SUM_MUL(&t, r, k_rln10_lo.d, 0);
+    SUM_MUL(&t, res, c_rln10(), 0);
+    return sum_round(&t, 0);
+}
 
 /* --- sine and cosine -------------------------------------------- */
 
@@ -475,131 +711,334 @@ double f77m_tan(double x) {
     return s / c;
 }
 
-/* --- arc tangent ------------------------------------------------ */
+/* --- arc tangents ----------------------------------------------- */
 
-/* atan t for 0 <= t <= 1: halved twice (t <= tan pi/16 = 0.199), then
- * the series to t^25, then doubled twice. */
-static double m_atan_unit(double t) {
-    double t2;
-    double s;
+/* sg atan(zh + zl), 0 <= z <= 1, sg +1 or -1, into t: atan(k/8) +
+ * atan u, k the nearest whole number to 8z and u = (z - k/8) / (1 +
+ * z k/8), within 1/16, its numerator exact and its denominator in two
+ * parts; atan u = u - u^3/3 + ..., to u^17. */
+static void m_atan_terms(Sum *t, double zh, double zl, double sg) {
+    double c;
+    double uh;
+    double ul;
+    double u2;
     double p;
-    int n;
-    t = t / (1.0 + m_sqrt_est(1.0 + t * t, 5));   /* the estimate does here, and is quicker */
-    t = t / (1.0 + m_sqrt_est(1.0 + t * t, 5));
-    t2 = t * t;
-    s = 0.0;
-    p = t;
-    n = 1;
-    while (n <= 25) {
-        if ((n / 2) & 1) s = s - p / (double)n; else s = s + p / (double)n;
-        p = p * t2;
-        n = n + 2;
+    int k;
+    k = (int)(zh * 8.0 + 0.5);
+    c = (double)k * 0.125;
+    if (k == 0) {
+        uh = zh;
+        ul = zl;
+    } else {
+        Sum d;
+        double dh;
+        double dl;
+        d.n = 0;
+        d.q = 0;
+        SUM_ADD(&d, 1.0, 0);
+        SUM_MUL(&d, c, zh, 0);
+        SUM_MUL(&d, c, zl, 0);
+        dh = sum_round(&d, &dl);
+        d.n = 0;
+        SUM_ADD(&d, zh - c, 0);
+        SUM_ADD(&d, zl, 0);
+        m_ddiv(&d, dh, dl, &uh, &ul);
     }
-    return 4.0 * s;
+    u2 = uh * uh;
+    p = 1.0 / 17.0;
+    p = p * u2 - 1.0 / 15.0;
+    p = p * u2 + 1.0 / 13.0;
+    p = p * u2 - 1.0 / 11.0;
+    p = p * u2 + 1.0 / 9.0;
+    p = p * u2 - 1.0 / 7.0;
+    p = p * u2 + 1.0 / 5.0;
+    p = p * u2 - 1.0 / 3.0;
+    SUM_ADD(t, sg * m_atant[k][0].d, 0);
+    SUM_ADD(t, sg * m_atant[k][1].d, 0);
+    SUM_ADD(t, sg * uh, 0);
+    SUM_ADD(t, sg * ul, 0);
+    SUM_ADD(t, sg * ((uh * u2) * p), 0);
 }
+
+static const Hw k_pio2_lo = {{0x33469898u, 0xCC51701Cu}};   /* pi/2 less c_pio2 */
+#define c_pio2_lo() (k_pio2_lo.d)
+static const Hw k_pi_lo = {{0x338D3131u, 0x98A2E037u}};   /* pi less c_pi */
+#define c_pi_lo() (k_pi_lo.d)
+
+/* atan2(ay, ax), both positive, into t: from 0 to pi/2 */
+static void m_atan2_terms(Sum *t, double ay, double ax) {
+    Sum q;
+    double zh;
+    double zl;
+    q.n = 0;
+    q.q = 0;
+    if (ay <= ax) {
+        SUM_ADD(&q, ay, 0);
+        m_ddiv(&q, ax, 0.0, &zh, &zl);
+        m_atan_terms(t, zh, zl, 1.0);
+    } else {
+        SUM_ADD(&q, ax, 0);
+        m_ddiv(&q, ay, 0.0, &zh, &zl);
+        SUM_ADD(t, c_pio2(), 0);
+        SUM_ADD(t, c_pio2_lo(), 0);
+        m_atan_terms(t, zh, zl, -1.0);
+    }
+}
+
+/* pi less the sum */
+static void m_pi_less(Sum *t) {
+    int i;
+    for (i = 0; i < t->n; i++) t->a[i] = -t->a[i];
+    SUM_ADD(t, c_pi(), 0);
+    SUM_ADD(t, c_pi_lo(), 0);
+}
+
+/* the rounded pi/2 and pi: the constants are cut */
+static double m_pio2r(void) { Sum t; t.n = 0; t.q = 0; SUM_ADD(&t, c_pio2(), 0); SUM_ADD(&t, c_pio2_lo(), 0); return sum_round(&t, 0); }
+static double m_pir(void) { Sum t; t.n = 0; t.q = 0; SUM_ADD(&t, c_pi(), 0); SUM_ADD(&t, c_pi_lo(), 0); return sum_round(&t, 0); }
 
 double f77m_atan(double x) __asm__("ATAN");
 double f77m_atan(double x) {
-    double a;
+    Sum t;
     double r;
-    a = m_fabs(x);
-    if (a > 1.0) r = c_pio2() - m_atan_unit(1.0 / a);
-    else r = m_atan_unit(a);
+    if (hfp_is_zero(x)) return 0.0;
+    t.n = 0;
+    t.q = 0;
+    m_atan2_terms(&t, m_fabs(x), 1.0);
+    r = sum_round(&t, 0);
     return x < 0.0 ? -r : r;
 }
 
 double f77m_atan2(double y, double x) __asm__("ATAN2");
 double f77m_atan2(double y, double x) {
-    double ax;
-    double ay;
+    Sum t;
     double r;
     if (hfp_is_zero(x)) {
         if (hfp_is_zero(y)) return 0.0;
-        return y < 0.0 ? -c_pio2() : c_pio2();
+        r = m_pio2r();
+        return y < 0.0 ? -r : r;
     }
-    /* the smaller over the larger: y / x could overflow */
-    ax = m_fabs(x);
-    ay = m_fabs(y);
-    if (ay <= ax) r = f77m_atan(ay / ax);
-    else r = c_pio2() - f77m_atan(ax / ay);
-    if (x < 0.0) r = c_pi() - r;
+    t.n = 0;
+    t.q = 0;
+    m_atan2_terms(&t, m_fabs(y), m_fabs(x));
+    if (x < 0.0) m_pi_less(&t);
+    r = sum_round(&t, 0);
     return y < 0.0 ? -r : r;
 }
 
-double f77m_asin(double x) __asm__("ASIN");
-double f77m_asin(double x) {
-    double c;
-    if (x >= 1.0) return c_pio2();
-    if (x <= -1.0) return -c_pio2();
-    c = f77m_sqrt((1.0 - x) * (1.0 + x));
-    return f77m_atan2(x, c);
+/* asin x = atan2(x, s) and acos x = atan2(s, x), s = sqrt(1 - x^2) in
+ * two parts: 1 - x^2 exact (as 2d - d^2, d = 1 - |x|, from 0.5 on,
+ * where x^2 would cancel), its root rounded and the remainder's
+ * share. */
+static double m_asincos(double x, int acos) {
+    Sum t;
+    Sum q;
+    double a;
+    double wh;
+    double wl;
+    double sh;
+    double sl;
+    double zh;
+    double zl;
+    double r;
+    a = m_fabs(x);
+    if (a >= 1.0) {
+        if (acos) return x > 0.0 ? 0.0 : m_pir();
+        r = m_pio2r();
+        return x < 0.0 ? -r : r;
+    }
+    t.n = 0;
+    t.q = 0;
+    if (a >= 0.5) {
+        double d;
+        d = 1.0 - a;
+        SUM_ADD(&t, d, 1);
+        SUM_MUL(&t, -d, d, 0);
+    } else {
+        SUM_ADD(&t, 1.0, 0);
+        SUM_MUL(&t, -a, a, 0);
+    }
+    wh = sum_round(&t, &wl);
+    sh = f77m_sqrt(wh);
+    t.n = 0;
+    SUM_ADD(&t, wh, 0);
+    SUM_ADD(&t, wl, 0);
+    SUM_MUL(&t, -sh, sh, 0);
+    sl = sum_round(&t, 0) / (2.0 * sh);
+    t.n = 0;
+    q.n = 0;
+    q.q = 0;
+    if (!acos) {
+        if (a <= sh) {
+            SUM_ADD(&q, a, 0);
+            m_ddiv(&q, sh, sl, &zh, &zl);
+            m_atan_terms(&t, zh, zl, 1.0);
+        } else {
+            SUM_ADD(&q, sh, 0);
+            SUM_ADD(&q, sl, 0);
+            m_ddiv(&q, a, 0.0, &zh, &zl);
+            SUM_ADD(&t, c_pio2(), 0);
+            SUM_ADD(&t, c_pio2_lo(), 0);
+            m_atan_terms(&t, zh, zl, -1.0);
+        }
+        r = sum_round(&t, 0);
+        return x < 0.0 ? -r : r;
+    }
+    if (sh <= a) {
+        SUM_ADD(&q, sh, 0);
+        SUM_ADD(&q, sl, 0);
+        m_ddiv(&q, a, 0.0, &zh, &zl);
+        m_atan_terms(&t, zh, zl, 1.0);
+    } else {
+        SUM_ADD(&q, a, 0);
+        m_ddiv(&q, sh, sl, &zh, &zl);
+        SUM_ADD(&t, c_pio2(), 0);
+        SUM_ADD(&t, c_pio2_lo(), 0);
+        m_atan_terms(&t, zh, zl, -1.0);
+    }
+    if (x < 0.0) m_pi_less(&t);
+    return sum_round(&t, 0);
 }
+
+double f77m_asin(double x) __asm__("ASIN");
+double f77m_asin(double x) { return m_asincos(x, 0); }
 
 double f77m_acos(double x) __asm__("ACOS");
-double f77m_acos(double x) {
-    double s;
-    if (x >= 1.0) return 0.0;
-    if (x <= -1.0) return c_pi();
-    s = f77m_sqrt((1.0 - x) * (1.0 + x));
-    return f77m_atan2(s, x);
-}
+double f77m_acos(double x) { return m_asincos(x, 1); }
 
 /* --- hyperbolics ------------------------------------------------ */
+
+/* (exp a + sg / exp a) / 2.  1/exp a by a corrected division when the
+ * result may be below 1 (exact); else, the result's unit being 16
+ * times 1/exp a's at least, a plain one with exp a's low part */
+static double m_hyp(double a, double sg, int exact) {
+    Sum t;
+    Sum e;
+    double eh;
+    double el;
+    double qh;
+    double ql;
+    int k;
+    e.n = 0;
+    e.q = 0;
+    k = m_exp_terms(&e, a, 0, 0.0);
+    t = e;
+    sum_frame(&e, k);
+    eh = sum_round(&e, &el);
+    sum_frame(&t, k - 1);
+    if (t.q >= 50) return sum_round(&t, 0);   /* 1/exp a is below exp a by 2^-400 and more */
+    if (exact) {
+        e.n = 0;
+        e.q = 0;
+        SUM_ADD(&e, 1.0, 0);
+        m_ddiv(&e, eh, el, &qh, &ql);
+        SUM_ADD(&t, sg * qh, -1 - 4 * t.q);
+        SUM_ADD(&t, sg * ql, -1 - 4 * t.q);
+    } else {
+        qh = 1.0 / eh;
+        SUM_ADD(&t, sg * qh, -1 - 4 * t.q);
+        SUM_ADD(&t, -sg * ((qh * qh) * el), -1 - 4 * t.q);
+    }
+    return sum_round(&t, 0);
+}
+
 double f77m_sinh(double x) __asm__("SINH");
 double f77m_sinh(double x) {
     double a;
+    double r;
     a = m_fabs(x);
-    if (a < 1.0) {
-        /* the series, to x^17: the difference of exponentials would
-         * lose its leading digits here */
+    if (a > 174.0) return x < 0.0 ? -HFP_HUGE : HFP_HUGE;
+    if (a < 0.125) {
+        /* the series, to x^13: the exponentials would cancel */
+        Sum t;
         double x2;
         double p;
         x2 = x * x;
-        p = 1.0 / 355687428096000.0;
-        p = p * x2 + 1.0 / 1307674368000.0;
-        p = p * x2 + 1.0 / 6227020800.0;
+        p = 1.0 / 6227020800.0;
         p = p * x2 + 1.0 / 39916800.0;
         p = p * x2 + 1.0 / 362880.0;
         p = p * x2 + 1.0 / 5040.0;
         p = p * x2 + 1.0 / 120.0;
         p = p * x2 + 1.0 / 6.0;
-        return x + x * x2 * p;
+        t.n = 0;
+        t.q = 0;
+        SUM_ADD(&t, x, 0);
+        SUM_ADD(&t, (x * x2) * p, 0);
+        return sum_round(&t, 0);
     }
-    if (a > 174.0) return x < 0.0 ? -HFP_HUGE : HFP_HUGE;
-    {
-        double e;
-        e = f77m_exp(a);
-        e = 0.5 * (e - 1.0 / e);
-        return x < 0.0 ? -e : e;
-    }
+    r = m_hyp(a, -1.0, a < 0.8814);
+    return x < 0.0 ? -r : r;
 }
 
 double f77m_cosh(double x) __asm__("COSH");
 double f77m_cosh(double x) {
-    double e;
-    x = m_fabs(x);
-    if (x > 174.0) return HFP_HUGE;
-    e = f77m_exp(x);
-    return 0.5 * (e + 1.0 / e);
+    double a;
+    a = m_fabs(x);
+    if (a > 174.0) return HFP_HUGE;
+    return m_hyp(a, 1.0, 0);
 }
 
+/* u / (u + 2), u = exp(2a) - 1, the denominator in two parts; from
+ * 1.75 on, 1 - 2/(u + 2) */
 double f77m_tanh(double x) __asm__("TANH");
 double f77m_tanh(double x) {
+    Sum u;
+    Sum d;
     double a;
-    double e;
+    double dh;
+    double dl;
+    double qh;
+    double ql;
+    double r;
     a = m_fabs(x);
     if (a > 22.0) return x < 0.0 ? -1.0 : 1.0;
-    if (a < 1.0) return f77m_sinh(x) / f77m_cosh(x);
-    e = f77m_exp(2.0 * a);
-    e = (e - 1.0) / (e + 1.0);
-    return x < 0.0 ? -e : e;
+    u.n = 0;
+    u.q = 0;
+    if (a < 1.0 / 4096.0) {              /* x - x^3/3 + 2x^5/15 */
+        double x2;
+        x2 = x * x;
+        SUM_ADD(&u, x, 0);
+        SUM_ADD(&u, (x * x2) * (-1.0 / 3.0 + (2.0 / 15.0) * x2), 0);
+        return sum_round(&u, 0);
+    }
+    sum_frame(&u, m_exp_terms(&u, a, 1, 0.0));
+    if (a >= 1.75) {                     /* 1 - 2/(exp(2a) + 1), the quotient below 1/16 */
+        double q;
+        SUM_ADD(&u, 1.0, -4 * u.q);
+        dh = sum_round(&u, &dl);
+        q = 2.0 / dh;
+        d.n = 0;
+        d.q = 0;
+        SUM_ADD(&d, 1.0, 0);
+        SUM_ADD(&d, -q, 0);
+        SUM_ADD(&d, (q * q) * dl, -1);
+        r = sum_round(&d, 0);
+        return x < 0.0 ? -r : r;
+    }
+    SUM_ADD(&u, -1.0, -4 * u.q);
+    d = u;
+    SUM_ADD(&d, 2.0, -4 * d.q);
+    dh = sum_round(&d, &dl);
+    m_ddiv(&u, dh, dl, &qh, &ql);
+    d.n = 0;
+    d.q = 0;
+    SUM_ADD(&d, qh, 0);
+    SUM_ADD(&d, ql, 0);
+    r = sum_round(&d, 0);
+    return x < 0.0 ? -r : r;
 }
 
 /* --- powers ----------------------------------------------------- */
+
+/* exp(y log x), log x in two parts and their product with y in two */
 double f77m_pow(double x, double y) __asm__("POW");
 double f77m_pow(double x, double y) {
+    Sum t;
     double r;
-    double l;
+    double lh;
+    double ll;
+    double xh;
+    double xl;
     int neg;
     if (hfp_is_zero(y)) return 1.0;
     if (hfp_is_zero(x)) return 0.0;
@@ -626,10 +1065,25 @@ double f77m_pow(double x, double y) {
         }
         x = -x;
     }
+    t.n = 0;
+    t.q = 0;
+    m_log_terms(&t, x);
+    lh = sum_round(&t, &ll);
     /* y log x past the exponential's range would overflow the product */
-    l = f77m_log(x);
-    if (m_fabs(y) > 1.0 && m_fabs(l) > 200.0 / m_fabs(y))
-        r = (y < 0.0) == (l < 0.0) ? HFP_HUGE : 0.0;
-    else r = f77m_exp(y * l);
+    if (m_fabs(y) > 1.0 && m_fabs(lh) > 200.0 / m_fabs(y))
+        r = (y < 0.0) == (lh < 0.0) ? HFP_HUGE : 0.0;
+    else {
+        t.n = 0;
+        SUM_MUL(&t, y, lh, 0);
+        SUM_MUL(&t, y, ll, 0);
+        xh = sum_round(&t, &xl);
+        if (xh > 174.6) r = HFP_HUGE;
+        else if (xh < -180.2) r = 0.0;
+        else {
+            t.n = 0;
+            sum_frame(&t, m_exp_terms(&t, xh, 0, xl));
+            r = sum_round(&t, 0);
+        }
+    }
     return neg ? -r : r;
 }

@@ -54,13 +54,17 @@ test: out/f77
 	@CC="$(CC)" sh tests/host/stream.sh
 
 RT := f77rt f77dtoa f77main f77math f77rec millicode
-runtime: $(RT:%=out/crt/%.o) out/crt/f77ishim.o
+runtime: $(RT:%=out/crt/%.o) out/crt/f77ishim.o out/crt/f77xsum.o
 
 out/crt/%.o: runtime/s370/%.c runtime/s370/f77rt.h runtime/s370/f77rec.h Makefile
 	@mkdir -p out/crt
 	$(MVSCLOCK) cc370 -O1 -c -o $@ $<
 
 out/crt/f77ishim.o: runtime/s370/f77ishim.asm Makefile
+	@mkdir -p out/crt
+	$(MVSCLOCK) as370 -o $@ $<
+
+out/crt/f77xsum.o: runtime/s370/f77xsum.asm Makefile
 	@mkdir -p out/crt
 	$(MVSCLOCK) as370 -o $@ $<
 
