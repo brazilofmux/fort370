@@ -1809,6 +1809,17 @@ static int f77_char_fcall(char *name, int rlen, int *addrs, int *lens, int nargs
  * A function of its own because of its argument arrays: in f77_primary
  * they sat in the frame of every level of a nested expression (FCVS
  * FM045 nests 57 deep), which is what sizes the stack on MVS. */
+/* a type's name, for messages */
+static char *f77_tyname(int ty, int lg) {
+    if (ty == TY_INT) return lg ? "LOGICAL" : "INTEGER";
+    if (ty == TY_FLOAT) return "REAL";
+    if (ty == TY_DOUBLE) return "DOUBLE PRECISION";
+    if (ty == TY_CPLX) return "COMPLEX";
+    if (ty == TY_DCPLX) return "COMPLEX*16";
+    if (ty == TY_CHAR) return "CHARACTER";
+    return "untyped";
+}
+
 static int f77_unit_fcall(int u, char *nm) {
     /* FUNCTION reference: by-reference actuals, result in the
      * usual return register (plus its hi word for a double). */
@@ -1841,6 +1852,31 @@ static int f77_unit_fcall(int u, char *nm) {
         else f77_tok();
     }
     rty = f77_urty_of(u);
+    {
+        /* fort370: the caller's type for the name, declared or
+         * implicit, is the definition's (#21).  The call takes the
+         * definition's, so the value was right here, but FORTRAN H,
+         * which compiles units apart, reads it by the caller's: the
+         * program does not mean what it says. */
+        int s;
+        int ulog;
+        int cty;
+        int clog;
+        /* looked up, not made: a symbol made here moved the frame */
+        s = f77_sym_at(nm, f77_scope_base);
+        if (s >= 0) { cty = f77_sty[s]; clog = f77_slog[s]; }
+        else {
+            cty = f77_implicit_ty(nm);
+            clog = (f77_imp_ready && nm[0] >= 'A' && nm[0] <= 'Z') ? f77_imp_log[nm[0] - 'A'] : 0;
+        }
+        ulog = f77_uentry_parent[u] >= 0 ? f77_urlog[f77_uentry_parent[u]] : f77_urlog[u];
+        if (cty >= 0 && (cty != rty || (rty == TY_INT && clog != ulog))) {
+            char m[160];
+            sprintf(m, "%s is %s here but %s where it is defined (line %d)", nm,
+                    f77_tyname(cty, clog), f77_tyname(rty, ulog), f77_uline[u]);
+            f77_error(m);
+        }
+    }
     if (rty == TY_CHAR) {
         int rl;
         rl = f77_urlen[u];

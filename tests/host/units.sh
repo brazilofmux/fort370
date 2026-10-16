@@ -7,7 +7,7 @@
 # own line even after a CALL whose callee was spliced in its place; a
 # DO or block IF still open at END, and a stray END DO; two subprograms
 # or ENTRY points of one name, and two names that are one external name
-# in eight characters.  tests/s370/mainlast.f has a main program after
+# in eight characters; a function called with a type other than its own.  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -45,6 +45,10 @@ printf '      CALL S\n      END\n      SUBROUTINE S\n      ENTRY T\n      END\n 
 expect entsub "line 6: T is already a subprogram or ENTRY name (line 4)"
 printf '      CALL LONGNAME\n      CALL LONGNAME01\n      END\n      SUBROUTINE LONGNAME\n      END\n      SUBROUTINE LONGNAME01\n      END\n' > $T/eightch.f
 expect eightch "line 6: LONGNAME01 and LONGNAME (line 4) are one external name, LONGNAME"
+printf '      INTEGER A(8)\n      X = SIZE8(A)\n      END\n      INTEGER FUNCTION SIZE8(A)\n      INTEGER A(8)\n      SIZE8 = 8\n      END\n' > $T/fntype.f
+expect fntype "line 2: SIZE8 is REAL here but INTEGER where it is defined (line 4)"
+printf '      LOGICAL LF\n      J = 0\n      IF (LF(1)) J = 1\n      END\n      INTEGER FUNCTION LF(I)\n      LF = I\n      END\n' > $T/fnlog.f
+expect fnlog "line 3: LF is LOGICAL here but INTEGER where it is defined (line 5)"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks and a name used twice refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice and a function's type mistaken refused"
 [ $bad = 0 ]
