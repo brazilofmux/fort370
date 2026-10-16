@@ -53,7 +53,7 @@ test: out/f77
 	@sh tests/host/units.sh
 	@CC="$(CC)" sh tests/host/stream.sh
 
-RT := f77rt f77dtoa f77main f77math f77rec millicode
+RT := f77rt f77intr f77dtoa f77main f77math f77rec millicode
 runtime: $(RT:%=out/crt/%.o) out/crt/f77ishim.o out/crt/f77xsum.o
 
 out/crt/%.o: runtime/s370/%.c runtime/s370/f77rt.h runtime/s370/f77rec.h runtime/s370/f77std.h Makefile

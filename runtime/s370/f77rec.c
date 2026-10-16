@@ -30,6 +30,7 @@
 #include <mvs/osio.h>
 #include <mvs/dd.h>
 #include <mvs/dscb.h>
+#include "f77rt.h"
 #include "f77rec.h"
 #include "f77std.h"
 
@@ -475,3 +476,9 @@ void f77r_closeall(void) {
         if (sunit[u].f) { fclose(sunit[u].f); sunit[u].f = 0; }
     }
 }
+
+/* ---- the front doors (f77rec.h) ---------------------------------- */
+
+void f77_set_rec(int rec) { f77_set_rec_rt(rec); }
+void f77_wu_begin(int unit) { f77_wu_begin_rt(unit); }
+int  f77_ru_begin(int unit, int flags) { return f77_ru_begin_rt(unit, flags); }

@@ -30,6 +30,7 @@
 #include <stdlib.h>
 #include "f77rt.h"
 #include "f77dtoa.h"
+#define F77REC_WEAK
 #include "f77rec.h"
 #include "../../backend/s370_hfp.h"
 #include "f77std.h"
@@ -166,7 +167,7 @@ static FILE *fio_out;            /* stream of the WRITE in progress */
 static int fio_u0tried;                  /* unit 0's FT00F001 looked for */
 static void fio_exit(int code) {
     int u;
-    f77r_closeall();
+    if (f77r_closeall) f77r_closeall();
     for (u = 0; u < FIO_MAXUNIT; u++) if (fio_ufile[u]) { fclose(fio_ufile[u]); fio_ufile[u] = 0; }
     f77_flush_std();
     exit(code);
@@ -721,7 +722,7 @@ static void fio_init_units(void) {
 
 static void fio_wr_setup(const char *fmt);
 /* REC= announced by the compiler just before the statement begins. */
-void f77_set_rec(int rec) { fio_rec_next = rec; }
+void f77_set_rec_rt(int rec) { fio_rec_next = rec; }
 
 /* Position a direct-access unit at the record the statement names. */
 static void fio_position(FILE *f, int unit) {
@@ -752,7 +753,7 @@ void f77_wr_begin(int unit, const char *fmt) {
  * Sequential records carry a 4-byte length before and after the data
  * (gfortran's layout, so files are interchangeable with the oracle);
  * direct-access records are RECL bytes.  Items are raw bytes. */
-void f77_wu_begin(int unit) {
+void f77_wu_begin_rt(int unit) {
     fio_init_units();
     fio_out = 0;
     fio_unit = unit;
@@ -794,7 +795,7 @@ void f77_wu_end(void) {
     if (f77s_write(u, fio_ddof(u), fio_urec, fio_ulen) != 0) fio_exit(2);
 }
 /* flags: 1 END= present, 2 ERR=/IOSTAT= present.  0 ok, 1 eof, 2 error */
-int f77_ru_begin(int unit, int flags) {
+int f77_ru_begin_rt(int unit, int flags) {
     int rc;
     int n;
     fio_init_units();
@@ -1117,207 +1118,6 @@ void f77_wr_a(const char *s, int len) {
     for (i = 0; i < len; i++) fio_putc(s[i]);
     fio_consumed();
 }
-
-/* --- COMPLEX primitives ------------------------------------------------
- *
- * A COMPLEX is two floats; the compiler passes the parts as two words
- * and takes results back through an 8-byte frame temporary (`out`). */
-float f77_cabs(float re, float im) { return (float)sqrt((double)re * re + (double)im * im); }
-
-/* a / b: the textbook (ar br + ai bi, ai br - ar bi) / (br^2 + bi^2),
- * in double, where a product of two floats is exact -- so only the
- * sums and the quotients are rounded, and the result once more to
- * float.  A divisor far from 1 is first scaled by 2^64 at a time (a
- * power of 16 as well: exact in either arithmetic) so that its square
- * stays in range.  (fort370: was inline in float, 2026-10-15.) */
-void f77_cdiv(float *out, float ar, float ai, float br, float bi) {
-    double k = 18446744073709551616.0;
-    double c = br, d = bi, sc = 1.0, m, den;
-    m = fabs(c) > fabs(d) ? fabs(c) : fabs(d);
-    while (m > k) { c = c / k; d = d / k; m = m / k; sc = sc / k; }
-    while (m > 0.0 && m < 1.0 / k) { c = c * k; d = d * k; m = m * k; sc = sc * k; }
-    den = c * c + d * d;
-    out[0] = (float)((ar * c + ai * d) / den * sc);
-    out[1] = (float)((ai * c - ar * d) / den * sc);
-}
-
-/* fort370: COMPLEX*16, in double, where the products are not exact:
- * division by Smith's way (the smaller part of the divisor over the
- * larger), the modulus scaled so that its square cannot overflow.  The
- * result's address comes last, after the doubles, which then sit on
- * doublewords in the parameter list. */
-static double fio_zmod(double re, double im) {
-    double a = fabs(re), b = fabs(im), t;
-    if (a < b) { t = a; a = b; b = t; }
-    if (a == 0.0) return 0.0;
-    t = b / a;
-    return a * sqrt(1.0 + t * t);
-}
-double f77_zabs(double re, double im) { return fio_zmod(re, im); }
-void f77_zdiv(double ar, double ai, double br, double bi, double *out) {
-    double r, d;
-    if (fabs(br) >= fabs(bi)) {
-        r = bi / br; d = br + bi * r;
-        out[0] = (ar + ai * r) / d;
-        out[1] = (ai - ar * r) / d;
-    } else {
-        r = br / bi; d = bi + br * r;
-        out[0] = (ar * r + ai) / d;
-        out[1] = (ai * r - ar) / d;
-    }
-}
-void f77_zpow_i(double re, double im, int n, double *out) {
-    double rr = 1.0, ri = 0.0;
-    double br = re, bi = im;
-    int neg = n < 0;
-    unsigned k = (unsigned)(neg ? -n : n);
-    while (k) {
-        if (k & 1) { double t = rr * br - ri * bi; ri = rr * bi + ri * br; rr = t; }
-        k >>= 1;
-        if (k) { double t = br * br - bi * bi; bi = 2.0 * br * bi; br = t; }
-    }
-    if (neg) { double q[2]; f77_zdiv(1.0, 0.0, rr, ri, q); rr = q[0]; ri = q[1]; }
-    out[0] = rr; out[1] = ri;
-}
-void f77_zlog(double re, double im, double *out) {
-    out[0] = log(fio_zmod(re, im));
-    out[1] = atan2(im, re);
-}
-void f77_zexp(double re, double im, double *out) {
-    double e = exp(re);
-    out[0] = e * cos(im);
-    out[1] = e * sin(im);
-}
-void f77_zpow_c(double ar, double ai, double br, double bi, double *out) {
-    double l[2];
-    if (ar == 0.0 && ai == 0.0) { out[0] = 0.0; out[1] = 0.0; return; }
-    f77_zlog(ar, ai, l);
-    f77_zexp(br * l[0] - bi * l[1], br * l[1] + bi * l[0], out);
-}
-void f77_zsqrt(double re, double im, double *out) {
-    double m = fio_zmod(re, im);
-    double r = sqrt((m + fabs(re)) / 2.0);
-    if (re >= 0.0) { out[0] = r; out[1] = r == 0.0 ? 0.0 : im / (2.0 * r); }
-    else { out[0] = r == 0.0 ? 0.0 : fabs(im) / (2.0 * r); out[1] = im < 0.0 ? -r : r; }
-}
-void f77_zsin(double re, double im, double *out) {
-    out[0] = sin(re) * cosh(im);
-    out[1] = cos(re) * sinh(im);
-}
-void f77_zcos(double re, double im, double *out) {
-    out[0] = cos(re) * cosh(im);
-    out[1] = -sin(re) * sinh(im);
-}
-
-void f77_cpow_i(float *out, float re, float im, int n) {
-    double rr = 1.0, ri = 0.0;
-    double br = re, bi = im;
-    int neg = n < 0;
-    unsigned k = (unsigned)(neg ? -n : n);
-    while (k) {
-        if (k & 1) { double t = rr * br - ri * bi; ri = rr * bi + ri * br; rr = t; }
-        k >>= 1;
-        if (k) { double t = br * br - bi * bi; bi = 2.0 * br * bi; br = t; }
-    }
-    if (neg) { double d = rr * rr + ri * ri; double t = rr / d; ri = -ri / d; rr = t; }
-    out[0] = (float)rr; out[1] = (float)ri;
-}
-
-void f77_clog(float *out, float re, float im) {
-    out[0] = (float)log(sqrt((double)re * re + (double)im * im));
-    out[1] = (float)atan2((double)im, (double)re);
-}
-void f77_cexp(float *out, float re, float im) {
-    double e = exp((double)re);
-    out[0] = (float)(e * cos((double)im));
-    out[1] = (float)(e * sin((double)im));
-}
-void f77_cpow_c(float *out, float ar, float ai, float br, float bi) {
-    float l[2];
-    double wr, wi;
-    if (ar == 0.0f && ai == 0.0f) { out[0] = 0.0f; out[1] = 0.0f; return; }
-    f77_clog(l, ar, ai);
-    wr = (double)br * l[0] - (double)bi * l[1];
-    wi = (double)br * l[1] + (double)bi * l[0];
-    f77_cexp(out, (float)wr, (float)wi);
-}
-void f77_csqrt(float *out, float re, float im) {
-    double m = sqrt((double)re * re + (double)im * im);
-    double r = sqrt((m + fabs((double)re)) / 2.0);
-    if (re >= 0.0f) { out[0] = (float)r; out[1] = (float)(r == 0.0 ? 0.0 : im / (2.0 * r)); }
-    else { out[0] = (float)(r == 0.0 ? 0.0 : fabs((double)im) / (2.0 * r)); out[1] = (float)(im < 0.0f ? -r : r); }
-}
-void f77_csin(float *out, float re, float im) {
-    out[0] = (float)(sin((double)re) * cosh((double)im));
-    out[1] = (float)(cos((double)re) * sinh((double)im));
-}
-void f77_ccos(float *out, float re, float im) {
-    out[0] = (float)(cos((double)re) * cosh((double)im));
-    out[1] = (float)(-sin((double)re) * sinh((double)im));
-}
-
-int f77_index(const char *a, int la, const char *b, int lb);
-
-/* --- specific intrinsics as actual arguments ---------------------------
- *
- * F77 15.9.3 lets a specific intrinsic name be passed to a dummy
- * procedure; the compiler lowers intrinsics inline, so these are the
- * by-reference copies it passes the address of. */
-int    f77i_iabs(int *x)              { return *x < 0 ? -*x : *x; }
-float  f77i_abs(float *x)             { return *x < 0 ? -*x : *x; }
-double f77i_dabs(double *x)           { return *x < 0 ? -*x : *x; }
-float  f77i_sqrt(float *x)            { return (float)sqrt((double)*x); }
-double f77i_dsqrt(double *x)          { return sqrt(*x); }
-float  f77i_exp(float *x)             { return (float)exp((double)*x); }
-double f77i_dexp(double *x)           { return exp(*x); }
-float  f77i_alog(float *x)            { return (float)log((double)*x); }
-double f77i_dlog(double *x)           { return log(*x); }
-float  f77i_alog10(float *x)          { return (float)log10((double)*x); }
-double f77i_dlog10(double *x)         { return log10(*x); }
-float  f77i_sin(float *x)             { return (float)sin((double)*x); }
-double f77i_dsin(double *x)           { return sin(*x); }
-float  f77i_cos(float *x)             { return (float)cos((double)*x); }
-double f77i_dcos(double *x)           { return cos(*x); }
-float  f77i_tan(float *x)             { return (float)tan((double)*x); }
-double f77i_dtan(double *x)           { return tan(*x); }
-float  f77i_asin(float *x)            { return (float)asin((double)*x); }
-double f77i_dasin(double *x)          { return asin(*x); }
-float  f77i_acos(float *x)            { return (float)acos((double)*x); }
-double f77i_dacos(double *x)          { return acos(*x); }
-float  f77i_arsin(float *x)           { return (float)asin((double)*x); }   /* IBM's names */
-double f77i_darsin(double *x)         { return asin(*x); }
-float  f77i_arcos(float *x)           { return (float)acos((double)*x); }
-double f77i_darcos(double *x)         { return acos(*x); }
-float  f77i_atan(float *x)            { return (float)atan((double)*x); }
-double f77i_datan(double *x)          { return atan(*x); }
-float  f77i_atan2(float *y, float *x) { return (float)atan2((double)*y, (double)*x); }
-double f77i_datan2(double *y, double *x) { return atan2(*y, *x); }
-float  f77i_sinh(float *x)            { return (float)sinh((double)*x); }
-double f77i_dsinh(double *x)          { return sinh(*x); }
-float  f77i_cosh(float *x)            { return (float)cosh((double)*x); }
-double f77i_dcosh(double *x)          { return cosh(*x); }
-float  f77i_tanh(float *x)            { return (float)tanh((double)*x); }
-double f77i_dtanh(double *x)          { return tanh(*x); }
-float  f77i_aint(float *x)            { return (float)trunc((double)*x); }
-double f77i_dint(double *x)           { return trunc(*x); }
-float  f77i_anint(float *x)           { return (float)round((double)*x); }
-double f77i_dnint(double *x)          { return round(*x); }
-int    f77i_nint(float *x)            { return (int)round((double)*x); }
-int    f77i_idnint(double *x)         { return (int)round(*x); }
-int    f77i_mod(int *a, int *b)       { return *a % *b; }
-float  f77i_amod(float *a, float *b)  { return (float)fmod((double)*a, (double)*b); }
-double f77i_dmod(double *a, double *b) { return fmod(*a, *b); }
-int    f77i_isign(int *a, int *b)     { int v = *a < 0 ? -*a : *a; return *b < 0 ? -v : v; }
-float  f77i_sign(float *a, float *b)  { float v = *a < 0 ? -*a : *a; return *b < 0 ? -v : v; }
-double f77i_dsign(double *a, double *b) { double v = *a < 0 ? -*a : *a; return *b < 0 ? -v : v; }
-int    f77i_idim(int *a, int *b)      { return *a > *b ? *a - *b : 0; }
-float  f77i_dim(float *a, float *b)   { return *a > *b ? *a - *b : 0.0f; }
-double f77i_ddim(double *a, double *b) { return *a > *b ? *a - *b : 0.0; }
-double f77i_dprod(float *a, float *b) { return (double)*a * (double)*b; }
-int    f77i_len(const char *s, int len) { (void)s; return len; }
-int    f77i_index(const char *a, const char *b, int la, int lb) { return f77_index(a, la, b, lb); }
-float  f77i_aimag(float *z)           { return z[1]; }
-float  f77i_cabs(float *z)            { return (float)sqrt((double)z[0] * z[0] + (double)z[1] * z[1]); }
 
 /* --- CHARACTER primitives --------------------------------------------- */
 
@@ -2060,8 +1860,8 @@ int f77_open(int unit, const char *name, int nlen,
     fio_uunf[unit] = unf;
     fio_urecl[unit] = recl;
     fio_ubz[unit] = (blank && blen > 0 && fio_str_is(blank, blen, "ZERO"));
-    f77d_close(unit);
-    f77s_close(unit);
+    if (f77d_close) f77d_close(unit);
+    if (f77s_close) f77s_close(unit);
     fio_ucur[unit] = 1;
     return 0;
 }
@@ -2071,8 +1871,8 @@ int f77_open(int unit, const char *name, int nlen,
 void f77_close(int unit, const char *status, int slen) {
     int del;
     if (unit < 0 || unit >= FIO_MAXUNIT) return;
-    f77d_close(unit);
-    f77s_close(unit);
+    if (f77d_close) f77d_close(unit);
+    if (f77s_close) f77s_close(unit);
     if (!fio_ufile[unit]) { fio_ufname[unit][0] = 0; return; }   /* OPENed, never used, or records only */
     del = (status && slen > 0 && fio_str_is(status, slen, "DELETE"));
     if (status && slen > 0 && !del && !fio_str_is(status, slen, "KEEP")) {
@@ -2199,7 +1999,7 @@ void f77_rewind(int unit) {
         fio_exit(2);
     }
     if (fio_ufile[unit]) { fclose(fio_ufile[unit]); fio_ufile[unit] = 0; }   /* reopened by the next statement, at the start */
-    f77s_rewind(unit);
+    if (f77s_rewind) f77s_rewind(unit);
     fio_uend[unit] = -1;
     fio_uaeof[unit] = 0;
 }
