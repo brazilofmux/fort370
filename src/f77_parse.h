@@ -6297,6 +6297,33 @@ static int f77_implied_do_spans(int open, int *close_off, int *eq_off,
     return 1;
 }
 
+/* One element of a whole array in an I/O list, `off` its element number. */
+static void f77_whole_item(int s, int off) {
+    int byte;
+    int addr;
+    int v;
+    int vhi;
+    byte = f77_elem_bytes(s, off);
+    addr = hi_emit(HI_ADD, HL_ADDR_TY, f77_sval[s], byte, 0, NULL);
+    if (f77_io_unf) {
+        int args[2];
+        args[0] = addr;
+        args[1] = (f77_sty[s] == TY_CHAR && f77_slen[s] < 0) ? f77_slenv[s] : f77_iconst(f77_esize(s));
+        f77_call_i(f77_io_rd ? "f77_ru" : "f77_wu", 2, args);
+    } else if (f77_sty[s] == TY_CHAR) {
+        int args[2];
+        args[0] = addr;
+        args[1] = (f77_slen[s] >= 0) ? f77_iconst(f77_slen[s]) : f77_slenv[s];
+        f77_call_i(f77_io_rd ? "f77_rd_s" : "f77_wr_a", 2, args);
+    } else if (f77_io_rd) {
+        f77_rd_item(addr, f77_sty[s]);
+    } else {
+        v = f77_load_at(addr, f77_sty[s]);
+        vhi = ex_hi;
+        f77_wr_item(v, f77_sty[s], vhi);
+    }
+}
+
 /* Column-major expansion of an unsubscripted array in an I/O list. */
 static void f77_wr_whole_array(int s) {
     int rank;
@@ -6310,15 +6337,41 @@ static void f77_wr_whole_array(int s) {
     int t;
     int idx;
     int off;
-    int byte;
-    int addr;
-    int v;
-    int vhi;
     int cstride;
 
     rank = f77_srank[s];
     if (f77_adjustable(s)) {
-        f77_error("whole-array I/O needs constant extents");
+        /* fort370: an adjustable array's extents are run-time values;
+         * its elements, in storage order, are one run of the product of
+         * them -- one loop over the element number */
+        int n;
+        n = f77_iconst(1);
+        for (k = 0; k < rank; k++)
+            n = hi_emit(HI_MUL, TY_INT, n, f77_sextv[s][k] >= 0 ? f77_sextv[s][k] : f77_iconst(f77_sext[s][k]), 0, NULL);
+        f77_frame = f77_frame + 4;
+        iv[0] = hi_emit(HI_ALLOCA, TY_INT, -1, -1, 0 - f77_frame, NULL);
+        hl_ainst[hl_nalloca] = iv[0];
+        hl_aoff[hl_nalloca] = 0 - f77_frame;
+        hl_nalloca = hl_nalloca + 1;
+        hi_emit(HI_STORE, TY_INT, iv[0], f77_iconst(0), 0, NULL);
+        b_test[0] = hir_new_block();
+        b_body[0] = hir_new_block();
+        b_exit[0] = hir_new_block();
+        f77_goto_blk(b_test[0]);
+        f77_begin_blk(b_test[0]);
+        c = hi_emit(HI_LOAD, TY_INT, iv[0], -1, 0, NULL);
+        c = hi_emit(HI_SLT, TY_INT, c, n, 0, NULL);
+        hi_emit(HI_BRC, TY_VOID, c, b_body[0], b_exit[0], NULL);
+        f77_cur_blk_live = 0;
+        f77_begin_blk(b_body[0]);
+        off = hi_emit(HI_LOAD, TY_INT, iv[0], -1, 0, NULL);
+        f77_whole_item(s, off);
+        idx = hi_emit(HI_LOAD, TY_INT, iv[0], -1, 0, NULL);
+        idx = hi_emit(HI_ADDI, TY_INT, idx, -1, 1, NULL);
+        hi_emit(HI_STORE, TY_INT, iv[0], idx, 0, NULL);
+        hi_emit(HI_BR, TY_VOID, -1, -1, b_test[0], NULL);
+        f77_cur_blk_live = 0;
+        f77_begin_blk(b_exit[0]);
         return;
     }
     for (k = rank - 1; k >= 0; k--) {
@@ -6356,25 +6409,7 @@ static void f77_wr_whole_array(int s) {
         off = hi_emit(HI_ADD, TY_INT, off, idx, 0, NULL);
         cstride = cstride * f77_sext[s][k];
     }
-    byte = f77_elem_bytes(s, off);
-    addr = hi_emit(HI_ADD, HL_ADDR_TY, f77_sval[s], byte, 0, NULL);
-    if (f77_io_unf) {
-        int args[2];
-        args[0] = addr;
-        args[1] = (f77_sty[s] == TY_CHAR && f77_slen[s] < 0) ? f77_slenv[s] : f77_iconst(f77_esize(s));
-        f77_call_i(f77_io_rd ? "f77_ru" : "f77_wu", 2, args);
-    } else if (f77_sty[s] == TY_CHAR) {
-        int args[2];
-        args[0] = addr;
-        args[1] = (f77_slen[s] >= 0) ? f77_iconst(f77_slen[s]) : f77_slenv[s];
-        f77_call_i(f77_io_rd ? "f77_rd_s" : "f77_wr_a", 2, args);
-    } else if (f77_io_rd) {
-        f77_rd_item(addr, f77_sty[s]);
-    } else {
-        v = f77_load_at(addr, f77_sty[s]);
-        vhi = ex_hi;
-        f77_wr_item(v, f77_sty[s], vhi);
-    }
+    f77_whole_item(s, off);
     for (k = 0; k < rank; k++) {
         idx = hi_emit(HI_LOAD, TY_INT, iv[k], -1, 0, NULL);
         idx = hi_emit(HI_ADDI, TY_INT, idx, -1, 1, NULL);
