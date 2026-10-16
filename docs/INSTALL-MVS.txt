@@ -162,9 +162,9 @@ whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
   IFOX00 then leaves out its error messages with the listing.)
 
   Give the program's step a REGION.  Its arrays and COMMON are static
-  storage in the module, beside about 175K of runtime, and the runtime
+  storage in the module, beside about 190K of runtime, and the runtime
   takes about 70K more when it starts, mostly its C stack: a program
-  with no arrays runs in 244K.  SYSPRINT, SYSTERM and SYSIN are opened
+  with no arrays runs in 260K.  SYSPRINT, SYSTERM and SYSIN are opened
   only if the program uses them (a unit 5 or 6 without its DD, unit 0,
   a message), each with a buffer of the DD's block size, 32K when the
   DD gives none.  The default
@@ -275,7 +275,9 @@ DACOS.
 Rebuilding it yourself
 ----------------------
 
-You need mvslovers' cc370 toolchain and libc370 installed, and then,
+You need mvslovers' cc370 toolchain and libc370 installed -- cc370
+1.6.3 with libc370 2.16.0, which cc370's install.sh puts in place
+together (with maclib370) -- with that cc370 first on PATH, and then,
 from a fort370 checkout:
 
     make mvs

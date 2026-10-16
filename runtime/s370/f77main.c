@@ -1,11 +1,7 @@
 /* f77main.c -- the C side of a fort370 program: libc370's startup
- * (crt0) calls __start here, which calls this main, which calls the
- * Fortran main program; its END returns here and exit flushes the
- * units.  STOP calls exit itself. */
-#include <stdio.h>
-#include <clibgrt.h>
-#include <clibcrt.h>
-
+ * (@@CRT0) calls this main, which calls the Fortran main program; its
+ * END returns here and exit flushes the units.  STOP calls exit
+ * itself. */
 extern void F77MAIN(void);
 int main(void) { F77MAIN(); return 0; }
 
@@ -18,24 +14,3 @@ int main(void) { F77MAIN(); return 0; }
  * reached was 9.3K, most 1.5K-4.5K; nothing checks for overflow, so
  * 64K leaves a wide margin and gives 192K back to the region. */
 int __stklen = 65536;
-
-/* In place of libc370's __start (@@START), which opened SYSPRINT,
- * SYSTERM and SYSIN before main, read SYSENV and set the time zone.
- * A Fortran program has no use for the environment or the time zone,
- * and its units are its own DDs, FTnnF001; the standard streams stand
- * in only for a unit 5 or 6 without a DD, unit 0, and the runtime's
- * messages, so they are opened when first used (f77std.h).  Opened
- * here, a DD without a block size cost each one a 32K buffer, 164K in
- * all, whether the program used it or not.  TSO's parameter list is
- * still recognised, since the streams open differently there; the
- * PARM is not used. */
-int __start(char *p, char *pgmname, int tsojbid, void **pgmr1) {
-    CLIBGRT *grt;
-    int parmlen;
-    grt = __grtget();
-    parmlen = ((unsigned int)(unsigned char)p[0] << 8) | (unsigned int)(unsigned char)p[1];
-    if (grt && parmlen > 0 && p[2] == 0) grt->grtflag1 |= GRTFLAG1_TSO;
-    (void)pgmname; (void)tsojbid; (void)pgmr1;
-    __exit(main());
-    return 0;
-}

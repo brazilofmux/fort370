@@ -19,7 +19,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #else
-/* SYSPRINT, SYSTERM and SYSIN opened when first used (src/f77start.c) */
+/* f77_is_stdin: whether the source is SYSIN, without opening SYSIN */
 #include "../runtime/s370/f77std.h"
 #endif
 

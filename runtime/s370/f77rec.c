@@ -27,9 +27,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <osio.h>
-#include <osjfcb.h>
-#include <clibdscb.h>
+#include <mvs/osio.h>
+#include <mvs/dd.h>
+#include <mvs/dscb.h>
 #include "f77rec.h"
 #include "f77std.h"
 

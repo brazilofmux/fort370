@@ -17,7 +17,7 @@ The member list is ld370's own: a program is linked here once with -v,
 and every archive member its autocall pulls in is taken from libc.a by
 the offset ld370 reports.  Run from the repository root after
 `make runtime`."""
-import os, re, subprocess, sys
+import os, re, shutil, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RT = ['f77rt', 'f77dtoa', 'f77main', 'f77math', 'f77rec', 'f77ishim', 'f77xsum', 'millicode']
@@ -82,9 +82,9 @@ def main():
     out = sys.argv[1]
     work = os.path.join(REPO, 'out', 'rtlib')
     os.makedirs(work, exist_ok=True)
-    cc = os.path.expanduser('~/.local/cc370')
-    lib = os.path.join(cc, 'lib', 'libc.a')
-    crt0 = os.path.join(cc, 'lib', 'crt0.o')
+    # the sysroot of the cc370 on PATH: <prefix>/bin/cc370, <prefix>/cc370/lib
+    cc = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(shutil.which('cc370')))), 'cc370')
+    crt0 = os.path.join(cc, 'lib', 'crt0.o')   # libc370 before 2.3; later, @@CRT0 is a member of libc.a
     objs = [os.path.join(REPO, 'out', 'crt', n + '.o') for n in RT]
     for o in objs:
         if not os.path.exists(o): sys.exit(f'{o}: make runtime first')
@@ -97,14 +97,20 @@ def main():
     r = subprocess.run(['cc370', '-o', os.path.join(work, 'PROBE'), os.path.join(work, 'probe.o')] + objs +
                        ['-Wl,-v'], capture_output=True, text=True)
     if r.returncode != 0: sys.exit('link failed:\n' + r.stdout + r.stderr)
-    offs = []
-    for m in re.finditer(r"autocall: '[^']*' -> archive 0 member @(\d+)", r.stdout + r.stderr):
-        o = int(m.group(1))
-        if o not in offs: offs.append(o)
-    a = open(lib, 'rb').read()
-    decks = [open(crt0, 'rb').read()] + [open(o, 'rb').read() for o in objs]
+    log = r.stdout + r.stderr
+    # ld370 numbers the archives it searches in the order it lists them
+    # (cc370 1.6: libcc370rt.a, libc.a, libcc370rt.a again)
+    archives = re.findall(r'^\[ld370\] - archive (.*?): \d+ exported', log, re.M)
+    picks = []
+    for m in re.finditer(r"autocall: '[^']*' -> archive (\d+) member @(\d+)", log):
+        k = (archives[int(m.group(1))], int(m.group(2)))
+        if k not in picks: picks.append(k)
+    data = {}
+    decks = ([open(crt0, 'rb').read()] if os.path.exists(crt0) else []) + [open(o, 'rb').read() for o in objs]
     names = []
-    for o in offs:
+    for path, o in picks:
+        if path not in data: data[path] = open(path, 'rb').read()
+        a = data[path]
         hdr = a[o:o + 60]
         names.append(hdr[:16].decode().strip().rstrip('/'))
         size = int(hdr[48:58])
@@ -118,7 +124,7 @@ def main():
     decks.append(' ENTRY @@CRT0'.ljust(80).encode('cp037'))
     open(out, 'wb').write(b''.join(decks))
     total = sum(len(d) for d in decks)
-    print(f'{out}: crt0, {len(objs)} runtime objects, {len(names)} libc370 members, {total // 80} cards')
+    print(f'{out}: {len(objs)} runtime objects, {len(names)} library members, {total // 80} cards')
 
 
 if __name__ == '__main__':

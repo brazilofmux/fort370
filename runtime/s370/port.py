@@ -732,7 +732,7 @@ char *f77_cat(const char *a, int la, const char *b, int lb) {
         }
     }
 ''')
-# The standard streams are opened on first use (f77std.h, f77main.c):
+# libc370 opens the standard streams on first use (f77std.h):
 # what only stands in for a stream must not open one, and flushing them
 # must not either.
 rep('#include "../../backend/s370_hfp.h"\n', '#include "../../backend/s370_hfp.h"\n#include "f77std.h"\n')
