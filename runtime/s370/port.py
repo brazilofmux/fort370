@@ -509,6 +509,17 @@ rep('''    fseek(f, (long)(rec - 1) * fio_urecl[unit], SEEK_SET);
 }''', '''    (void)f;
     fio_ucur[unit] = rec;
 }''')
+# an empty record (a slash, FORMAT(/), WRITE with nothing): libc370
+# writes no record for an empty line, so a blank line vanished --
+# FORMAT(1X,'A',/) printed no blank line after A (Marco Verpelli,
+# 2026-10-16).  A blank is the record IBM's compilers write: on a
+# printer, its carriage control, one line.
+rep('''    fputs(fio_line, f);
+    fputc('\\n', f);
+    fio_len = 0;''', '''    if (fio_len == 0) fputc(' ', f);
+    fputs(fio_line, f);
+    fputc('\\n', f);
+    fio_len = 0;''')
 # formatted direct access: a record padded to RECL with blanks
 rep('''        fputs(fio_line, f);
         for (i = fio_len; i < recl; i++) fputc(' ', f);

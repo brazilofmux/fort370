@@ -816,9 +816,14 @@ static void fio_wr_setup(const char *fmt) {
     fio_fmt = fmt;
     fio_pos = 0;
     fio_revert = -1;
-    /* Skip the outer parenthesis; it is the reversion point. */
+    /* Skip the outer parenthesis; just inside it is the reversion
+     * point.  (fort370: it was the parenthesis itself, so a reversion
+     * made the whole format a group and its last ')' a group's end,
+     * not the format's -- and where no NUL follows the format, as on
+     * MVS, the next reversion read on into whatever did: READ (5,
+     * '(A)') A, B, C left C blank (2026-10-16).) */
     while (fio_fmt[fio_pos] == ' ') fio_pos++;
-    if (fio_fmt[fio_pos] == '(') { fio_revert = fio_pos; fio_pos++; }
+    if (fio_fmt[fio_pos] == '(') { fio_pos++; fio_revert = fio_pos; }
 }
 
 /* fort370: A editing of a numeric item -- FORTRAN 66 and IBM keep text
@@ -1626,7 +1631,7 @@ static int fio_rd_setup(const char *fmt, int has_end) {
     fio_revert = -1;
     if (!fio_listed) {
         while (fio_fmt[fio_pos] == ' ') fio_pos++;
-        if (fio_fmt[fio_pos] == '(') { fio_revert = fio_pos; fio_pos++; }
+        if (fio_fmt[fio_pos] == '(') { fio_pos++; fio_revert = fio_pos; }   /* inside it: see fio_wr_setup's */
     }
     if (fio_getrec()) {
         fio_reading = 0;
