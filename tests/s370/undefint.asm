@@ -66,4 +66,9 @@ C00022   DC    V(F77WRBEG)
 C00023   DC    V(F77WREND)
 C00018   DC    H'-1'
 Q00001   DC    C'(1X,''>UNDEFINT OK'')'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

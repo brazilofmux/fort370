@@ -179,4 +179,9 @@ G00034   CSECT
 G00017   CSECT
          DS    0D
          DC    X'D8D9E2E3E4E5E6E7E8E9'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

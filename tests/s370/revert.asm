@@ -502,4 +502,9 @@ Q00011   DC    C'ZC'
 Q00012   DC    C'PD'
 Q00014   DC    C' 1 2'
 Q00015   DC    C' 5 6'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

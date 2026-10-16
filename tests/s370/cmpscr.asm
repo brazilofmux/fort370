@@ -605,4 +605,9 @@ G00027   CSECT
 G00025   CSECT
          DS    0D
          DC    X'000000030000000100000002'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

@@ -285,4 +285,9 @@ S00047   DS    0D
          DS    8D
          DS    D
 C00054   DC    F'1'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

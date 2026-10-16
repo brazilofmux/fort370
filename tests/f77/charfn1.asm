@@ -325,4 +325,9 @@ C00068   DC    A(Q00049)
 Q00048   DC    C'FIRST AID'
 Q00049   DC    C'SECONDRATE'
 Q00050   DC    C'THIRDCLASS'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

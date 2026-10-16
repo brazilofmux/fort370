@@ -102,4 +102,9 @@ C00023   DC    X'41200000'
 C00024   DC    V(F77WRR)
 Q00001   DC    C'(''SUM OF SQUARES = '',I5)'
 Q00002   DC    C'(''PI = '',F10.6)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

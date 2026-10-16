@@ -338,4 +338,9 @@ S00071   DS    0D
 C00082   DC    F'1'
 C00084   DC    F'0'
 C00083   DC    H'-4'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

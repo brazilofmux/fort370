@@ -1312,4 +1312,9 @@ C00221   DC    F'1'
 C00222   DC    F'2'
 C00224   DC    F'0'
 C00223   DC    H'-8'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

@@ -500,4 +500,9 @@ C00055   DC    H'-3'
 C00057   DC    H'-2'
 Q00001   DC    C'(''OK'',4I7)'
 Q00002   DC    C'(F8.3,F10.4)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

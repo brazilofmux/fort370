@@ -1,10 +1,10 @@
 //*  F77CLG -- compile, assemble, link and go, all on MVS 3.8j.
 //*
 //*  FORT370 compiles FORTRAN 77 to S/370 assembler; IFOX00 and IEWL
-//*  are the system's own.  The program is linked with F77RT, the
-//*  fort370 runtime as object decks (docs/INSTALL-MVS.txt), which
-//*  ends in the control statement ENTRY @@CRT0: libc370's entry,
-//*  which calls the Fortran main program.
+//*  are the system's own.  IEWL takes what the program calls from
+//*  F77RT, the fort370 runtime as a library (docs/INSTALL-MVS.txt),
+//*  by automatic call: the program's object names the startup and
+//*  its entry point, and only the runtime it uses is linked.
 //*  Adjust the three data set names to where FORT370, F77RT and the
 //*  source live.
 //*
@@ -46,10 +46,10 @@
 //SYSUT3   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 //SYSPRINT DD DUMMY
 //SYSIN    DD DSN=&&ASM,DISP=(OLD,DELETE)
-//LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST,NCAL',REGION=2048K,
+//LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST',REGION=2048K,
 //            COND=((0,NE,FORT),(8,LE,ASM))
 //SYSLIN   DD DSN=&&OBJ,DISP=(OLD,DELETE)
-//         DD DSN=HERC01.FORT370.F77RT,DISP=SHR
+//SYSLIB   DD DSN=HERC01.FORT370.F77RT,DISP=SHR
 //SYSLMOD  DD DSN=&&LOAD(GO),DISP=(NEW,PASS),UNIT=SYSDA,
 //            SPACE=(TRK,(30,10,5))
 //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))

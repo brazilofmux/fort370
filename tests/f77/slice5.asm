@@ -305,4 +305,9 @@ C00065   DC    F'-2147483648'
 C00067   DC    X'00000000'
 C00070   DC    X'41900000'
 C00080   DC    V(EXIT)
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

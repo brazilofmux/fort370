@@ -729,4 +729,9 @@ Q00020   DC    C'RSQRT'
 Q00021   DC    C'RSIN'
 Q00022   DC    C'REXP'
 Q00023   DC    C'RPOW'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

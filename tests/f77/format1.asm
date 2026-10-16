@@ -320,4 +320,9 @@ Q00008   DC    C'(5X,''INDENTED'',I3)'
 Q00009   DC    C'(''V:'',5I4)'
 Q00010   DC    C'(I4)'
 Q00011   DC    C'(''R:'',F6.2)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

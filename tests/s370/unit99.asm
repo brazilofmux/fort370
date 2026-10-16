@@ -225,4 +225,9 @@ Q00003   DC    C'('' UNIT 0'')'
 Q00004   DC    C'(1X,''>UNIT99'',2I5)'
 Q00001   DC    C'FT01F001'
 Q00002   DC    C'UNKNOWN'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

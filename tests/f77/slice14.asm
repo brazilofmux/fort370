@@ -233,4 +233,9 @@ Q00008   DC    C'(2PF10.2)'
 Q00009   DC    C'(1PG12.4)'
 Q00010   DC    C'(1PG12.4)'
 Q00011   DC    C'(G12.4)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

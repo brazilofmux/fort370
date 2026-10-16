@@ -364,4 +364,9 @@ Q00005   DC    C'NOEOF'
 Q00006   DC    C'EOF OK'
 Q00007   DC    C'EARLY EOF'
 Q00008   DC    C'AGAIN'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

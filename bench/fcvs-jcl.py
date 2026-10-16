@@ -10,7 +10,7 @@ to run them, only to write them: the decks are self-contained.
   --fcvs DIR     the FCVS sources (default ~/refs/fcvs/fcvs21, or $FCVS)
   --out DIR      where the decks go (default bench/out/fcvs-jcl)
   --load DSN     FORT370's load library (default HERC01.FORT370.LOAD)
-  --rt DSN       the F77RT object deck (default HERC01.FORT370.F77RT)
+  --rt DSN       the F77RT library (default HERC01.FORT370.F77RT)
   --jobcard F    a job card template, {name} for the job name; the
                  default is //{name} JOB (FCVS),'FCVS {name}',CLASS=A,
                  MSGCLASS=A,MSGLEVEL=(1,1)

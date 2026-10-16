@@ -664,4 +664,9 @@ C00098   DC    V(EXIT)
 Q00001   DC    C'(F10.6,F10.6,F10.6)'
 Q00002   DC    C'(3F10.6)'
 Q00003   DC    C'(3F10.6)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

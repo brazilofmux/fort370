@@ -449,4 +449,9 @@ C00106   DC    X'42100000'
 C00107   DC    V(SQRT)
 C00108   DC    X'41400000'
 C00114   DC    V(EXIT)
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

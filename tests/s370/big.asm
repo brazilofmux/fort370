@@ -2873,4 +2873,9 @@ C00806   DC    A(L00112)
 C00792   DC    H'-1'
 Q00001   DC    C'('' >BIG '',D22.15,I3)'
 Q00002   DC    C'('' >BIG NEGATIVE'')'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

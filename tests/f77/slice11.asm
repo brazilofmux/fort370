@@ -325,4 +325,9 @@ S00072   DS    0D
 P00079   DS    1F
          DS    XL4
 C00080   DC    V(EXIT)
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

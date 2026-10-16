@@ -280,4 +280,9 @@ P00069   DS    1F
 C00070   DC    V(SA)
 C00071   DC    F'1'
 C00072   DC    F'2'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

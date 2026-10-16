@@ -490,4 +490,9 @@ Q00015   DC    C' '
 Q00016   DC    C'Q'
 Q00017   DC    C' '
 Q00018   DC    C' '
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

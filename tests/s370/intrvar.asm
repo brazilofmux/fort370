@@ -131,4 +131,9 @@ Q00001   DC    C'(1X,''>INTRVAR'',4I5)'
 G00017   CSECT
          DS    0D
          DC    X'0000001E'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

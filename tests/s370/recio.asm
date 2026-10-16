@@ -1436,4 +1436,9 @@ C00199   DC    F'1'
 C00200   DC    A(Q00182)
 Q00182   DC    C'('' >'',A,'' OK'')'
 Q00183   DC    C'('' >'',A,'' BAD'')'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

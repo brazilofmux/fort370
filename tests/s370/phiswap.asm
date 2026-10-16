@@ -213,4 +213,9 @@ C00041   DC    F'5'
 C00043   DC    V(EXIT)
 C00019   DC    H'-1'
 Q00001   DC    C'(1X,''>PHISWAP'',4F5.1,2I3)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

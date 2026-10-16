@@ -5,9 +5,10 @@ Two files make the MVS package:
 
   FORT370.xmit   one load module, FORT370: the FORTRAN 77 compiler,
                  which runs on the guest and writes S/370 assembler
-  F77RT.obj      the fort370 runtime as object decks, for IEWL to link
-                 a compiled program with: fort370's runtime and the
-                 libc370 members it calls, about 290K in a program
+  F77RT.upd      the fort370 runtime as a library: IEBUPDTE input that
+                 makes the PDS F77RT, from which the linkage editor or
+                 the loader takes, by automatic call, what a compiled
+                 program uses of fort370's runtime and of libc370
 
 Nothing here needs a C compiler on MVS.  Both were cross-built on a
 host with mvslovers' cc370 and libc370, and these are the results.
@@ -18,8 +19,8 @@ rather than against this file.
 
   FORT370.xmit  SHA256 f4dfde88a08d234af5d8f08e305ee59fc1786c3361c2d2ba74a1f76a133e13c4
                 539440 bytes, FB80 when it lands on the guest
-  F77RT.obj     SHA256 315a8cf953377cd9505a4acbe21dd08ad275161cbeb36c2150725c81c53a0999
-                422480 bytes, FB80
+  F77RT.upd     SHA256 (filled in at release)
+                487920 bytes, FB80
   built         from fort370 ef5b843 (release 2026-10-16.3) with mvslovers/cc370 and libc370
                 as installed 2026-09-22
   tested        all 192 FCVS programs, 91 test programs and a unit
@@ -48,13 +49,12 @@ blocks and IEBGENER it in, as for any XMIT.
     //SYSPRINT DD SYSOUT=*
     //SYSIN    DD DUMMY
 
-F77RT.obj lands the same way, as your.FORT370.F77RT, and is used as it
-is: it is the runtime's object decks end to end, read by IEWL as part of
-SYSLIN (section 4).
+F77RT.upd lands the same way, as your.FORT370.F77RT.UPD; section 2
+makes the runtime library of it.
 
 
-2.  RECEIVE the compiler into a load library
---------------------------------------------
+2.  RECEIVE the compiler, and make the runtime library
+-----------------------------------------------------
 
 On TK5 the NJE38 RECEIVE is the one that works; it takes the whole
 command on one line.
@@ -66,6 +66,20 @@ command on one line.
     RECEIVE INDATASET('your.FORT370.XMIT') -
       DATASET('your.FORT370.LOAD') DIR(5) NOPROMPT
     /*
+
+IEBUPDTE makes the runtime library of F77RT.upd:
+
+    //LIB      EXEC PGM=IEBUPDTE,PARM=NEW
+    //SYSPRINT DD SYSOUT=*
+    //SYSUT2   DD DSN=your.FORT370.F77RT,DISP=(NEW,CATLG),UNIT=SYSDA,
+    //            SPACE=(CYL,(2,1,40)),
+    //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
+    //SYSIN    DD DSN=your.FORT370.F77RT.UPD,DISP=SHR
+
+  Each member is one object deck, named for an entry point it defines,
+  with an alias for each of the others.  IEBUPDTE says IEB817I, "STOWED
+  WITH TTR", for every member and alias: that is how it records a new
+  one, and the step ends with return code 0.
 
 
 3.  Run it
@@ -110,13 +124,16 @@ command on one line.
 4.  Link and run a program
 --------------------------
 
-The program's object deck is linked with F77RT by concatenation: F77RT
-ends in the control statement ENTRY @@CRT0, libc370's entry, which
-calls the Fortran main program (CSECT F77MAIN).
+F77RT is the link's SYSLIB, and the linkage editor's automatic call
+takes from it what the program calls of fort370's runtime and of
+libc370, and nothing else.  The program's own object names the rest: a
+compiled main program carries the entry point F77@GO, which goes on to
+libc370's startup, @@CRT0, which calls the Fortran main program (CSECT
+F77MAIN).  So the link needs no ENTRY statement and no INCLUDE:
 
-    //LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST,NCAL',REGION=2048K
+    //LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST',REGION=2048K
     //SYSLIN   DD DSN=&&OBJ,DISP=(OLD,DELETE)
-    //         DD DSN=your.FORT370.F77RT,DISP=SHR
+    //SYSLIB   DD DSN=your.FORT370.F77RT,DISP=SHR
     //SYSLMOD  DD DSN=&&LOAD(GO),DISP=(NEW,PASS),UNIT=SYSDA,
     //            SPACE=(TRK,(30,10,5))
     //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
@@ -129,6 +146,10 @@ calls the Fortran main program (CSECT F77MAIN).
   storage follows FORTRAN's rule instead: undefined until assigned or
   given by DATA, as with IBM's compilers.
 
+  NCAL would turn automatic call off and leave the runtime out.  A
+  program that prints takes about 130K of the runtime, one that also
+  computes a SQRT about 150K, and LINPACK about 220K.
+
 The loader (PGM=LOADER, IEWLDRGO) takes the same SYSLIN and runs the
 program without a load module, but it builds the whole program in the
 storage its SIZE option gives it, whatever the REGION: the default is
@@ -137,16 +158,14 @@ IEW1194 AVAILABLE STORAGE EXCEEDED.  Give it SIZE, the program's size
 and room (a program with a 1MB array loads in SIZE=3072K), and a
 REGION with the runtime's 230K more:
 
-    //GO       EXEC PGM=LOADER,PARM='NOCALL,SIZE=1024K',REGION=4096K
+    //GO       EXEC PGM=LOADER,PARM='SIZE=1024K',REGION=4096K
     //SYSLIN   DD DSN=&&OBJ,DISP=(OLD,DELETE)
-    //         DD DSN=your.FORT370.F77RT,DISP=SHR
+    //SYSLIB   DD DSN=your.FORT370.F77RT,DISP=SHR
     //SYSLOUT  DD SYSOUT=*
     //FT06F001 DD SYSOUT=*,DCB=(RECFM=FBA,LRECL=133,BLKSIZE=133)
 
-  The loader reads F77RT's last card, ENTRY @@CRT0, as "not an object
-  record" (IEW1141) and finds the entry itself; leave EP= out (with
-  EP=@@CRT0 it refused to load).  NOCALL keeps it from looking for a
-  SYSLIB the program does not need.
+  It takes its entry point, F77@GO, from the program's object, as
+  IEWL does; leave EP= out.
 
 F77CLG.jcl beside this file is a cataloged procedure that chains the
 whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
@@ -162,9 +181,9 @@ whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
   IFOX00 then leaves out its error messages with the listing.)
 
   Give the program's step a REGION.  Its arrays and COMMON are static
-  storage in the module, beside about 190K of runtime, and the runtime
+  storage in the module, beside the runtime it uses, and the runtime
   takes about 70K more when it starts, mostly its C stack: a program
-  with no arrays runs in 260K.  SYSPRINT, SYSTERM and SYSIN are opened
+  with no arrays that prints runs in 208K.  SYSPRINT, SYSTERM and SYSIN are opened
   only if the program uses them (a unit 5 or 6 without its DD, unit 0,
   a message), each with a buffer of the DD's block size, 32K when the
   DD gives none.  The default
@@ -283,8 +302,9 @@ from a fort370 checkout:
     make mvs
 
 which builds out/mvs/FORT370.xmit (the compiler, with cc370) and
-out/mvs/F77RT.obj (the runtime and the libc370 members it calls,
-bench/mkrtlib.py).  The assembler's and linker's clock is pinned
+out/mvs/F77RT.upd (the runtime library, with the libc370 members the
+runtime calls, bench/mkrtlib.py, which also links every test program
+from it the way automatic call does).  The assembler's and linker's clock is pinned
 (MVSDATE, MVSTIME in the Makefile), since as370 and ld370 stamp the
 date and time into what they write; two builds of the same source are
 then the same bytes, and the SHA256 above reproduces.

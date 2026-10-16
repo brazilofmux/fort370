@@ -1,26 +1,33 @@
 #!/usr/bin/env python3
-"""mkrtlib.py OUT.obj -- fort370's runtime as object decks, for IEWL on MVS.
+"""mkrtlib.py OUT.upd -- fort370's runtime as a library, F77RT, for MVS.
 
 A program compiled on the guest (FORT370, then IFOX00) is linked there
-by IEWL, which reads object decks -- not the load modules ld370 writes,
-which it misreads (bench/ship.py).  So the runtime goes aboard as one
-sequential FB/80 data set of object decks, each ending in its END card:
-libc370's startup (crt0), fort370's runtime objects (make runtime), and
-exactly the libc370 members they call, in the order ld370's autocall
-resolves them, every section's storage covered by text (zeros where the
-compiler wrote none: IEWL fills uncovered storage from its own buffers).
-Its last card is the control statement ENTRY @@CRT0, so a link's SYSLIN
-is the program's object with this data set concatenated
+by IEWL or the loader, which read object decks -- not the load modules
+ld370 writes, which IEWL misreads (bench/ship.py).  So the runtime is a
+PDS of object decks, F77RT, the link's SYSLIB: automatic library call
+takes from it only what the program calls (fort370 issue 1), and the
+program's own object names the startup and its entry point (F77@GO,
+backend/hir_codegen_s370.h), so a link needs nothing else
 (docs/INSTALL-MVS.txt, jcl/F77CLG.jcl).
 
+The library goes aboard as IEBUPDTE input, FB/80, which makes the PDS:
+fort370's runtime objects (make runtime) and the libc370 members they
+call, each a member named for its first entry point with an alias for
+every other (only the front doors of f77rt.o, which has more names
+than a member can carry), every section's storage covered by text
+(zeros where the compiler wrote none: IEWL fills uncovered storage
+from its own buffers).
+
 The member list is ld370's own: a program is linked here once with -v,
-and every archive member its autocall pulls in is taken from libc.a by
-the offset ld370 reports.  Run from the repository root after
-`make runtime`."""
-import os, re, shutil, subprocess, sys
+with every runtime object, and every archive member its autocall pulls
+in is taken from the archive by the offset ld370 reports.  Then every
+committed test program is linked from the library the way automatic
+call does it, and a name left unresolved fails the build.  Run from the
+repository root after `make runtime`."""
+import glob, os, re, shutil, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RT = ['f77rt', 'f77intr', 'f77dtoa', 'f77main', 'f77math', 'f77rec', 'f77ishim', 'f77xsum', 'millicode']
+RT = ['f77rt', 'f77misc'] + open(os.path.join(REPO, 'runtime/s370/f77int.lst')).read().split() + ['f77dtoa', 'f77main', 'f77math', 'f77rec', 'f77ishim', 'f77xsum', 'millicode']
 
 
 def zerofill(deck):
@@ -77,6 +84,88 @@ def zerofill(deck):
     return b''.join(cards[:last_esd + 1] + fill + cards[last_esd + 1:])
 
 
+# A deck may define more names than a member can carry, one name and
+# IEBUPDTE's 16 aliases: f77rt.o, formatted I/O, defines 44.  Automatic
+# call needs only the names a program can reach it by first -- the
+# statements' own entry points; each statement's items (F77WRI after
+# F77WRBEG) come after one of them, and a member, once in, defines all
+# its names.  check() below proves it over the test programs.
+DOORS = ['F77WRBEG', 'F77WRBI', 'F77RDBEG', 'F77RDBI', 'F77WUB@R', 'F77RUB@R', 'F77SRC@R',
+         'F77OPEN', 'F77CLOSE', 'F77INQR', 'F77INQ', 'F77REWND', 'F77BKSP', 'F77ENDF', 'F77PAUSE']
+
+
+def esd(deck):
+    """(defined names, strong external references) of an object deck."""
+    names, refs = [], []
+    for i in range(0, len(deck), 80):
+        c = deck[i:i + 80]
+        if c[1:4] != 'ESD'.encode('cp037'): continue
+        n = int.from_bytes(c[10:12], 'big')
+        for p in range(16, 16 + n, 16):
+            e = c[p:p + 16]
+            nm = e[:8].decode('cp037').strip()
+            if not nm: continue
+            if e[8] in (0x00, 0x01) and nm not in names: names.append(nm)
+            if e[8] == 0x02 and nm not in refs: refs.append(nm)
+    return names, refs
+
+
+def members(decks):
+    """[(member, aliases, deck)] as the library holds them."""
+    out = []
+    seen = set()
+    for d in decks:
+        names = [n for n in esd(d)[0] if n not in seen]
+        if not names: continue
+        seen.update(names)
+        if len(names) > 17:
+            names = [n for n in DOORS if n in names]
+            if len(names) > 17: sys.exit('mkrtlib: too many doors')
+        out.append((names[0], names[1:], d))
+    return out
+
+
+def check(mems, progs):
+    """Link each program as the linkage editor's automatic call would
+    from this library: every name still unresolved is looked up in the
+    directory, its member included, until nothing changes.  A name left
+    over would be an unresolved external on MVS."""
+    where = {}
+    for k, (m, al, d) in enumerate(mems):
+        for n in [m] + al: where[n] = k
+    defs = [esd(d) for (m, al, d) in mems]
+    everything = set(n for dn, dr in defs for n in dn)
+    bad = 0
+    for name, obj in progs:
+        defined, refs = esd(obj)
+        defined, refs = set(defined), set(refs)
+        took = set()
+        while True:
+            want = {where[n] for n in refs - defined if n in where} - took
+            if not want: break
+            for k in want:
+                took.add(k); defined |= set(defs[k][0]); refs |= set(defs[k][1])
+        left = (refs - defined) & everything      # names of other programs' are not the library's
+        if left: print(f'mkrtlib: {name}: unresolved {sorted(left)}'); bad += 1
+    return bad
+
+
+def updte(decks):
+    """The library as IEBUPDTE input: each deck a member named for the
+    first name it defines, with an alias for every other, so that the
+    linkage editor's and the loader's automatic library call find each
+    external name (docs/INSTALL-MVS.txt).  Object cards begin X'02', so
+    none is taken for a ./ control statement."""
+    card = lambda t: t.ljust(80).encode('cp037')
+    out = []
+    for m, al, d in members(decks):
+        out.append(card('./ ADD NAME=' + m))
+        out.append(d)
+        for n in al: out.append(card('./ ALIAS NAME=' + n))
+    out.append(card('./ ENDUP'))
+    return b''.join(out)
+
+
 def main():
     if len(sys.argv) != 2: sys.exit(__doc__)
     out = sys.argv[1]
@@ -84,7 +173,6 @@ def main():
     os.makedirs(work, exist_ok=True)
     # the sysroot of the cc370 on PATH: <prefix>/bin/cc370, <prefix>/cc370/lib
     cc = os.path.join(os.path.dirname(os.path.dirname(os.path.realpath(shutil.which('cc370')))), 'cc370')
-    crt0 = os.path.join(cc, 'lib', 'crt0.o')   # libc370 before 2.3; later, @@CRT0 is a member of libc.a
     objs = [os.path.join(REPO, 'out', 'crt', n + '.o') for n in RT]
     for o in objs:
         if not os.path.exists(o): sys.exit(f'{o}: make runtime first')
@@ -106,7 +194,7 @@ def main():
         k = (archives[int(m.group(1))], int(m.group(2)))
         if k not in picks: picks.append(k)
     data = {}
-    decks = ([open(crt0, 'rb').read()] if os.path.exists(crt0) else []) + [open(o, 'rb').read() for o in objs]
+    decks = [open(o, 'rb').read() for o in objs]   # @@CRT0 is a member of libc.a
     names = []
     for path, o in picks:
         if path not in data: data[path] = open(path, 'rb').read()
@@ -118,14 +206,20 @@ def main():
     for d in decks:
         if len(d) % 80: sys.exit('an object is not card images')
     decks = [zerofill(d) for d in decks]
-    # the link's control statement travels with the decks, so SYSLIN is
-    # just the program's object and this data set, concatenated (a
-    # cataloged procedure cannot carry DD * on MVS 3.8j)
-    decks.append(' ENTRY @@CRT0'.ljust(80).encode('cp037'))
-    open(out, 'wb').write(b''.join(decks))
-    total = sum(len(d) for d in decks)
-    print(f'{out}: {len(objs)} runtime objects, {len(names)} library members, {total // 80} cards')
-
+    lib = updte(decks)
+    # the proof: every committed test program links from the library
+    progs = []
+    for a in sorted(glob.glob(os.path.join(REPO, 'tests', '*', '*.asm')) + glob.glob(os.path.join(REPO, 'bench', 'kernels', '*.asm'))):
+        o = os.path.join(work, 'chk.o')
+        if subprocess.run(['as370', '-o', o, a], capture_output=True).returncode != 0: continue
+        obj = open(o, 'rb').read()
+        if 'F77MAIN' in esd(obj)[0]: progs.append((os.path.relpath(a, REPO), obj))
+    if check(members(decks), progs): sys.exit('mkrtlib: the library does not link every test program')
+    open(out, 'wb').write(lib)
+    mems = members(decks)
+    print(f'{out}: {len(objs)} runtime objects and {len(names)} libc370 members, '
+          f'{len(mems)} members and {sum(len(a) for m, a, d in mems)} aliases, {len(lib) // 80} cards; '
+          f'all {len(progs)} test programs link from it')
 
 if __name__ == '__main__':
     main()

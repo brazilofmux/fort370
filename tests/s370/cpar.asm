@@ -293,4 +293,9 @@ S00048   DS    0D
 G00033   CSECT
          DS    0D
          DC    X'C150000041A00000'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

@@ -195,7 +195,7 @@ def main():
             ref = [l.rstrip() for l in open(os.path.join(WORK, 'ref', m + '.asm'), encoding='latin-1').read().split('\n')]
             g = got.get(m, [])
             for i, l in enumerate(g):
-                if re.match(r'^ +END\s*$', l):
+                if re.match(r'^ +END(\s|$)', l):     # END, or END F77@GO for a main program
                     g = g[:i + 1]
                     break
             while ref and not ref[-1]: ref.pop()

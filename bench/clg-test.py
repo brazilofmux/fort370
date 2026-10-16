@@ -3,8 +3,9 @@
 says: FORT370 compiles on the guest, IFOX00 assembles, IEWL links with
 F77RT, the program runs; no host in the loop but to submit the job.
 
-  1. install: FORT370.xmit RECEIVEd into HERC01.FORT370.LOAD, F77RT.obj
-     written as it is into HERC01.FORT370.F77RT (both through HEXIN);
+  1. install: FORT370.xmit RECEIVEd into HERC01.FORT370.LOAD, F77RT.upd
+     (both through HEXIN) made the library HERC01.FORT370.F77RT by
+     IEBUPDTE;
   2. one job: jcl/F77CLG.jcl as an instream procedure, one invocation
      per program, its source DD * on the compile step, scratch DDs
      FT01F001-FT04F001 and FT07F001-FT30F001 on the GO step;
@@ -25,7 +26,7 @@ JOBCARD = ("//HERC01S  JOB (TEST),'FORT370 CLG',CLASS=A,MSGCLASS=Z,\n"
 
 def install():
     comp = os.path.join(REPO, 'out', 'mvs', 'FORT370.xmit')
-    rt = os.path.join(REPO, 'out', 'mvs', 'F77RT.obj')
+    rt = os.path.join(REPO, 'out', 'mvs', 'F77RT.upd')
     jcl = JOBCARD
     jcl += ("//DEL      EXEC PGM=IEFBR14\n"
             "//DD1      DD DSN=HERC01.FORT370.CLGX,DISP=(MOD,DELETE),\n"
@@ -33,8 +34,10 @@ def install():
             "//DD2      DD DSN=HERC01.FORT370.LOAD,DISP=(MOD,DELETE),\n"
             "//            SPACE=(TRK,(1)),UNIT=SYSDA\n"
             "//DD3      DD DSN=HERC01.FORT370.F77RT,DISP=(MOD,DELETE),\n"
+            "//            SPACE=(TRK,(1)),UNIT=SYSDA\n"
+            "//DD4      DD DSN=HERC01.FORT370.F77UPD,DISP=(MOD,DELETE),\n"
             "//            SPACE=(TRK,(1)),UNIT=SYSDA\n")
-    for dsn, f in (('HERC01.FORT370.CLGX', comp), ('HERC01.FORT370.F77RT', rt)):
+    for dsn, f in (('HERC01.FORT370.CLGX', comp), ('HERC01.FORT370.F77UPD', rt)):
         jcl += ("//HEX      EXEC PGM=HEXIN,REGION=1024K\n"
                 "//STEPLIB  DD DSN=HERC01.FORT370.UTIL,DISP=SHR\n"
                 "//SYSPRINT DD SYSOUT=Z\n"
@@ -48,13 +51,18 @@ def install():
             "//SYSTSIN  DD *\n"
             "RECEIVE INDATASET('HERC01.FORT370.CLGX') -\n"
             "  DATASET('HERC01.FORT370.LOAD') DIR(5) NOPROMPT\n"
-            "/*\n")
+            "/*\n"
+            "//LIB      EXEC PGM=IEBUPDTE,PARM=NEW\n"
+            "//SYSPRINT DD SYSOUT=Z\n"
+            "//SYSUT2   DD DSN=HERC01.FORT370.F77RT,DISP=(NEW,CATLG),UNIT=SYSDA,\n"
+            "//            SPACE=(CYL,(2,1,40)),DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)\n"
+            "//SYSIN    DD DSN=HERC01.FORT370.F77UPD,DISP=SHR\n")
     deck = os.path.join(WORK, 'install.jcl')
     open(deck, 'w').write(jcl)
     out = os.path.join(WORK, 'install.out')
     ship.run_deck(deck, out)
     t = open(out, 'rb').read().decode('latin-1')
-    print('installed' if re.search(r'RCV\s+IKJEFT01\s+RC= 0000', t) else 'install FAILED, see ' + out)
+    print('installed' if re.search(r'RCV\s+IKJEFT01\s+RC= 0000', t) and re.search(r'LIB\s+IEBUPDTE\s+RC= 0000', t) else 'install FAILED, see ' + out)
 
 
 def main():

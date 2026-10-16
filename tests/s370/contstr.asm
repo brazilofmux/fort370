@@ -99,4 +99,9 @@ Q00004   DC    C'(1X,''XY                                 '
 Q00001   DC    C'AB                                      '
          DC    C'                     CD'
 Q00003   DC    C'CD'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

@@ -885,4 +885,9 @@ Q00097   DC    C'BAD LEN'
 G00052   CSECT
          DS    0D
          DC    X'C1C24040C3C4C5C6C9D1D2D3'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

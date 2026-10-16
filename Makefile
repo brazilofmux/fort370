@@ -53,7 +53,7 @@ test: out/f77
 	@sh tests/host/units.sh
 	@CC="$(CC)" sh tests/host/stream.sh
 
-RT := f77rt f77intr f77dtoa f77main f77math f77rec millicode
+RT := f77rt f77misc $(shell cat runtime/s370/f77int.lst) f77dtoa f77main f77math f77rec millicode
 runtime: $(RT:%=out/crt/%.o) out/crt/f77ishim.o out/crt/f77xsum.o
 
 out/crt/%.o: runtime/s370/%.c runtime/s370/f77rt.h runtime/s370/f77rec.h runtime/s370/f77std.h Makefile
@@ -70,7 +70,7 @@ out/crt/f77xsum.o: runtime/s370/f77xsum.asm Makefile
 
 # The compiler as an MVS load module, out/mvs/FORT370 and its XMIT:
 # the same C, built with cc370 for libc370 (docs/INSTALL-MVS.txt).
-mvs: out/mvs/FORT370.xmit out/mvs/F77RT.obj
+mvs: out/mvs/FORT370.xmit out/mvs/F77RT.upd
 
 # The clock is pinned (as370 and ld370 stamp the date and time into the
 # deck and the module), so two builds of the same source are the same
@@ -85,7 +85,7 @@ out/mvs/FORT370.xmit: $(SRC) runtime/s370/millicode.c runtime/s370/f77std.h Make
 	cd out/mvs && $(MVSCLOCK) cc370 -o FORT370 f77.o millicode.o -Wl,--sparse-text -flinker-output=xmit
 
 # The runtime as object decks for IEWL on MVS (bench/mkrtlib.py)
-out/mvs/F77RT.obj: runtime bench/mkrtlib.py out/f77
+out/mvs/F77RT.upd: runtime bench/mkrtlib.py out/f77
 	@mkdir -p out/mvs
 	python3 bench/mkrtlib.py $@
 

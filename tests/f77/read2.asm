@@ -435,4 +435,9 @@ C00075   DC    H'-1'
 C00077   DC    H'-4'
 Q00001   DC    C'(5F8.2)'
 Q00002   DC    C'(''N='',I3,'' SUM='',F12.4)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

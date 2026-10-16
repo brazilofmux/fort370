@@ -409,4 +409,9 @@ Q00001   DC    C'ABCDEF'
 Q00002   DC    C'GHIJKL'
 Q00003   DC    C'NO EOF'
 Q00004   DC    C'EOF OK'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

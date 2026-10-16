@@ -316,4 +316,9 @@ Q00001   DC    C'(I3,I2,I2,I3,I3,I3,I4,I1,I1,I1,I1,I1,I1,'
          DC    C'I1,I1,I1,I1,I2,I2,I3,I3,I4,I4,I4,I4,I4,I'
          DC    C'5,I5,I5,I5)'
 Q00002   DC    C'('' >SCR7'',3I6)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

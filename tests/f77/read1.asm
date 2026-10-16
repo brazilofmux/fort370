@@ -390,4 +390,9 @@ Q00003   DC    C'(E10.3,1X,D9.2)'
 Q00004   DC    C'(L2,I3,/,L4)'
 Q00005   DC    C'(I3,I3)'
 Q00006   DC    C'(''OK'',I4,I4,F10.2)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

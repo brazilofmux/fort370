@@ -40,8 +40,8 @@ unrolling and calls, and it is worth perhaps 10 to 35%, not multiples.
 2026-10-13. The compiler runs on MVS 3.8j itself: FORT370, a load
 module built from the same C with cc370, compiles in REGION=8192K and
 writes, byte for byte, what the host compiler writes for every FCVS
-program and test; with F77RT, the runtime as object decks, IFOX00 and
-IEWL on the guest make a running program (`docs/INSTALL-MVS.txt`,
+program and test; with F77RT, the runtime as an autocall library,
+IFOX00 and IEWL on the guest make a running program (`docs/INSTALL-MVS.txt`,
 `jcl/F77CLG.jcl`). On a host, `out/f77` compiles a program unit to IFOX00 assembler with
 standard OS linkage, static storage per unit and symbolic references
 the linkage editor resolves; the I/O is FORTRAN H's `IBCOM#` or the
@@ -79,7 +79,7 @@ counts is one `BXH`. What H does that this compiler does not yet:
 parameter lists built once in static storage, and a second base
 register for code beyond 4K (a branch to such a target here loads its
 address from the pool, `L 15,=A(L) / BC m,0(,15)`). The MVS package
-is FORT370.xmit and F77RT.obj, built by `make mvs`. `docs/BACKEND.md` has the design and the record of the
+is FORT370.xmit and F77RT.upd, built by `make mvs`. `docs/BACKEND.md` has the design and the record of the
 work.
 
 How large a program unit each compiler takes
@@ -111,7 +111,7 @@ nested procedures, is still its own work.
 
 Each dated release carries host binaries for Linux, macOS and Windows,
 built and checked by CI on their own platforms (the binary is
-`fort370`), and the MVS package, FORT370.xmit and F77RT.obj, built by
+`fort370`), and the MVS package, FORT370.xmit and F77RT.upd, built by
 `make mvs` with its clock pinned so that the SHA256 in the release
 notes reproduces. The Linux and Windows ones are static. The macOS one is
 unsigned: if it came through a browser, `xattr -d
@@ -149,7 +149,7 @@ direct-access file is a DASD data set of fixed blocks, RECL bytes each.
     tests/f77/            regression programs; tests/oracle.sh runs gfortran
     tests/s370/           programs run through both H and fort370 on MVS
     Makefile              make: out/f77; make check-asm, make test, make runtime,
-                          make mvs (FORT370.xmit and F77RT.obj)
+                          make mvs (FORT370.xmit and F77RT.upd)
     jcl/F77CLG.jcl        compile, assemble, link and go on MVS
     docs/INSTALL-MVS.txt  installing and running the compiler on MVS
     CHANGES.md            what each release brought
@@ -169,7 +169,7 @@ direct-access file is a DASD data set of fixed blocks, RECL bytes each.
     bench/fcvs-jcl.py     the FCVS as 192 MVS jobs, compiled, linked and run there
     bench/port-sweep.py   every program compiled on the guest, diffed with the host's
     bench/clg-test.py     the MVS package installed and used on the guest
-    bench/mkrtlib.py      the runtime as object decks for IEWL (F77RT.obj)
+    bench/mkrtlib.py      the runtime as an autocall library (F77RT.upd)
     bench/listings/       H's OPT=2 object listings
     bench/results-*.txt   the raw timings and the FCVS results
 

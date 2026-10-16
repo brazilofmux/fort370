@@ -134,4 +134,9 @@ S00021   DS    0D
          DS    8D
          DS    D
 C00027   DC    X'4110000000000000'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

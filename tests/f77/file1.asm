@@ -504,4 +504,9 @@ Q00009   DC    C'NEW'
 Q00011   DC    C'scratch1.dat'
 Q00012   DC    C'OLD'
 Q00014   DC    C'DELETE'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

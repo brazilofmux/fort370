@@ -3573,6 +3573,31 @@ static void gen_program(Node *prog) {
         fn = fn->next;
     }
     gen_data();
+    /* fort370: a source with a main program carries the program's
+     * entry point, F77@GO, which goes on to libc370's startup, @@CRT0,
+     * with the registers as it found them.  Its V-constant makes the
+     * linkage editor's (or the loader's) automatic library call bring
+     * the startup in from F77RT, and the END card names F77@GO -- a
+     * symbol of this deck, which the loader takes as well as IEWL; an
+     * external one there it ignores -- so a link needs the program's
+     * objects and F77RT as its SYSLIB, and nothing more: no ENTRY
+     * statement, no EP=, no runtime in SYSLIN (fort370 issue 1).  The
+     * @ keeps the name from any Fortran one. */
+    {
+        int u;
+        int has_main;
+        has_main = 0;
+        for (u = 0; u < f77_nunit; u++) if (f77_ukind[u] == F77_UNIT_PROGRAM) has_main = 1;
+        if (has_main) {
+            asm_stmt("F77@GO", "CSECT", "");
+            asm_stmt("", "L", "15,8(,15)");
+            asm_stmt("", "BR", "15");
+            asm_stmt("", "DS", "0F");
+            asm_stmt("", "DC", "V(@@CRT0)");
+            asm_stmt("", "END", "F77@GO");
+            return;
+        }
+    }
     asm_stmt("", "END", "");
 }
 

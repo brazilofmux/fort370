@@ -171,4 +171,9 @@ Q00001   DC    C'(''     NORM. RESID      TIME       MFLOP'
 Q00002   DC    C'(2X,E14.7,2X,F8.4,2X,F10.3)'
 Q00003   DC    C'('' X ='',4F9.4)'
 Q00004   DC    C'('' N ='',I4,''  RESID ='',E12.5)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

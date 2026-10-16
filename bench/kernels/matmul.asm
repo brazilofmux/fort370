@@ -247,4 +247,9 @@ T00004   DS    10001D
 G00052   CSECT
          DS    0D
          DC    X'000000C8'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

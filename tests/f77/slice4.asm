@@ -326,4 +326,9 @@ C00061   DC    X'40800000'
 C00068   DC    F'7'
 C00075   DC    V(EXIT)
 C00070   DC    H'-1'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

@@ -272,4 +272,9 @@ S00043   DS    0D
          DS    D
 P00053   DS    1F
          DS    XL4
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

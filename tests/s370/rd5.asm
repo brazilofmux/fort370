@@ -170,4 +170,9 @@ Q00002   DC    C'(2I5)'
 Q00003   DC    C'('' >RD5 FORMATTED'',2I6)'
 Q00004   DC    C'('' >RD5 LISTED '',D22.15)'
 Q00005   DC    C'('' >RD5 PUNCH'',I6)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

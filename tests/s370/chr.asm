@@ -434,4 +434,9 @@ Q00015   DC    C'ABC'
 Q00016   DC    C'EQ5'
 Q00017   DC    C'ABC'
 Q00018   DC    C'NE5'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

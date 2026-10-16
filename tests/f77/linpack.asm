@@ -1374,4 +1374,9 @@ C00242   DC    H'-4'
 C00243   DC    H'-8'
 C00247   DC    H'8'
 C00248   DC    H'-1'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

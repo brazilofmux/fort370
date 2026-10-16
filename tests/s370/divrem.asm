@@ -263,4 +263,9 @@ G00018   CSECT
 G00021   CSECT
          DS    0D
          DC    X'0000000500000005FFFFFFFBFFFFFFFB'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

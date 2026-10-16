@@ -328,15 +328,25 @@ it took besides room:
   for an HFP one with libc370's printf. The constant evaluator now
   carries each literal's text beside its value; on MVS the lexer's
   double comes from the same conversion, not from libc370's `strtod`.
-- **The runtime for programs compiled there** is F77RT, object decks
-  for IEWL (`bench/mkrtlib.py`): crt0, fort370's runtime and the 172
-  libc370 members it calls, in ld370's autocall order, every section's
-  storage covered by text. IEWL fills storage no text record covers
-  from its own buffers -- it read back as code -- and C assumes zeros;
-  without them a program abended S0C4 in libc370's `@@FPUTC`. The
-  library ends in `ENTRY @@CRT0`, so a link's SYSLIN is the program's
-  object and F77RT concatenated (`jcl/F77CLG.jcl`, since a cataloged
-  procedure cannot carry `DD *` on MVS 3.8j).
+- **The runtime for programs compiled there** is F77RT, a PDS of
+  object decks that is the link's SYSLIB (`bench/mkrtlib.py`, which
+  writes it as IEBUPDTE input): fort370's runtime and the libc370
+  members it calls, each a member named for an entry point with an
+  alias for the others, every section's storage covered by text. IEWL
+  fills storage no text record covers from its own buffers -- it read
+  back as code -- and C assumes zeros; without them a program abended
+  S0C4 in libc370's `@@FPUTC`. Automatic call takes only what a
+  program calls: f77rt.c's pieces that need no I/O (f77misc.c) and
+  those that call f77math (f77int*.c) are files of their own, and
+  f77rt.c reaches f77rec.c weakly, through the entry points f77rec.c
+  defines. A main program's object carries the entry point `F77@GO`,
+  which branches to libc370's `@@CRT0`, and names it on its END card,
+  so the link needs no control statements (`jcl/F77CLG.jcl`): IEWL
+  and the loader both take the entry from the first object's END card,
+  but the loader ignores one that names an external symbol. IEBUPDTE
+  gives a member at most 16 aliases, and f77rt.o has 44 names: its
+  member is reached by the statements' own entry points only, the
+  front doors, which every I/O statement calls first.
 
 `bench/port-sweep.py` is the proof of the first three: every FCVS
 program and test compiled on the guest is byte for byte the host's

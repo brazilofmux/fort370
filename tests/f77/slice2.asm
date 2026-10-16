@@ -151,4 +151,9 @@ C00041   DC    V(F77WRI)
 C00042   DC    V(F77WREND)
 C00043   DC    V(EXIT)
 Q00001   DC    C'(''S'',I4)'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO

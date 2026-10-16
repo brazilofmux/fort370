@@ -209,4 +209,9 @@ Q00004   DC    C'ABC'
 Q00006   DC    C'EQ'
 Q00007   DC    C'ABC'
 Q00008   DC    C'NE'
-         END
+F77@GO   CSECT
+         L     15,8(,15)
+         BR    15
+         DS    0F
+         DC    V(@@CRT0)
+         END   F77@GO
