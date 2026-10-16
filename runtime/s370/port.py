@@ -828,6 +828,6 @@ for k, c in enumerate(chunks):
     body = c.replace(zmod, '')
     gen('f77int%d.c' % (k + 1), 'part %d of the COMPLEX primitives and\n * the specific intrinsics passed as arguments. */' % (k + 1),
         '#include <math.h>\n#include "f77rt.h"\n\n' + TRUNC + zmod + '\n' + body)
-open('runtime/s370/f77int.lst', 'w').write(' '.join('f77int%d' % (k + 1) for k in range(len(chunks))) + '\n')
+open('runtime/s370/f77int.lst', 'w', newline='\n').write(' '.join('f77int%d' % (k + 1) for k in range(len(chunks))) + '\n')
 open('runtime/s370/f77rt.c', 'w', newline='\n').write(s)
 print('port.py: %d entry points; f77rt.c, f77misc.c, %d f77intN.c and f77rt.h written' % (len(protos), len(chunks)))
