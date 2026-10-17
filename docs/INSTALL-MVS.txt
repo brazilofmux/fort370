@@ -95,10 +95,12 @@ IEBUPDTE makes the runtime library of F77RT.upd:
     //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
     //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 
-  REGION=8192K is the recommendation.  The compiler's static tables are
-  about 4MB, and each phase takes up to 1MB more while it runs; the
-  largest units tested (FCVS FM912) need 7168K.  (The 2026-10-12 package
-  needs the full 8192K, and the first package of 2026-10-13 6656K.)
+  REGION=8192K is the recommendation.  The compiler's tables are about
+  2.5MB, its two phases sharing most of them, and each phase takes up to
+  1MB more while it runs; a small program compiles in about 4300K, and
+  the largest units tested (FCVS FM912) need 6144K.  (The 2026-10-12
+  package needs the full 8192K, those of 2026-10-13 to 2026-10-16
+  7168K.)
 
   SYSIN is the source: fixed-form FORTRAN 77, any number of program
   units, columns 1-72 (73-80 are ignored).  It may be a data set or

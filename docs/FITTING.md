@@ -205,3 +205,7 @@ callee's dummy arguments (f77_bind_actual left most fields as the last
 symbol with that index had them), and an INTEGER or REAL PARAMETER's
 part texts. Each is set now; only the register pairs changed any code,
 the registers six programs use.
+
+A small compile's step is 4288K, was 5684K; the largest, FM912, is
+6052K, and every FCVS program and test compiles in REGION=6144K, where
+7168K was needed.

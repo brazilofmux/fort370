@@ -12,7 +12,7 @@
 //*  standard input); SYSUT1 is the work data set the compiler copies
 //*  it to, so that it holds one program unit at a time, not the file.
 //*  REGION=8192K for the compiler is the recommendation; the largest
-//*  units tested need 7168K.  IFOX00 needs PARM='OBJ,NODECK' or
+//*  units tested need 6144K.  IFOX00 needs PARM='OBJ,NODECK' or
 //*  it assembles cleanly and produces nothing.  A program's arrays
 //*  are static storage in its module; raise GO's REGION for large
 //*  ones.  Units are the DD names FTnnF001: unit 6 is FT06F001 (or
