@@ -198,8 +198,11 @@ def main():
                 if re.match(r'^ +END(\s|$)', l):     # END, or END F77@GO for a main program
                     g = g[:i + 1]
                     break
-            while ref and not ref[-1]: ref.pop()
-            while g and not g[-1]: g.pop()
+            # no blank line means anything to the assembler, and FORT370
+            # writes none: the printer's page breaks can leave one (a
+            # batch at REGION=6144K had one every 58 lines, 2026-10-16)
+            ref = [l for l in ref if l.strip()]
+            g = [l for l in g if l.strip()]
             open(os.path.join(WORK, 'got', m + '.asm'), 'w', encoding='latin-1').write('\n'.join(g) + '\n')
             cc = re.search(rf'HERC01S\s+C{chunk.index((m, f)):02d}\s+-\s+(?:ABEND (\S+)|STEP WAS EXECUTED - COND CODE (\d+))', raw)
             if ref == g:
