@@ -113,6 +113,39 @@ typedef char f77_alloca_room[HL_MAX_ALLOCA >= HIR_MAX_INST ? 1 : -1];   /* see f
 #endif
 
 static int f77_quiet;     /* f77_check_persistence's trial compile: errors are its own */
+/* --- the phases' tables, one storage (f77_arena.h) --- */
+#include "f77_arena.h"
+static char *f77_arena;
+static unsigned int f77_arena_fe;          /* bytes of the front end's part */
+static unsigned int f77_arena_be;          /* and the back end's */
+#define F77_ARENA_SIZE(n, d) off = (off + 7u) & ~7u; off += (unsigned int)(d) * (unsigned int)sizeof *n;
+#define F77_ARENA_PLACE(n, d) off = (off + 7u) & ~7u; n = (void *)(f77_arena + off); off += (unsigned int)(d) * (unsigned int)sizeof *n;
+static int f77_arena_init(void) {
+    unsigned int off;
+    off = 0; F77_FE_TABLES(F77_ARENA_SIZE) f77_arena_fe = off;
+    off = 0; F77_BE_TABLES(F77_ARENA_SIZE) f77_arena_be = off;
+    f77_arena = (char *)calloc(1, f77_arena_fe > f77_arena_be ? f77_arena_fe : f77_arena_be);
+    if (!f77_arena) return -1;
+    off = 0; F77_FE_TABLES(F77_ARENA_PLACE)
+    off = 0; F77_BE_TABLES(F77_ARENA_PLACE)
+    if (getenv("F77_ARENA_STATS")) {
+        fdputs("f77: arena: front end ", 2); fdputuint(2, f77_arena_fe);
+        fdputs(" bytes, back end ", 2); fdputuint(2, f77_arena_be); fdputs("\n", 2);
+    }
+    return 0;
+}
+/* A phase begins: its tables start the unit as zeros.  Built with
+ * -DF77_ARENA_POISON they start as garbage instead, which is how it is
+ * proved that no table in the arena carries anything from one unit, or
+ * one phase, to the next: the output must not change. */
+static void f77_arena_phase(int be) {
+#ifdef F77_ARENA_POISON
+    memset(f77_arena, 0xA5, be ? f77_arena_be : f77_arena_fe);
+#else
+    memset(f77_arena, 0, be ? f77_arena_be : f77_arena_fe);
+#endif
+}
+
 static void f77_error(char *msg) {
     if (f77_quiet) { f77_quiet = f77_quiet + 1; return; }
     fdputs("f77: line ", 2);
@@ -487,6 +520,7 @@ static void hl_func(Node *fn) {
 
     u = fn->unit;
     hl_cur_fn_dbg = fn->name;
+    f77_arena_phase(0);
 #ifdef F77_TARGET_S370
     ssa_exposed_keep = (f77_ukind[u] != F77_UNIT_PROGRAM);   /* see ssa_keep_exposed */
 #endif
@@ -815,6 +849,7 @@ int main(int argc, char **argv) {
     lx_line = 1;
 #endif
 
+    if (f77_arena_init() != 0) { fdputs("f77: no storage for the compiler's tables\n", 2); return 1; }
     f77_scan_units();
     if (f77_nunit == 0) { fdputs("f77: empty source\n", 2); return 1; }
 #ifdef F77_TARGET_S370

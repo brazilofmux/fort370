@@ -34,29 +34,29 @@
 
 #define F77_MAX_SYM (4096 * F77_ROOM)  /* fort370: symbols in one unit, inlined callees' too */
 #define F77_MAX_RANK 7                 /* the F77 limit */
-static char f77_sname[F77_MAX_SYM][F77_MAX_NAME];
-static short  f77_sty[F77_MAX_SYM];      /* TY_INT / TY_FLOAT / TY_DOUBLE */
-static int  f77_sval[F77_MAX_SYM];     /* HIR alloca */
-static signed char  f77_srank[F77_MAX_SYM];    /* 0 = scalar */
+static char (*f77_sname)[F77_MAX_NAME];
+static short *f77_sty;      /* TY_INT / TY_FLOAT / TY_DOUBLE */
+static int *f77_sval;     /* HIR alloca */
+static signed char *f77_srank;    /* 0 = scalar */
 /* fort370: the bounds live in rows of their own, one per array, and a
  * symbol points at its row (f77_slo[s][k] reads as before).  Every
  * scalar shares row 0, whose bounds nothing writes (f77_parse_dims
  * gives a symbol its own row before it writes any); 112 bytes of rank-7
  * bounds per scalar would be most of the table. */
 #define F77_MAX_ARR (1024 * F77_ROOM)  /* arrays in one unit */
-static int  f77_dlo[F77_MAX_ARR][F77_MAX_RANK];
-static int  f77_dext[F77_MAX_ARR][F77_MAX_RANK];
-static int  f77_dextsym[F77_MAX_ARR][F77_MAX_RANK];
-static int  f77_dlov[F77_MAX_ARR][F77_MAX_RANK];
+static int (*f77_dlo)[F77_MAX_RANK];
+static int (*f77_dext)[F77_MAX_RANK];
+static int (*f77_dextsym)[F77_MAX_RANK];
+static int (*f77_dlov)[F77_MAX_RANK];
 static int  f77_narr;
-static int *f77_slo[F77_MAX_SYM];      /* lower bound per dim */
-static int *f77_sext[F77_MAX_SYM];     /* constant extent */
+static int * *f77_slo;      /* lower bound per dim */
+static int * *f77_sext;     /* constant extent */
 /* Adjustable dimensions: DOUBLE PRECISION A(LDA,1) inside a subprogram,
  * where LDA is itself a dummy argument.  LINPACK is built on this.  When
  * f77_sextv[s][k] >= 0 the extent is that HIR value (computed in the
  * declaration part) and f77_sext[s][k] is meaningless. */
-static int *f77_sextsym[F77_MAX_SYM];  /* now: HIR value of the extent, or -1 */
-static int *f77_slov[F77_MAX_SYM];     /* HIR value of the lower bound, or -1 */
+static int * *f77_sextsym;  /* now: HIR value of the extent, or -1 */
+static int * *f77_slov;     /* HIR value of the lower bound, or -1 */
 #define f77_sextv f77_sextsym
 /* Row r's bounds, fresh: extents and lower bounds unknown (-1). */
 static void f77_dim_row(int s, int r) {
@@ -85,8 +85,8 @@ static int  f77_nsym;
  * name's bucket, newest first; f77_sym_at answers what the scan from
  * f77_scope_base answered -- the oldest match at or above the base. */
 #define F77_SHASH 1024
-static int f77_shead[F77_SHASH];       /* symbol + 1, 0 = empty */
-static int f77_snext[F77_MAX_SYM];     /* symbol + 1, 0 = end */
+static int *f77_shead;       /* symbol + 1, 0 = empty */
+static int *f77_snext;     /* symbol + 1, 0 = end */
 static int f77_shash(char *nm) {
     unsigned h;
     h = 0;
@@ -100,7 +100,7 @@ static void f77_sym_hash(int s) {
     f77_shead[h] = s + 1;
 }
 static void f77_sym_reset(void) {
-    memset(f77_shead, 0, sizeof f77_shead);
+    memset(f77_shead, 0, ((F77_SHASH) * sizeof *f77_shead));
     f77_nsym = 0;
     f77_narr = 1;                      /* row 0 is every scalar's */
 }
@@ -127,7 +127,7 @@ static int  f77_label_base;
  * Fortran, so the symbol's value is already an address and there is no
  * alloca behind it -- everything downstream works off an address, so
  * loads, stores and subscripting need no special case. */
-static signed char  f77_sarg[F77_MAX_SYM];
+static signed char *f77_sarg;
 
 /* Hi-word slot for a scalar DOUBLE local, or -1.
  *
@@ -143,13 +143,13 @@ static signed char  f77_sarg[F77_MAX_SYM];
  * LOAD/STOREs, which is exactly what the promoter accepts.  The hi slot
  * keeps the frame offset the ADDI would have addressed, so the layout
  * is unchanged. */
-static int  f77_shi[F77_MAX_SYM];
+static int *f77_shi;
 static int  f77_split_count;
 static int  f77_split_on = -1;
 
 /* Static storage flags: member of a COMMON block / named in SAVE. */
-static signed char  f77_scom[F77_MAX_SYM];
-static signed char  f77_ssaved[F77_MAX_SYM];
+static signed char *f77_scom;
+static signed char *f77_ssaved;
 
 /* Read-only dummy-load tracking, for LICM's h_ld_ro assertion.  F77
  * 15.9.3.6: while a subprogram executes, its scalar dummies cannot
@@ -159,10 +159,10 @@ static signed char  f77_ssaved[F77_MAX_SYM];
  * address passed onward).  One-pass compilation means the store may
  * be seen after the load, so loads are recorded and the flag is
  * RETRACTED at unit end for every symbol that got stored. */
-static signed char  f77_sstored[F77_MAX_SYM];
+static signed char *f77_sstored;
 #define F77_MAX_LDRO 4096
-static int  f77_ldro_inst[F77_MAX_LDRO];
-static int  f77_ldro_sym[F77_MAX_LDRO];
+static int *f77_ldro_inst;
+static int *f77_ldro_sym;
 static int  f77_ldro_n;
 
 static void f77_ldro_note(int inst, int s) {
@@ -183,8 +183,8 @@ static void f77_ldro_finalize(void) {
             h_ld_ro[f77_ldro_inst[i]] = 0;
     }
 }
-static int  f77_sgidx[F77_MAX_SYM];    /* ps_g* index once bound static */
-static int  f77_sgoff[F77_MAX_SYM];    /* byte offset inside that object */
+static int *f77_sgidx;    /* ps_g* index once bound static */
+static int *f77_sgoff;    /* byte offset inside that object */
 
 /* --- CHARACTER ---------------------------------------------------------
  *
@@ -198,15 +198,15 @@ static int  f77_sgoff[F77_MAX_SYM];    /* byte offset inside that object */
  * regular ones -- one per CHARACTER actual, in order, the gfortran
  * convention -- and a CHARACTER FUNCTION, which takes its result
  * buffer and length as two hidden leading arguments. */
-static int  f77_slen[F77_MAX_SYM];     /* length in bytes, -1 = assumed (*) */
-static int  f77_slenv[F77_MAX_SYM];    /* HIR value of the length when -1 */
-static int  f77_spstr[F77_MAX_SYM];    /* CHARACTER PARAMETER: string index */
-static signed char  f77_sexternal[F77_MAX_SYM]; /* named in EXTERNAL */
-static signed char  f77_sintrinsic[F77_MAX_SYM]; /* named in INTRINSIC */
+static int *f77_slen;     /* length in bytes, -1 = assumed (*) */
+static int *f77_slenv;    /* HIR value of the length when -1 */
+static int *f77_spstr;    /* CHARACTER PARAMETER: string index */
+static signed char *f77_sexternal; /* named in EXTERNAL */
+static signed char *f77_sintrinsic; /* named in INTRINSIC */
 /* LOGICAL shares TY_INT with INTEGER in the backend; what tells them
  * apart for list-directed output (T/F vs a number) is this flag on the
  * symbol, carried through expressions in ex_log. */
-static signed char  f77_slog[F77_MAX_SYM];
+static signed char *f77_slog;
 /* fort370: indexed by letter - 'A', which in EBCDIC runs to 40 ('A' to
  * 'Z' has gaps there), so the tables span 'A'..'Z' in the execution
  * character set: 26 on a host, 41 on MVS. */
@@ -295,23 +295,23 @@ static int f77_eq_oa[F77_MAX_EQ];
 static int f77_eq_sb[F77_MAX_EQ];
 static int f77_eq_ob[F77_MAX_EQ];
 static int f77_eq_n;
-static int f77_eq_parent[F77_MAX_SYM];   /* union-find; -1 = not involved */
-static int f77_eq_delta[F77_MAX_SYM];    /* addr(s) = addr(parent) + delta */
+static int *f77_eq_parent;   /* union-find; -1 = not involved */
+static int *f77_eq_delta;    /* addr(s) = addr(parent) + delta */
 
 /* PARAMETER named constants: no storage, value folded at parse time.
  * The value is kept in both domains and converted per the symbol's
  * type at each use. */
-static signed char    f77_sparam[F77_MAX_SYM];
-static int    f77_spival[F77_MAX_SYM];
-static double f77_spdval[F77_MAX_SYM];
-static double f77_spdval2[F77_MAX_SYM];  /* COMPLEX PARAMETER: imaginary part */
-static char  *f77_sptext[F77_MAX_SYM];   /* fort370: the value's decimal text (f77_cx_t), or 0 */
-static char  *f77_sptext2[F77_MAX_SYM];
+static signed char *f77_sparam;
+static int *f77_spival;
+static double *f77_spdval;
+static double *f77_spdval2;  /* COMPLEX PARAMETER: imaginary part */
+static char  * *f77_sptext;   /* fort370: the value's decimal text (f77_cx_t), or 0 */
+static char  * *f77_sptext2;
 
 /* Explicitly typed by a type declaration (or a typed FUNCTION
  * header): what IMPLICIT NONE checks, and what an IMPLICIT statement
  * must not retype. */
-static signed char    f77_styped[F77_MAX_SYM];
+static signed char *f77_styped;
 
 /* Per-unit implicit typing map, letter -> type.  bind_unit resets it
  * to the default rule (I-N INTEGER, the rest REAL) and the IMPLICIT
@@ -349,16 +349,16 @@ static int f77_frame;   /* bytes of locals allocated so far */
 #define F77_STF_POOL     16384
 static int  f77_stf_sym[F77_MAX_STF];
 static int  f77_stf_nargs[F77_MAX_STF];
-static char f77_stf_arg[F77_MAX_STF][F77_MAX_STF_ARGS][F77_MAX_NAME];
-static int  f77_stf_argty[F77_MAX_STF][F77_MAX_STF_ARGS];
+static char (*f77_stf_arg)[F77_MAX_STF_ARGS][F77_MAX_NAME];
+static int (*f77_stf_argty)[F77_MAX_STF_ARGS];
 static int  f77_stf_text[F77_MAX_STF];
 static int  f77_stf_len[F77_MAX_STF];
 static int  f77_stf_n;
-static char f77_stf_pool[F77_STF_POOL];
-static unsigned char f77_stf_pbrk[F77_STF_POOL];
+static char *f77_stf_pool;
+static unsigned char *f77_stf_pbrk;
 static int  f77_stf_pool_n;
 #define F77_MAX_STFB 64
-static char f77_stfb_name[F77_MAX_STFB][F77_MAX_NAME];
+static char (*f77_stfb_name)[F77_MAX_NAME];
 static int  f77_stfb_sym[F77_MAX_STFB];
 static int  f77_stfb_n;
 
@@ -711,9 +711,9 @@ static void f77_realloc_sym(int s) {
 /* --- statement labels ----------------------------------------------- */
 
 #define F77_MAX_LABEL (4096 * F77_ROOM)   /* fort370: was 512 */
-static int f77_lnum[F77_MAX_LABEL];
-static int f77_lblk[F77_MAX_LABEL];
-static signed char f77_ldef[F77_MAX_LABEL];   /* fort370: a statement carries it */
+static int *f77_lnum;
+static int *f77_lblk;
+static signed char *f77_ldef;   /* fort370: a statement carries it */
 static int f77_nlabel;
 
 /* Block for a label, created on first mention so forward GOTOs work. */
@@ -4163,12 +4163,17 @@ static void f77_stmt_parameter(int skip) {
         } else if (f77_sty[s] == TY_INT) {
             f77_spival[s] = (f77_cx_ty == TY_INT) ? f77_cx_i : (int)f77_cx_d;
             f77_spdval[s] = (double)f77_spival[s];
+            /* fort370: no text; left alone, these were an earlier symbol's,
+             * which a constant expression then read (f77_arena.h) */
+            f77_sptext[s] = 0;
+            f77_sptext2[s] = 0;
         } else {
             f77_spdval[s] = (f77_cx_ty == TY_INT) ? (double)f77_cx_i : f77_cx_d;
             if (f77_sty[s] == TY_FLOAT)
                 f77_spdval[s] = (double)(float)f77_spdval[s];
             f77_spival[s] = (int)f77_spdval[s];
             f77_sptext[s] = f77_cx_t[0] ? strdup(f77_cx_t) : 0;
+            f77_sptext2[s] = 0;
         }
         if (lx_t != T_COMMA) break;
         f77_tok();
@@ -4187,16 +4192,16 @@ static void f77_stmt_parameter(int skip) {
  * declared before the DATA statement, so element counts are known):
  * one (symbol, element, value) triple per initialized element. */
 #define F77_MAX_DINIT 8192
-static int    f77_di_sym[F77_MAX_DINIT];
-static int    f77_di_elem[F77_MAX_DINIT];
-static int    f77_di_ty[F77_MAX_DINIT];
-static int    f77_di_i[F77_MAX_DINIT];
-static double f77_di_d[F77_MAX_DINIT];
-static int    f77_di_sidx[F77_MAX_DINIT];
-static double f77_di_d2[F77_MAX_DINIT];
-static char  *f77_di_t[F77_MAX_DINIT];    /* fort370: the value's decimal text, or 0 */
-static char  *f77_di_t2[F77_MAX_DINIT];
-static int    f77_di_sub[F77_MAX_DINIT];   /* substring target: byte length, elem is a byte offset */
+static int *f77_di_sym;
+static int *f77_di_elem;
+static int *f77_di_ty;
+static int *f77_di_i;
+static double *f77_di_d;
+static int *f77_di_sidx;
+static double *f77_di_d2;
+static char  * *f77_di_t;    /* fort370: the value's decimal text, or 0 */
+static char  * *f77_di_t2;
+static int *f77_di_sub;   /* substring target: byte length, elem is a byte offset */
 static int    f77_di_n;
 
 /* Byte images of DATA values, in the TARGET's order and format.  The
@@ -4341,10 +4346,10 @@ static void f77_data_const(void) {
 }
 
 #define F77_MAX_DTGT 1024
-static int f77_dt_sym[F77_MAX_DTGT];
-static int f77_dt_start[F77_MAX_DTGT];   /* element index, or byte offset for a substring */
-static int f77_dt_count[F77_MAX_DTGT];   /* elements, or 1 */
-static int f77_dt_sublen[F77_MAX_DTGT];  /* substring length, 0 = not a substring */
+static int *f77_dt_sym;
+static int *f77_dt_start;   /* element index, or byte offset for a substring */
+static int *f77_dt_count;   /* elements, or 1 */
+static int *f77_dt_sublen;  /* substring length, 0 = not a substring */
 static int f77_dt_n;
 
 /* Constant bindings of implied-DO variables while a DATA target list
@@ -5730,6 +5735,24 @@ static int f77_bind_actual(char *nm, int addr) {
     f77_srank[s] = 0;
     f77_sarg[s] = 1;
     f77_shi[s] = -1;                 /* by-reference: value is an address */
+    /* fort370: and the rest as f77_sym_param has them: these were left
+     * as whatever symbol had this index before (f77_arena.h) */
+    f77_scom[s] = 0;
+    f77_ssaved[s] = 0;
+    f77_sgidx[s] = -1;
+    f77_sgoff[s] = 0;
+    f77_sparam[s] = 0;
+    f77_styped[s] = 0;
+    f77_slen[s] = 1;
+    f77_slenv[s] = -1;
+    f77_spstr[s] = -1;
+    f77_sexternal[s] = 0;
+    f77_sintrinsic[s] = 0;
+    f77_slog[s] = 0;
+    if (f77_imp_ready && nm[0] >= 'A' && nm[0] <= 'Z') {
+        if (f77_sty[s] == TY_CHAR) f77_slen[s] = f77_imp_len[nm[0] - 'A'];
+        f77_slog[s] = f77_imp_log[nm[0] - 'A'];
+    }
     /* fort370: and taken as stored.  A dummy's loads are asserted
      * loop-invariant (f77_ldro_note) because nothing else may change
      * it while its own unit runs; spliced, the callee runs as part of

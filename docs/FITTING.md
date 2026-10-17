@@ -167,3 +167,41 @@ printer's display of three CP037 characters normalized). What it took
 besides room is in docs/BACKEND.md: stdio for the driver, EBCDIC in the
 scanner and the front end, and floating constants always converted from
 their decimal text rather than through a host double and printf.
+
+## The two phases in one storage (2026-10-16)
+
+A unit is parsed into HIR, and then the back end makes code of it, and
+neither phase reads the other's own tables. So the large tables that
+belong to one phase and one unit are pointers into one arena now
+(`src/f77_arena.h`), and both phases' pointers start at its beginning:
+the front end's 73 tables, 1.64MB, and the back end's 117, 1.61MB,
+take 1.64MB between them instead of 3.25MB. The HIR, the string pool,
+the DATA images, and what the pre-scan gathers for the whole source
+stay static. Each phase zeroes its part when it starts, so every unit
+starts from the same tables, whatever came before it. On S/370 the
+pointers cost nothing in speed (an array past a base register's 4K is
+reached through an address constant anyway), but the module is 14K
+larger.
+
+Which tables can join was proved, not assumed, in two ways. A build
+with `-DF77_ARENA_POISON` fills each phase's part with garbage instead
+of zeros, and it must compile every FCVS program, test and kernel to
+the same assembler as the normal build, with the guest's tables and
+the host's: no table in the arena may be read before the phase writes
+it. And the normal build must compile them as the compiler with static
+tables did, since what the pre-scan gathers before any phase begins
+would be lost to both builds alike (the escape list, which says whose
+address a unit takes, did just that, and FM910's COMPLEX variables were
+split into two slots and read back without their imaginary parts).
+
+Nine tables do cross units and stay static: the pre-scan's unit text,
+dummy names and escape list, the COMMON block names, the global name
+pool, string literal labels. Five values were read before they were
+set, and each made a unit's code depend on the units compiled before
+it: the register-pair tables (set only after a pass that read them),
+the frame layout's offsets (asked by LICM before the frame was laid
+out, and set only for the instructions there were then), a spliced
+callee's dummy arguments (f77_bind_actual left most fields as the last
+symbol with that index had them), and an INTEGER or REAL PARAMETER's
+part texts. Each is set now; only the register pairs changed any code,
+the registers six programs use.

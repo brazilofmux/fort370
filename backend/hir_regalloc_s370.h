@@ -56,28 +56,28 @@ static int ra_class(int inst) { return ra_is_fpv(inst); }
 
 static int ra_class_k(int cls) { return cls ? RA_NFPR : ra_gpr_avail; }
 
-static signed char ra_crosses_call[HIR_MAX_INST];
-static signed char ra_mem_forced[HIR_MAX_INST];   /* iterated-spill victims, and floating values across calls */
+static signed char *ra_crosses_call;
+static signed char *ra_mem_forced;   /* iterated-spill victims, and floating values across calls */
 
 /* BXLE wants its increment in an even register and its limit in the
  * next odd one.  The loop pass marks the two values as partners; the
  * colouring prefers an aligned pair for them, and the emitter falls
  * back to AR/C/BC when it could not be had. */
-static hir_ix  ra_pair_of[HIR_MAX_INST];     /* partner, or -1 */
-static char ra_pair_lo[HIR_MAX_INST];     /* 1 = wants the even register */
-static int  gc_pin[GC_MAX_NODE];          /* colour the partner asked for, or -1 */
-static int  gc_pair_inst[GC_MAX_NODE];    /* a pair-marked member of the node, or -1: survives coalescing */
+static hir_ix *ra_pair_of;     /* partner, or -1 */
+static char *ra_pair_lo;     /* 1 = wants the even register */
+static int *gc_pin;          /* colour the partner asked for, or -1 */
+static int *gc_pair_inst;    /* a pair-marked member of the node, or -1: survives coalescing */
 static void ra_dump_signed(int v);
 
 /* --- Output arrays --- */
 static hir_ix ra_reg[HIR_MAX_INST];
-static int ra_spill_off[HIR_MAX_INST];
+static int *ra_spill_off;
 static int ra_nslots;
 
 /* --- Live interval arrays --- */
-static hir_ix ra_pos[HIR_MAX_INST];
-static hir_ix ra_iend[HIR_MAX_INST];
-static hir_ix ra_order[HIR_MAX_INST];
+static hir_ix *ra_pos;
+static hir_ix *ra_iend;
+static hir_ix *ra_order;
 static int ra_norder;
 
 static int ra_stat_spills;
@@ -97,11 +97,11 @@ static int ra_can_reuse_src1(int k) {
 #define GC_MAX_MOVE (4096 * F77_ROOM)
 
 static int gc_nnode;
-static int gc_inst[GC_MAX_NODE];
-static hir_ix gc_node[HIR_MAX_INST];
-static char gc_cls[GC_MAX_NODE];
+static int *gc_inst;
+static hir_ix *gc_node;
+static char *gc_cls;
 
-static int gc_adj_head[GC_MAX_NODE];
+static int *gc_adj_head;
 /* An edge's peer node and the next edge of its list, in one word: the
  * peer in the low GC_NODE_BITS, the next edge plus one above them (0
  * ends a list).  Two int arrays were 2MB of the region.  On MVS a 32-bit
@@ -120,10 +120,10 @@ static gc_word *gc_adj;              /* fort370: GC_MAX_EDGE, allocated by hir_r
 #define GC_SETE(e, peer, next) (gc_adj[e] = ((gc_word)((next) + 1) << GC_NODE_BITS) | (gc_word)(peer))
 static int gc_nedge;
 
-static int gc_degree[GC_MAX_NODE];
+static int *gc_degree;
 
-static int gc_mv_a[GC_MAX_MOVE];
-static int gc_mv_b[GC_MAX_MOVE];
+static int *gc_mv_a;
+static int *gc_mv_b;
 static int gc_nmove;
 
 #define GC_MV_WORKLIST    0
@@ -131,12 +131,12 @@ static int gc_nmove;
 #define GC_MV_COALESCED   2
 #define GC_MV_FROZEN      3
 #define GC_MV_CONSTRAINED 4
-static int gc_mv_status[GC_MAX_MOVE];
+static int *gc_mv_status;
 
 #define GC_MAX_NMLIST (16384 * F77_ROOM)
-static int gc_nmlist_mv[GC_MAX_NMLIST];
-static int gc_nmlist_next[GC_MAX_NMLIST];
-static int gc_nmlist_head[GC_MAX_NODE];
+static int *gc_nmlist_mv;
+static int *gc_nmlist_next;
+static int *gc_nmlist_head;
 static int gc_nnmlist;
 
 #define GC_WL_SIMPLIFY  0
@@ -145,14 +145,14 @@ static int gc_nnmlist;
 #define GC_WL_COALESCED 3
 #define GC_WL_SELECT    4
 #define GC_WL_COLORED   5
-static int gc_wl[GC_MAX_NODE];
+static int *gc_wl;
 
-static int gc_sel_stk[GC_MAX_NODE];
+static int *gc_sel_stk;
 static int gc_nsel;
 
-static int gc_alias[GC_MAX_NODE];
-static int gc_color[GC_MAX_NODE];
-static int gc_force_spill[GC_MAX_NODE];
+static int *gc_alias;
+static int *gc_color;
+static int *gc_force_spill;
 
 /* =================================================================
  * Step 1: linearized positions (RPO block order)
@@ -250,9 +250,9 @@ static void ra_extend(int inst, int use_pos) {
     if (inst >= 0 && ra_pos[inst] >= 0 && use_pos > ra_iend[inst]) ra_iend[inst] = use_pos;
 }
 
-static int ra_blk_last[HIR_MAX_BLOCK];
-static int ra_bvis[HIR_MAX_BLOCK];
-static int ra_bwl[HIR_MAX_BLOCK];
+static int *ra_blk_last;
+static int *ra_bvis;
+static int *ra_bwl;
 
 static void ra_backprop(int val, int use_blk) {
     int def_blk;
@@ -474,9 +474,9 @@ static void ra_compute_ends(void) {
  * Step 3: spill slots, 8 bytes each, shared by live range
  * ================================================================= */
 
-static hir_ix ra_shead[HIR_MAX_INST];
-static hir_ix ra_snext[HIR_MAX_INST];
-static hir_ix ra_slot_end[HIR_MAX_INST];
+static hir_ix *ra_shead;
+static hir_ix *ra_snext;
+static hir_ix *ra_slot_end;
 
 static int ra_spill_wants_slot(int i) {
     if (ra_reg[i] >= 0) return 0;
@@ -695,7 +695,7 @@ static void gc_dec_degree(int n) {
     }
 }
 
-static char gc_mv_phi[GC_MAX_MOVE];
+static char *gc_mv_phi;
 
 static void gc_add_move_tag(int a, int b, int is_phi) {
     int mv;
@@ -730,12 +730,12 @@ static unsigned int *lv_pool_out;
 static int lv_pool_cap;
 static int lv_cap;
 static int lv_live_cap;
-static hir_ix lv_id[HIR_MAX_INST];
-static hir_ix lv_rev[HIR_MAX_INST];
+static hir_ix *lv_id;
+static hir_ix *lv_rev;
 static int lv_nid;
 static int lv_nw;
-static int lv_bstart[HIR_MAX_BLOCK];
-static int lv_bend[HIR_MAX_BLOCK];
+static int *lv_bstart;
+static int *lv_bend;
 static int lv_on;
 
 static int lv_tracked(int inst) {
@@ -1395,7 +1395,7 @@ static int gc_freeze(void) {
 }
 
 /* Loop-depth-weighted use counts for the spill cost. */
-static int ra_wuses[HIR_MAX_INST];
+static int *ra_wuses;
 
 static int ra_depth_w(int b) {
     int d;

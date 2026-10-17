@@ -99,7 +99,7 @@ static int s370_scache[16];
 #define S370_MAX_ULBL (8192 * F77_ROOM)    /* fort370: labels in one unit; a unit past it is refused */
 static int  s370_lbl_base;
 static int  s370_lbl_pc[S370_MAX_ULBL];
-static char s370_far[S370_MAX_ULBL];
+static char *s370_far;
 static int  s370_code_base;
 static int  s370_sizing_changed;
 static int  s370_area_end_sized;   /* the static area's extent the sizing found */
@@ -332,12 +332,12 @@ static int s370_cur_unit;
 
 /* ALLOCA objects */
 #define S370_MAX_OBJ 4096
-static int s370_obj_inst[S370_MAX_OBJ];
-static int s370_obj_size[S370_MAX_OBJ];
-static int s370_obj_off[S370_MAX_OBJ];     /* offset in the area, or -1 = far */
-static int s370_obj_lbl[S370_MAX_OBJ];     /* Tnnnnn */
+static int *s370_obj_inst;
+static int *s370_obj_size;
+static int *s370_obj_off;     /* offset in the area, or -1 = far */
+static int *s370_obj_lbl;     /* Tnnnnn */
 static int s370_nobj;
-static int s370_alab[HIR_MAX_INST];        /* ALLOCA inst -> its label number */
+static int *s370_alab;        /* ALLOCA inst -> its label number */
 
 /* Spill slots: offset of slot 0 in the area; each 8 bytes */
 static int s370_spill_base;
@@ -354,11 +354,11 @@ static int s370_spill_base;
 #define S370_PK_AL    8    /* DC A(Lnnnnn): a block label */
 #define S370_PK_AQ    9    /* DC A(Qnnnnn+off): a string */
 #define S370_PK_AB   10    /* DC A(Lnnnnn): a code label, for a far branch */
-static int   s370_pk_kind[S370_MAX_POOL];
-static int   s370_pk_lbl[S370_MAX_POOL];
-static unsigned int s370_pk_v1[S370_MAX_POOL];
-static unsigned int s370_pk_v2[S370_MAX_POOL];
-static char *s370_pk_name[S370_MAX_POOL];
+static int *s370_pk_kind;
+static int *s370_pk_lbl;
+static unsigned int *s370_pk_v1;
+static unsigned int *s370_pk_v2;
+static char * *s370_pk_name;
 static int   s370_npool;
 
 static int s370_pool(int kind, unsigned int v1, unsigned int v2, char *name) {
@@ -423,7 +423,7 @@ static int s370_cmp_size(const void *a, const void *b) {
     return ia - ib;
 }
 
-static int s370_order[S370_MAX_OBJ];
+static int *s370_order;
 
 static void s370_layout(void) {
     int i;
@@ -434,8 +434,11 @@ static void s370_layout(void) {
     int small_total;
     int big_total;
 
+    /* fort370: every instruction, not the h_ninst there are now: the
+     * passes after this one make more, and a frame object's offset is
+     * asked of them too, which read the last unit's (f77_arena.h) */
     i = 0;
-    while (i < h_ninst) { s370_aoff[i] = -1; s370_alab[i] = -1; i = i + 1; }
+    while (i < HIR_MAX_INST) { s370_aoff[i] = -1; s370_alab[i] = -1; i = i + 1; }
     n = 0;
     i = 0;
     while (i < h_ninst) {
@@ -666,8 +669,8 @@ static char *s370_r(int r) {
 /* Materialize an integer value (or address) into register d. */
 static void s370_load_into(int d, int v);
 static char *s370_memop_text(int ld, int s);
-static hir_ix s370_bxle_add[HIR_MAX_INST];   /* BRC -> the index-step ADD it performs, or -1 */
-static hir_ix s370_bxle_brc[HIR_MAX_INST];   /* ADD -> its BRC, or -1 */
+static hir_ix *s370_bxle_add;   /* BRC -> the index-step ADD it performs, or -1 */
+static hir_ix *s370_bxle_brc;   /* ADD -> its BRC, or -1 */
 static int s370_bxle_ok(int brc);
 
 /* Chain folding: a LOAD/STORE/ADDI address through ADDI chains to a
@@ -980,9 +983,9 @@ static void s370_ffinish(int i, int d) {
 /* Code emission                                                     */
 /* ---------------------------------------------------------------- */
 
-static int hcg_blk_lbl[HIR_MAX_BLOCK];
-static int hcg_emit_ord[HIR_MAX_BLOCK];
-static int hcg_placed[HIR_MAX_BLOCK];
+static int *hcg_blk_lbl;
+static int *hcg_emit_ord;
+static int *hcg_placed;
 static int hcg_epilog;
 static int hcg_cur_blk;
 
@@ -2540,15 +2543,19 @@ static void s370_mark_strings(void) {
     }
 }
 
-/* What LICM may leave in a loop as a leaf to recompute: an object the
- * data bases reach (its address is a label, no instruction), or a
- * constant LA can make.  A far object or a symbol costs a load from
- * the pool at every use; hoist those. */
+/* What LICM may leave in a loop as a leaf to recompute: a frame object
+ * or a constant LA can make.  A symbol costs a load from the pool at
+ * every use; hoist those.  Whether a frame object is far is not known
+ * yet -- the frame is laid out after LICM, which makes objects of its
+ * own -- and s370_hoist_bases hoists the far ones' addresses once it
+ * is.  (fort370: this asked s370_aoff, which then held the last unit's
+ * layout, or a first unit's zeros: every object near, which is what
+ * it says now for every unit; f77_arena.h.) */
 static int s370_cheap_operand(int inst) {
     int k;
     if (inst < 0) return 1;
     k = h_kind[inst];
-    if (k == HI_ALLOCA) return s370_aoff[inst] >= 0;
+    if (k == HI_ALLOCA) return 1;
     if (k == HI_ICONST) return h_val[inst] >= 0 && h_val[inst] <= 4095;
     return 0;
 }
@@ -2559,7 +2566,7 @@ static int s370_cheap_operand(int inst) {
  * carries nothing but the subscript.  Both instructions are rewritten
  * in place, which keeps the order right; the ADD must have no other
  * use. */
-static short s370_use_count[HIR_MAX_INST];
+static short *s370_use_count;
 static void s370_reassoc(void) {
     int i;
     int j;
@@ -2649,9 +2656,9 @@ static void s370_reassoc(void) {
 /* Loops: the innermost header of each block, from the back edges    */
 /* ---------------------------------------------------------------- */
 
-static int s370_loop_hdr[HIR_MAX_BLOCK];   /* innermost loop header containing the block, or -1 */
-static int s370_loop_size[HIR_MAX_BLOCK];  /* body size of the loop headed here */
-static int s370_lwl[HIR_MAX_BLOCK];
+static int *s370_loop_hdr;   /* innermost loop header containing the block, or -1 */
+static int *s370_loop_size;  /* body size of the loop headed here */
+static int *s370_lwl;
 static char s370_lvis[HIR_MAX_BLOCK];
 
 static void s370_find_loops(void) {
@@ -3254,6 +3261,12 @@ static void s370_gen_unit(Node *fn) {
          * and generating from it would only bury the message */
         if (f77_nerr > nerr) return;
     }
+    f77_arena_phase(1);      /* fort370: the back end's tables, where the front end's were */
+    /* No instruction has a pair partner yet.  This was set only further
+     * on, and what read it before saw the last unit's -1s, or the first
+     * unit's zeros -- a unit's registers depended on the units before it
+     * (found when the tables moved into the arena, f77_arena.h). */
+    { int z; z = 0; while (z < HIR_MAX_INST) { ra_pair_of[z] = -1; ra_pair_lo[z] = 0; z = z + 1; } }
 
     { int z; z = 0; while (z < HIR_MAX_INST) { bg_fold[z] = 0; bg_memop[z] = 0; bg_mem_lnt[z] = -1; z = z + 1; } }
     ssa_split_pairs = 0;
@@ -3327,7 +3340,7 @@ static void s370_gen_unit(Node *fn) {
  * far (a 25K unit took eleven passes); then the real pass.  Everything the emission allocates (labels,
  * pool entries, temporaries, parameter lists, global labels) is
  * restored between passes so that every pass numbers alike. */
-static int s370_glbl_save[P_MAX_GLOBALS];
+static int *s370_glbl_save;
 static void s370_emit_csect(Node *fn, char *csect, int size_only) {
     int sv_lbl;
     int sv_npool;

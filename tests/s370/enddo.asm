@@ -208,15 +208,15 @@ L00052   DS    0H
          LA    2,0
          LR    3,8
 L00053   DS    0H
-         LR    4,3
-         SR    4,6
-         AR    4,6
+         LR    5,3
+         SR    5,6
+         AR    5,6
 L00056   DS    0H
-         LR    5,4
-         SLL   5,0
+         LR    4,5
+         SLL   4,0
          LA    7,0
-         AR    7,5
-         C     4,C00070
+         AR    7,4
+         C     5,C00070
          BC    2,L00083
          B     L00058
 L00083   DS    0H

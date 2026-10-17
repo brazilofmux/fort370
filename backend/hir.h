@@ -257,10 +257,10 @@ static hir_ix   hjt_span[HIR_MAX_INST];
 static int   hjt_n;
 
 /* Phi arguments (Phase B) */
-static int   h_pblk[HIR_MAX_PARG];
-static int   h_pval[HIR_MAX_PARG];
-static hir_ix   h_pbase[HIR_MAX_INST];
-static hir_ix   h_pcnt[HIR_MAX_INST];
+static int *h_pblk;
+static int *h_pval;
+static hir_ix *h_pbase;
+static hir_ix *h_pcnt;
 static int   h_nparg;
 
 /* Basic blocks */
@@ -384,7 +384,7 @@ static int hi_is_remat(int kind) {
  * lui+addi rematerialized at every use (two instructions per loop
  * iteration), the value gets a graph node, a color, and one
  * materialization at its def.  Reset per function by that pass. */
-static short h_no_remat[HIR_MAX_INST];
+static short *h_no_remat;
 
 /* Instruction-level remat query: kind says remat, override says
  * keep it in a register.  Use wherever an instruction (not just a

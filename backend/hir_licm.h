@@ -19,7 +19,7 @@
  */
 
 /* --- Per-block hoisted instruction lists (append order: defs before uses) --- */
-static int licm_head[HIR_MAX_BLOCK];  /* first hoisted inst, -1 = none */
+static int *licm_head;  /* first hoisted inst, -1 = none */
 
 /* Loop-optimisation gate.  licm_split parks values in split_head[]
  * TOP-of-block lists and licm_strred/licm_fp64_consts append clones
@@ -33,25 +33,25 @@ static int licm_split_on = 1;        /* licm_split around each loop (a target ma
  * one instruction, so ADD(iv, base) must stay an ADD rather than
  * become a pointer induction variable; set by the S/370 emitter. */
 static int licm_no_ptr_iv;
-static int licm_tail[HIR_MAX_BLOCK];  /* last hoisted inst, for O(1) append */
-static hir_ix licm_next[HIR_MAX_INST];   /* next hoisted inst, -1 = end */
+static int *licm_tail;  /* last hoisted inst, for O(1) append */
+static hir_ix *licm_next;   /* next hoisted inst, -1 = end */
 
 /* --- Old-to-clone mapping --- */
 static hir_ix licm_map[HIR_MAX_INST];    /* old index -> clone index, -1 = not hoisted */
-static hir_ix licm_cpin[HIR_MAX_INST];   /* ICONST clone placed in a preheader by
+static hir_ix *licm_cpin;   /* ICONST clone placed in a preheader by
                                        * licm_fp64_consts; codegen pins it
                                        * (h_no_remat) so it can keep a pair */
 
 /* Blocks belonging to ANY natural loop in this function — persists
  * after hir_licm (ssa_vis is per-loop scratch).  Consumed by
  * hcg_mark_loop_consts. */
-static int licm_in_any_loop[HIR_MAX_BLOCK];
+static int *licm_in_any_loop;
 /* DIVERGENCE (f77, port upstream): nesting depth per block -- each
  * natural-loop body found below increments its blocks, so an inner
  * loop's blocks count every enclosing loop.  Consumed by the spill
  * cost in hir_regalloc: a value used in an inner loop is far more
  * expensive to spill than its static use count says. */
-static int licm_depth[HIR_MAX_BLOCK];
+static int *licm_depth;
 
 /* --- Stats --- */
 static int licm_stat_hoisted;
@@ -79,16 +79,16 @@ static int licm_stat_hoisted;
  * the preheader, and no use anywhere else (a use neither clearly
  * before nor clearly after the loop disqualifies).  CALL/CALLHI
  * values are excluded (their result-pair linkage is positional). */
-static int split_head[HIR_MAX_BLOCK];
+static int *split_head;
 static int split_frame;
 static int licm_stat_split;
-static char sp_inbody[HIR_MAX_INST];
-static char sp_post[HIR_MAX_INST];
-static char sp_bad[HIR_MAX_INST];
+static char *sp_inbody;
+static char *sp_post;
+static char *sp_bad;
 
 /* --- Scratch for loop body --- */
 #define LICM_MAX_BODY (8192 * F77_ROOM)    /* fort370: blocks of loop bodies, as one unit has them */
-static int licm_body[LICM_MAX_BODY];
+static int *licm_body;
 
 /* --- Helpers --- */
 
@@ -119,7 +119,7 @@ static int licm_in_loop(int inst) {
  * - already marked as invariant (ho_use[inst] == 1) */
 static int licm_cur_header = -1;
 static int licm_cur_latch = -1;      /* back-edge source of the loop being hoisted */
-static hir_ix licm_ucnt[HIR_MAX_INST];  /* marked in-loop users, for the cheap-leaf rule */
+static hir_ix *licm_ucnt;  /* marked in-loop users, for the cheap-leaf rule */
 
 static int licm_operand_ok(int inst) {
     if (inst < 0) return 1;

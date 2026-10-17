@@ -30,6 +30,8 @@
 #ifndef F77_CONTRACT_H
 #define F77_CONTRACT_H
 
+static void f77_arena_phase(int be);   /* f77.c, f77_arena.h */
+
 /* --- 1. diagnostic output ------------------------------------------ */
 
 #ifdef F77_TARGET_S370
@@ -130,12 +132,12 @@ static void  hl_inl_prepare(Node *prog) { (void)prog; }
 #define PS_MAX_INIT_RELOCS 8192
 
 static char *ps_gname[P_MAX_GLOBALS];
-static int   ps_gtype[P_MAX_GLOBALS];
+static int *ps_gtype;
 static int   ps_gsize[P_MAX_GLOBALS];
-static int   ps_ginit[P_MAX_GLOBALS];
-static int   ps_ginit_hi[P_MAX_GLOBALS];
-static int   ps_gstr[P_MAX_GLOBALS];
-static int   ps_glocal[P_MAX_GLOBALS];
+static int *ps_ginit;
+static int *ps_ginit_hi;
+static int *ps_gstr;
+static int *ps_glocal;
 static int   ps_gextern[P_MAX_GLOBALS];
 static int   ps_nglobals;
 
@@ -147,14 +149,14 @@ static int ps_ginit_pool_len;
 #define GIRELOC_STRING 0
 #define GIRELOC_GLOBAL 1
 #define GIRELOC_SYMBOL 2
-static int   ps_girel_start[P_MAX_GLOBALS];
+static int *ps_girel_start;
 static int   ps_girel_count[P_MAX_GLOBALS];
-static int   ps_girel_off[PS_MAX_INIT_RELOCS];
-static int   ps_girel_kind[PS_MAX_INIT_RELOCS];
-static int   ps_girel_idx[PS_MAX_INIT_RELOCS];
-static int   ps_girel_size[PS_MAX_INIT_RELOCS];
-static int   ps_girel_add[PS_MAX_INIT_RELOCS];
-static char *ps_girel_name[PS_MAX_INIT_RELOCS];
+static int *ps_girel_off;
+static int *ps_girel_kind;
+static int *ps_girel_idx;
+static int *ps_girel_size;
+static int *ps_girel_add;
+static char * *ps_girel_name;
 
 /* String pool: Fortran character constants (Hollerith and '...' alike)
  * land here and are emitted as .L.str labels by gen_data(). */

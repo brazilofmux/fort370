@@ -19,22 +19,22 @@
  * exhausted by one large switch plus ordinary control flow, so allow ample
  * headroom; ssa_build_cfg still range-checks and aborts cleanly on overflow. */
 #define SSA_SUCC_SZ (4096 * F77_ROOM)
-static int ssa_succ[SSA_SUCC_SZ];
-static int ssa_nsucc[HIR_MAX_BLOCK];
-static int ssa_soff[HIR_MAX_BLOCK];
+static int *ssa_succ;
+static int *ssa_nsucc;
+static int *ssa_soff;
 
 #define SSA_MAX_PRED (4096 * F77_ROOM)
-static int ssa_pred[SSA_MAX_PRED];
-static int ssa_pbase[HIR_MAX_BLOCK];
-static int ssa_npred[HIR_MAX_BLOCK];
+static int *ssa_pred;
+static int *ssa_pbase;
+static int *ssa_npred;
 
 /* --- RPO --- */
-static int ssa_rpo[HIR_MAX_BLOCK];
-static int ssa_rpo_ord[HIR_MAX_BLOCK];
+static int *ssa_rpo;
+static int *ssa_rpo_ord;
 static int ssa_rpo_cnt;
 
 /* --- Dominators --- */
-static int ssa_idom[HIR_MAX_BLOCK];
+static int *ssa_idom;
 
 /* --- Dominance frontier (fixed width per block) --- */
 /* Per-block dominance-frontier width, and the flat array it indexes as
@@ -51,7 +51,7 @@ static int ssa_idom[HIR_MAX_BLOCK];
 #define SSA_DF_W 64
 #define SSA_DF_SZ (HIR_MAX_BLOCK * SSA_DF_W)
 static short *ssa_df;              /* fort370: block numbers; SSA_DF_SZ, allocated per construction */
-static int ssa_dfc[HIR_MAX_BLOCK];
+static int *ssa_dfc;
 
 /* --- Promotable variables --- */
 #define SSA_MAX_PROMO 4096   /* was 256 */
@@ -84,16 +84,16 @@ static int ssa_is_setjmp_name(char *nm) {
 static int ssa_phi_base; /* h_ninst before phi insertion */
 
 /* --- PHI optimization (linked lists per block) --- */
-static int ssa_phi_head[HIR_MAX_BLOCK];
-static hir_ix ssa_phi_next[HIR_MAX_INST];
+static int *ssa_phi_head;
+static hir_ix *ssa_phi_next;
 
 /* hl_nparams defined in hir_lower.h (shared) */
 
 /* --- Dom tree children (flat) --- */
 #define SSA_DTC_MAX HIR_MAX_BLOCK   /* fort370: every block but the entry is one child */
-static int ssa_dtc[SSA_DTC_MAX];
-static int ssa_dtc_base[HIR_MAX_BLOCK];
-static int ssa_dtc_cnt[HIR_MAX_BLOCK];
+static int *ssa_dtc;
+static int *ssa_dtc_base;
+static int *ssa_dtc_cnt;
 
 /* --- Rename: per-variable value stack --- */
 /* SSA_VD bounds the depth of the per-variable value stack along any
@@ -126,11 +126,11 @@ static int *ssa_pprev;
 static int ssa_plog_n;
 
 /* --- Temp arrays (reused across passes) --- */
-static int ssa_vis[HIR_MAX_BLOCK];
-static int ssa_post[HIR_MAX_BLOCK];
-static int ssa_tmp1[HIR_MAX_BLOCK];  /* cnt / wl */
-static int ssa_tmp2[HIR_MAX_BLOCK];  /* has_phi */
-static int ssa_tmp3[HIR_MAX_BLOCK];  /* in_wl */
+static int *ssa_vis;
+static int *ssa_post;
+static int *ssa_tmp1;  /* cnt / wl */
+static int *ssa_tmp2;  /* has_phi */
+static int *ssa_tmp3;  /* in_wl */
 
 /* ------------------------------------------------------------ */
 

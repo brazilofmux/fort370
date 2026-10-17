@@ -58,15 +58,15 @@ static int bg_nchain;
 static int *bg_cost;                 /* fort370: BG_COST_SZ, allocated by hir_burg for selection */
 static short *bg_rule;              /* fort370: a rule number, or -1, or -(chain+2); as bg_cost */
 
-static hir_ix bg_sel[HIR_MAX_INST];
+static hir_ix *bg_sel;
 static signed char bg_fold[HIR_MAX_INST];
-static hir_ix bg_uses[HIR_MAX_INST];
-static int bg_foff[HIR_MAX_INST];   /* offset within the ALLOCA's object along an ADDI chain */
-static hir_ix bg_ssym[HIR_MAX_INST];
-static int bg_soff[HIR_MAX_INST];
-static signed char bg_memop[HIR_MAX_INST];    /* 0; 1 = src1 is a folded MEM; 2 = src2 is */
-static signed char bg_fold_kind[HIR_MAX_INST]; /* a folded instruction's kind before it became a NOP */
-static char bg_need_reg[HIR_MAX_INST];  /* some user reads this value from a register */
+static hir_ix *bg_uses;
+static int *bg_foff;   /* offset within the ALLOCA's object along an ADDI chain */
+static hir_ix *bg_ssym;
+static int *bg_soff;
+static signed char *bg_memop;    /* 0; 1 = src1 is a folded MEM; 2 = src2 is */
+static signed char *bg_fold_kind; /* a folded instruction's kind before it became a NOP */
+static char *bg_need_reg;  /* some user reads this value from a register */
 
 /* The kind of an instruction as the address parsers need it: folded
  * children are NOPs to the emitter but still shape the operand. */
@@ -75,12 +75,12 @@ static int bg_kind(int i) {
     if (bg_fold[i]) return bg_fold_kind[i];
     return h_kind[i];
 }
-static signed char bg_mem_lnt[HIR_MAX_INST];  /* for a folded LOAD: its address nonterminal */
+static signed char *bg_mem_lnt;  /* for a folded LOAD: its address nonterminal */
 
 /* Filled by the emitter's layout pass before hir_burg(): for an ALLOCA,
  * its byte offset in the unit's static area, or -1 when it lies past
  * the data bases' reach and must go through an address constant. */
-static int s370_aoff[HIR_MAX_INST];
+static int *s370_aoff;
 
 static int bg_inited;
 
@@ -573,8 +573,8 @@ static void bg_count_uses(void) {
 
 static int bg_is_sym(int k) { return k == HI_GADDR || k == HI_SADDR || k == HI_FADDR; }
 
-static char bg_fdone[HIR_MAX_INST];
-static hir_ix  bg_walk[HIR_MAX_INST];
+static char *bg_fdone;
+static hir_ix *bg_walk;
 
 static int bg_walk_push(int sp, int v) {
     if (sp >= HIR_MAX_INST) { fdputs("f77: burg walk stack overflow\n", 2); exit(1); }
@@ -638,7 +638,7 @@ static void bg_compute_foff(void) {
 
 /* --- Bottom-up labelling --- */
 
-static char bg_done[HIR_MAX_INST];
+static char *bg_done;
 
 static int bg_src2_is_value(int k) {
     if (k == HI_BR || k == HI_BRC || k == HI_PHI) return 0;
@@ -946,9 +946,9 @@ static void hir_burg_body(void) {
  * allocator (ra_extend_fused_cmp), which keeps its operands live.
  * ============================================================================ */
 
-static hir_ix hcg_brc_fuse[HIR_MAX_INST];
-static hir_ix hcg_cmp_fused[HIR_MAX_INST];
-static signed char hcg_cmp_kind[HIR_MAX_INST];
+static hir_ix *hcg_brc_fuse;
+static hir_ix *hcg_cmp_fused;
+static signed char *hcg_cmp_kind;
 
 static int hcg_is_cmp(int k) {
     return (k >= HI_SEQ && k <= HI_SGEU) || k == HI_FEQ || k == HI_FLT || k == HI_FLE;

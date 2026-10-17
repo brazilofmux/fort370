@@ -12,8 +12,8 @@
  */
 
 /* Use count per instruction */
-static hir_ix ho_use[HIR_MAX_INST];
-static char ho_phi_vouched[HIR_MAX_INST];   /* ho_count_uses: this live phi has counted its args */
+static hir_ix *ho_use;
+static char *ho_phi_vouched;   /* ho_count_uses: this live phi has counted its args */
 
 /* Resolve COPY chains: follow src1 until non-COPY */
 static int ho_resolve(int inst) {
@@ -876,8 +876,8 @@ static int ho_dominates(int a, int b) {
 #define HO_CSE_SLOTS  2048
 #define HO_CSE_MASK   2047
 
-static int ho_cse_head[HO_CSE_SLOTS];   /* slot -> first inst index, -1 if empty */
-static hir_ix ho_cse_next[HIR_MAX_INST];    /* inst -> next in chain, -1 if end */
+static int *ho_cse_head;   /* slot -> first inst index, -1 if empty */
+static hir_ix *ho_cse_next;    /* inst -> next in chain, -1 if end */
 static int ho_stat_cse;
 
 /* fort370: an operand's identity for CSE.  Two ICONSTs of one value and

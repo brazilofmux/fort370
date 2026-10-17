@@ -168,7 +168,7 @@ static int   lx_stmt_line;  /* line number of the initial line */
  * classifier uses it so INTEGER FUNCTIONAL stays one name while
  * INTEGER FUNCTION F and the no-space INTEGERFUNCTIONF(X) both still
  * open a FUNCTION unit (GitHub issue 25). */
-static unsigned char lx_brk[F77_MAX_STMT];
+static unsigned char *lx_brk;
 static int lx_after_blank;
 
 static void f77_error(char *msg);    /* supplied by the driver */
