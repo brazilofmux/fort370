@@ -13,7 +13,7 @@ with each release, built and checked by CI on their own platforms.
 Tagged `v2026.10.16.4`: the runtime is a library a program takes only
 what it calls from, programs and the compiler need much less storage,
 and both are built with mvslovers' current cc370 1.6.3 and libc370
-2.16.0.  Built from `1667c02`: FORT370.xmit SHA256 `b49d3addb0cc89d5…`,
+2.16.0.  Built from `89403cd`: FORT370.xmit SHA256 `d4d9e6a5b5a29924…`,
 567,760 bytes; F77RT.upd SHA256 `4fde8627c8462a3c…`, 487,920 bytes.
 All 192 FCVS programs, 91 tests, the 600K source, the 85-deep nesting
 test, a unit at each size limit, ANCORR, AIDAFC and the pi spigot
