@@ -16,7 +16,10 @@
  * a pointer through its value, one load either way.
  *
  * A table that is one phase's, per unit, can join: declare it a pointer
- * and add it to its phase here, with its first dimension. */
+ * and add it to its phase here, with its first dimension.  The back
+ * end's are in two lists: those of the headers the SLOW-32 build shares
+ * (out/f77-s32, which keeps the other back end), and the S/370 code
+ * generator's, allocator's and selector's. */
 
 #define F77_FE_TABLES(X) \
     X(lx_brk, F77_MAX_STMT) \
@@ -99,6 +102,44 @@
     X(h_pbase, HIR_MAX_INST) \
     X(h_pcnt, HIR_MAX_INST) \
     X(h_no_remat, HIR_MAX_INST) \
+    X(licm_head, HIR_MAX_BLOCK) \
+    X(licm_tail, HIR_MAX_BLOCK) \
+    X(licm_next, HIR_MAX_INST) \
+    X(licm_cpin, HIR_MAX_INST) \
+    X(licm_in_any_loop, HIR_MAX_BLOCK) \
+    X(licm_depth, HIR_MAX_BLOCK) \
+    X(split_head, HIR_MAX_BLOCK) \
+    X(sp_inbody, HIR_MAX_INST) \
+    X(sp_post, HIR_MAX_INST) \
+    X(sp_bad, HIR_MAX_INST) \
+    X(licm_body, LICM_MAX_BODY) \
+    X(licm_ucnt, HIR_MAX_INST) \
+    X(ho_use, HIR_MAX_INST) \
+    X(ho_phi_vouched, HIR_MAX_INST) \
+    X(ho_cse_head, HO_CSE_SLOTS) \
+    X(ho_cse_next, HIR_MAX_INST) \
+    X(ssa_succ, SSA_SUCC_SZ) \
+    X(ssa_nsucc, HIR_MAX_BLOCK) \
+    X(ssa_soff, HIR_MAX_BLOCK) \
+    X(ssa_pred, SSA_MAX_PRED) \
+    X(ssa_pbase, HIR_MAX_BLOCK) \
+    X(ssa_npred, HIR_MAX_BLOCK) \
+    X(ssa_rpo, HIR_MAX_BLOCK) \
+    X(ssa_rpo_ord, HIR_MAX_BLOCK) \
+    X(ssa_idom, HIR_MAX_BLOCK) \
+    X(ssa_dfc, HIR_MAX_BLOCK) \
+    X(ssa_phi_head, HIR_MAX_BLOCK) \
+    X(ssa_phi_next, HIR_MAX_INST) \
+    X(ssa_dtc, SSA_DTC_MAX) \
+    X(ssa_dtc_base, HIR_MAX_BLOCK) \
+    X(ssa_dtc_cnt, HIR_MAX_BLOCK) \
+    X(ssa_vis, HIR_MAX_BLOCK) \
+    X(ssa_post, HIR_MAX_BLOCK) \
+    X(ssa_tmp1, HIR_MAX_BLOCK) \
+    X(ssa_tmp2, HIR_MAX_BLOCK) \
+    X(ssa_tmp3, HIR_MAX_BLOCK) \
+
+#define F77_BE_S370_TABLES(X) \
     X(bg_sel, HIR_MAX_INST) \
     X(bg_uses, HIR_MAX_INST) \
     X(bg_foff, HIR_MAX_INST) \
@@ -137,22 +178,6 @@
     X(s370_loop_size, HIR_MAX_BLOCK) \
     X(s370_lwl, HIR_MAX_BLOCK) \
     X(s370_glbl_save, P_MAX_GLOBALS) \
-    X(licm_head, HIR_MAX_BLOCK) \
-    X(licm_tail, HIR_MAX_BLOCK) \
-    X(licm_next, HIR_MAX_INST) \
-    X(licm_cpin, HIR_MAX_INST) \
-    X(licm_in_any_loop, HIR_MAX_BLOCK) \
-    X(licm_depth, HIR_MAX_BLOCK) \
-    X(split_head, HIR_MAX_BLOCK) \
-    X(sp_inbody, HIR_MAX_INST) \
-    X(sp_post, HIR_MAX_INST) \
-    X(sp_bad, HIR_MAX_INST) \
-    X(licm_body, LICM_MAX_BODY) \
-    X(licm_ucnt, HIR_MAX_INST) \
-    X(ho_use, HIR_MAX_INST) \
-    X(ho_phi_vouched, HIR_MAX_INST) \
-    X(ho_cse_head, HO_CSE_SLOTS) \
-    X(ho_cse_next, HIR_MAX_INST) \
     X(ra_crosses_call, HIR_MAX_INST) \
     X(ra_mem_forced, HIR_MAX_INST) \
     X(ra_pair_of, HIR_MAX_INST) \
@@ -191,24 +216,4 @@
     X(lv_bstart, HIR_MAX_BLOCK) \
     X(lv_bend, HIR_MAX_BLOCK) \
     X(ra_wuses, HIR_MAX_INST) \
-    X(ssa_succ, SSA_SUCC_SZ) \
-    X(ssa_nsucc, HIR_MAX_BLOCK) \
-    X(ssa_soff, HIR_MAX_BLOCK) \
-    X(ssa_pred, SSA_MAX_PRED) \
-    X(ssa_pbase, HIR_MAX_BLOCK) \
-    X(ssa_npred, HIR_MAX_BLOCK) \
-    X(ssa_rpo, HIR_MAX_BLOCK) \
-    X(ssa_rpo_ord, HIR_MAX_BLOCK) \
-    X(ssa_idom, HIR_MAX_BLOCK) \
-    X(ssa_dfc, HIR_MAX_BLOCK) \
-    X(ssa_phi_head, HIR_MAX_BLOCK) \
-    X(ssa_phi_next, HIR_MAX_INST) \
-    X(ssa_dtc, SSA_DTC_MAX) \
-    X(ssa_dtc_base, HIR_MAX_BLOCK) \
-    X(ssa_dtc_cnt, HIR_MAX_BLOCK) \
-    X(ssa_vis, HIR_MAX_BLOCK) \
-    X(ssa_post, HIR_MAX_BLOCK) \
-    X(ssa_tmp1, HIR_MAX_BLOCK) \
-    X(ssa_tmp2, HIR_MAX_BLOCK) \
-    X(ssa_tmp3, HIR_MAX_BLOCK) \
 

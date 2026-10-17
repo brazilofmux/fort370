@@ -123,11 +123,28 @@ static unsigned int f77_arena_be;          /* and the back end's */
 static int f77_arena_init(void) {
     unsigned int off;
     off = 0; F77_FE_TABLES(F77_ARENA_SIZE) f77_arena_fe = off;
-    off = 0; F77_BE_TABLES(F77_ARENA_SIZE) f77_arena_be = off;
+#ifdef F77_TARGET_S370
+    off = 0;
+#else
+    off = f77_arena_fe;        /* the SLOW-32 back end does not take turns (f77_arena.h) */
+#endif
+    F77_BE_TABLES(F77_ARENA_SIZE)
+#ifdef F77_TARGET_S370
+    F77_BE_S370_TABLES(F77_ARENA_SIZE)
+#endif
+    f77_arena_be = off;
     f77_arena = (char *)calloc(1, f77_arena_fe > f77_arena_be ? f77_arena_fe : f77_arena_be);
     if (!f77_arena) return -1;
     off = 0; F77_FE_TABLES(F77_ARENA_PLACE)
-    off = 0; F77_BE_TABLES(F77_ARENA_PLACE)
+#ifdef F77_TARGET_S370
+    off = 0;
+#else
+    off = f77_arena_fe;
+#endif
+    F77_BE_TABLES(F77_ARENA_PLACE)
+#ifdef F77_TARGET_S370
+    F77_BE_S370_TABLES(F77_ARENA_PLACE)
+#endif
     if (getenv("F77_ARENA_STATS")) {
         fdputs("f77: arena: front end ", 2); fdputuint(2, f77_arena_fe);
         fdputs(" bytes, back end ", 2); fdputuint(2, f77_arena_be); fdputs("\n", 2);
