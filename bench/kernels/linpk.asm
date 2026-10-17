@@ -174,8 +174,8 @@ C00039   DC    V(MATGEN)
 C00040   DC    V(DGEFA)
 C00041   DC    V(DGESL)
 C00027   DC    H'-1'
-Q00001   DC    C'('' LINPACK INFO '',I3,'' CHECKSUM '',D22.15'
-         DC    C')'
+Q00001   DC    C'('' LINPACK INFO '',I3,'' CHECKSUM '',D2'
+         DC    C'2.15)'
          DS    0D
 T00008   DS    10101D
 * MATGEN

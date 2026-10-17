@@ -2351,7 +2351,10 @@ static void s370_layout_blocks(void) {
 
 static void s370_emit_dc_string(char *label, unsigned char *s, int len) {
     /* CLn'...' with quotes and ampersands doubled, 40 characters per
-     * statement so the line stays short */
+     * statement so the line stays short: 40 as written, a doubled
+     * quote two of them (fort370: counting the string's own characters,
+     * a FORMAT of quotes wrote 80 and passed column 71, Marco Verpelli's
+     * SHALLIT, 2026-10-17) */
     int i;
     int n;
     char *lab;
@@ -2362,10 +2365,12 @@ static void s370_emit_dc_string(char *label, unsigned char *s, int len) {
         n = 0;
         f_reset();
         f_s("C'");
-        while (i < len && n < 40) {
+        while (i < len) {
             int c;
             c = s[i];
-            if (c == '\'' || c == '&') { f_c(c); f_c(c); }
+            if ((c == '\'' || c == '&') && n + 2 > 40) break;
+            if (n + 1 > 40) break;
+            if (c == '\'' || c == '&') { f_c(c); f_c(c); n = n + 1; }
 #ifdef __MVS__
             else if (!isprint(c)) f_c('?');          /* EBCDIC: printable is not 32..126 */
 #else

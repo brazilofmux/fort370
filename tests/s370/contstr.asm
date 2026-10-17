@@ -94,8 +94,8 @@ C00020   DC    V(F77WRI)
 C00021   DC    V(F77WREND)
 C00022   DC    A(Q00004)
 Q00002   DC    C'(1X,''>CONTSTR'',I4)'
-Q00004   DC    C'(1X,''XY                                 '
-         DC    C'                 Z'',''<'')'
+Q00004   DC    C'(1X,''XY                                '
+         DC    C'                  Z'',''<'')'
 Q00001   DC    C'AB                                      '
          DC    C'                     CD'
 Q00003   DC    C'CD'

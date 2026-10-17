@@ -166,8 +166,8 @@ C00040   DC    V(F77WRI)
 C00041   DC    V(EXIT)
 C00043   DC    F'8'
 C00042   DC    H'-1'
-Q00001   DC    C'(''     NORM. RESID      TIME       MFLOP'
-         DC    C'S'')'
+Q00001   DC    C'(''     NORM. RESID      TIME       MFLO'
+         DC    C'PS'')'
 Q00002   DC    C'(2X,E14.7,2X,F8.4,2X,F10.3)'
 Q00003   DC    C'('' X ='',4F9.4)'
 Q00004   DC    C'('' N ='',I4,''  RESID ='',E12.5)'

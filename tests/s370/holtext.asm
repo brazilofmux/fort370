@@ -161,8 +161,8 @@ C00037   DC    V(F77WREND)
 C00039   DC    F'4'
 C00028   DC    H'-4'
 C00038   DC    H'-1'
-Q00002   DC    C'(1X,''>HOLTEXT '',A1,A1,A4,A2,1X,A4,1X,A8,'
-         DC    C'1X,A4,1X,A6,1X,A4)'
+Q00002   DC    C'(1X,''>HOLTEXT '',A1,A1,A4,A2,1X,A4,1X,A'
+         DC    C'8,1X,A4,1X,A6,1X,A4)'
 Q00001   DC    C'(A4,A6)'
 G00025   CSECT
          DS    0D
