@@ -8,6 +8,56 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-16.4
+
+Tagged `v2026.10.16.4`: the runtime is a library a program takes only
+what it calls from, programs and the compiler need much less storage,
+and both are built with mvslovers' current cc370 1.6.3 and libc370
+2.16.0.  Built from `1667c02`: FORT370.xmit SHA256 `b49d3addb0cc89d5…`,
+567,760 bytes; F77RT.upd SHA256 `4fde8627c8462a3c…`, 487,920 bytes.
+All 192 FCVS programs, 91 tests, the 600K source, the 85-deep nesting
+test, a unit at each size limit, ANCORR, AIDAFC and the pi spigot
+compile on the guest to the host's assembler, byte for byte, in
+REGION=6144K; the FCVS compiled, assembled, linked from the new
+library and run on the guest passes as before (3,346 tests, and
+FM923's two expected failures).
+
+**Your JCL changes.** F77RT is no longer an object deck to concatenate
+to SYSLIN.  It is a PDS made by IEBUPDTE from F77RT.upd (INSTALL.txt,
+section 2), and a link names it as SYSLIB:
+
+    //LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST'
+    //SYSLIN   DD DSN=&&OBJ,DISP=(OLD,DELETE)
+    //SYSLIB   DD DSN=your.FORT370.F77RT,DISP=SHR
+
+NCAL comes out of the PARM, and nothing else is needed: no ENTRY
+statement, and for the loader, `PGM=LOADER,PARM='SIZE=1024K'` with the
+same SYSLIB and no EP=.  jcl/F77CLG.jcl and the FCVS decks are changed
+to match.  Programs compiled by an earlier FORT370 need recompiling.
+
+- The runtime as an autocall library (#1).  The linkage editor and
+  the loader take from F77RT only what a program calls: a program that
+  prints is 133K, one that also takes a SQRT 154K, where every program
+  was 187K or more.  f77math comes only with the mathematical
+  functions, the record I/O only with unformatted or direct access.
+  A compiled main program carries its entry point, F77@GO, which goes
+  on to libc370's startup.
+- Storage for running a program: an empty one took 412K, 164K of it
+  libc370's startup opening SYSPRINT, SYSTERM and SYSIN with 32K
+  buffers each, used or not (#2).  libc370 2.16.0 opens them when first
+  used; with the library, FCVS's GO steps take 208K-340K, median 220K.
+- The compiler's front end and back end share the storage of their
+  per-unit tables: a small compile's step is 4,288K, was 5,684K, and
+  the largest units tested need 6,144K, were 7,168K.  On the way five
+  values read before they were set were found and fixed, which had
+  made a unit's code depend on the units compiled before it.
+- Built with cc370 1.6.3 and libc370 2.16.0, from the September builds:
+  the FCVS's 192 compiles take 241 CPU seconds on TK5, where release
+  2026-10-13.2's took 1,081.
+- The inliner no longer splices a subprogram that may read a local
+  before setting it, counting on the value from its last call, as
+  FORTRAN H allows (#15).
+
 ## 2026-10-16.3
 
 Tagged `v2026.10.16.3`: four mistakes that compiled without a word now

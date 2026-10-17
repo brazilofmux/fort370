@@ -17,18 +17,19 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 f4dfde88a08d234af5d8f08e305ee59fc1786c3361c2d2ba74a1f76a133e13c4
-                539440 bytes, FB80 when it lands on the guest
-  F77RT.upd     SHA256 (filled in at release)
+  FORT370.xmit  SHA256 b49d3addb0cc89d5f2300611e00e082e879a98cd9bd0fcde401d9f1ac29b5c04
+                567760 bytes, FB80 when it lands on the guest
+  F77RT.upd     SHA256 4fde8627c8462a3c0c03cedbe4feaae863e257c534f19708e1ba47c639a81d46
                 487920 bytes, FB80
-  built         from fort370 ef5b843 (release 2026-10-16.3) with mvslovers/cc370 and libc370
-                as installed 2026-09-22
+  built         from fort370 1667c02 (release 2026-10-16.4) with mvslovers'
+                cc370 1.6.3 and libc370 2.16.0
   tested        all 192 FCVS programs, 91 test programs and a unit
                 at each size limit compiled on the guest by this
-                module in REGION=7168K, the assembler byte for
+                module in REGION=6144K, the assembler byte for
                 byte the host compiler's (bench/port-sweep.py);
-                compile, assemble, link and go on the guest
-                (bench/clg-test.py)
+                compile, assemble, link from F77RT and go on the
+                guest (bench/clg-test.py, and the FCVS through
+                F77CLG)
 
 
 1.  Get the two files onto the guest
