@@ -8,6 +8,29 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-18
+
+Tagged `v2026.10.18`: one fix, from a user's program.  Built from
+`e3d2d11`: FORT370.xmit SHA256 `8c12dbd8efb99727…`, 567,760 bytes;
+F77RT.upd, the same runtime with a new date, SHA256
+`88fe850cf7eb3d74…`, 487,920 bytes.  All 192 FCVS programs, 93 tests,
+the 600K source, the 85-deep nesting test, a unit at each size limit,
+ANCORR, AIDAFC and the pi spigot compile on the guest to the host's
+assembler, byte for byte, in REGION=6144K.
+
+- A FORMAT made mostly of apostrophes stopped the compile with
+  "assembler statement past column 71".  A string constant goes into
+  DC statements 40 characters at a time, and the 40 counted the
+  string's own characters, though an apostrophe or ampersand is written
+  twice; they are counted as written now.  The object code of every
+  program is what it was.  (Marco Verpelli's SHALLIT, which writes a
+  format with a FORMAT.)
+- A unit with PARAMETERs, then a main program calling a subroutine that
+  assigns its dummy, was refused with "cannot assign to a PARAMETER"
+  in releases before 2026-10-16.4, which fixed it among the values read
+  before they were set.  slow-32 found it was a live failure, and its
+  test is in the suite now (tests/f77/bindold1.f).
+
 ## 2026-10-16.4
 
 Tagged `v2026.10.16.4`: the runtime is a library a program takes only
