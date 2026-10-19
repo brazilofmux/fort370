@@ -110,6 +110,50 @@ def esd(deck):
     return names, refs
 
 
+def keep_names():
+    """The external names compiled code calls the runtime by
+    (backend/s370_rtnames.h): F77..., and libm's and EXIT, which are
+    FORTLIB's names for them too."""
+    tab = open(os.path.join(REPO, 'backend', 's370_rtnames.h')).read()
+    m = re.search(r'static char \*s370_rt_map\[\] = \{(.*?)\n    0 \};', tab, re.S)
+    return set(re.findall(r'"[^"]+",\s*"([^"]+)"', m.group(1)))
+
+
+def private(decks):
+    """The decks with libc370's names out of the program's way.  A name
+    the library defines that a Fortran program could also give one of
+    its own subprograms -- FOPEN, FREE, MAIN, STRLEN -- is the program's
+    at link time, and the library's own calls go to it: MINOS has a
+    SUBROUTINE FOPEN, and libc370 opening SYSPRINT called it (Rene
+    Ferland, 2026-10-19).  So such a name, unless compiled code calls it
+    (keep_names()), becomes #NAME, or for eight letters # and seven of
+    them; no Fortran name has a #.  FORTLIB keeps its own the same way, under
+    IHC."""
+    keep = keep_names()
+    defined = set(n for d in decks for n in esd(d)[0])
+    ren, taken = {}, set(defined)
+    for n in sorted(defined, key=lambda n: (len(n), n)):
+        if n in keep or n.startswith('F77') or not re.fullmatch(r'[A-Z][A-Z0-9]{0,7}', n): continue
+        for c in ('#' + n, '#' + n[:7], '#' + n[1:], '#' + n[:6] + n[7:]):
+            if len(c) <= 8 and c not in taken: break
+        else:
+            sys.exit('mkrtlib: no private name for ' + n)
+        ren[n] = c; taken.add(c)
+    out = []
+    for d in decks:
+        cards = []
+        for i in range(0, len(d), 80):
+            c = bytearray(d[i:i + 80])
+            if c[1:4] == 'ESD'.encode('cp037'):
+                n = int.from_bytes(c[10:12], 'big')
+                for p in range(16, 16 + n, 16):
+                    nm = c[p:p + 8].decode('cp037').strip()
+                    if nm in ren: c[p:p + 8] = ren[nm].ljust(8).encode('cp037')
+            cards.append(bytes(c))
+        out.append(b''.join(cards))
+    return out, ren
+
+
 def members(decks):
     """[(member, aliases, deck)] as the library holds them."""
     out = []
@@ -205,7 +249,7 @@ def main():
         decks.append(a[o + 60:o + 60 + size])
     for d in decks:
         if len(d) % 80: sys.exit('an object is not card images')
-    decks = [zerofill(d) for d in decks]
+    decks, ren = private([zerofill(d) for d in decks])
     lib = updte(decks)
     # the proof: every committed test program links from the library
     progs = []
@@ -236,7 +280,7 @@ def main():
         sys.exit('mkrtlib: F77RT.xmit does not read back as the library')
     open(os.path.splitext(out)[0] + '.xmit', 'wb').write(xm)
     print(f'{out}: {len(objs)} runtime objects and {len(names)} libc370 members, '
-          f'{len(mems)} members and {sum(len(a) for m, a, d in mems)} aliases, {len(lib) // 80} cards; '
+          f'{len(mems)} members and {sum(len(a) for m, a, d in mems)} aliases, {len(lib) // 80} cards, {len(ren)} names made private; '
           f'all {len(progs)} test programs link from it')
 
 if __name__ == '__main__':
