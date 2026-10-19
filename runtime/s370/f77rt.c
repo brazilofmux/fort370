@@ -640,7 +640,7 @@ static void fio_efmt(char *out, int outsz, double v, int nd, int letter) {
         for (i = k; i < 0 && (q - out) < outsz - 8; i++) *q++ = '0';   /* |k| leading zeros */
         for (i = 0; i < n && (q - out) < outsz - 8; i++) *q++ = tmp[40 + i];
     }
-    expv = expv - k;
+    if (v != 0.0) expv = expv - k;    /* zero's exponent is 0 whatever k: 1PE10.2 is 0.00E+00 */
     {
         /* Exponent: Ew.dEe gives e digits after the letter and sign;
          * without e, two digits with the letter up to |exp| 99, three

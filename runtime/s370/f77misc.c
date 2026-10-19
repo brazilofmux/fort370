@@ -122,37 +122,75 @@ int f77_ipow(int a, int n) {
     r = 1;
     while (n > 0) {
         if (n & 1) r = r * a;
-        a = a * a;
         n = n >> 1;
+        if (n) a = a * a;       /* not past the last bit, where it may overflow */
     }
     return r;
 }
 
-double f77_dpow_i(double a, int n) {
+/* The largest REAL and DOUBLE PRECISION magnitudes, a little under. */
+#define F77_RHUGE 7.2e75
+#define F77_DHUGE 7.2e75
+
+/* Whether |x*y| stays at or under huge: x*y is safe without asking
+ * when both are under 1e18, in any format. */
+static int fio_pow_fits(double x, double y, double huge) {
+    if (x < 0.0) x = -x;
+    if (y < 0.0) y = -y;
+    if (x <= 1e18 && y <= 1e18) return 1;
+    return x <= 1.0 || y <= huge / x;
+}
+
+/* a**m.  With big, it stops and sets *big when a product would exceed
+ * huge, rather than overflow. */
+static double fio_dpow_u(double a, unsigned int m, int *big) {
     double r = 1.0;
-    int neg = 0;
-    unsigned int m;
-    if (n < 0) { neg = 1; m = (unsigned int)0 - (unsigned int)n; }
-    else m = (unsigned int)n;
-    while (m) {
-        if (m & 1u) r = r * a;
-        a = a * a;
+    for (;;) {
+        if (m & 1u) {
+            if (big && !fio_pow_fits(r, a, F77_DHUGE)) { *big = 1; return 0.0; }
+            r = r * a;
+        }
         m = m >> 1;
+        if (!m) return r;
+        if (big && !fio_pow_fits(a, a, F77_DHUGE)) { *big = 1; return 0.0; }
+        a = a * a;
     }
-    return neg ? 1.0 / r : r;
+}
+
+static float fio_rpow_u(float a, unsigned int m, int *big) {
+    float r = 1.0f;
+    for (;;) {
+        if (m & 1u) {
+            if (big && !fio_pow_fits(r, a, F77_RHUGE)) { *big = 1; return 0.0f; }
+            r = r * a;
+        }
+        m = m >> 1;
+        if (!m) return r;
+        if (big && !fio_pow_fits(a, a, F77_RHUGE)) { *big = 1; return 0.0f; }
+        a = a * a;
+    }
+}
+
+/* A negative exponent is 1/a**-n; when a**-n is too large to hold but
+ * its reciprocal is not too small (16.0**(-65), the smallest HFP
+ * number), it is (1/a)**-n instead. */
+double f77_dpow_i(double a, int n) {
+    unsigned int m;
+    int big = 0;
+    double r;
+    if (n >= 0) return fio_dpow_u(a, (unsigned int)n, 0);
+    m = (unsigned int)0 - (unsigned int)n;
+    r = fio_dpow_u(a, m, &big);
+    return big ? fio_dpow_u(1.0 / a, m, 0) : 1.0 / r;
 }
 
 float f77_rpow_i(float a, int n) {
-    float r = 1.0f;
-    int neg = 0;
     unsigned int m;
-    if (n < 0) { neg = 1; m = (unsigned int)0 - (unsigned int)n; }
-    else m = (unsigned int)n;
-    while (m) {
-        if (m & 1u) r = r * a;
-        a = a * a;
-        m = m >> 1;
-    }
-    return neg ? 1.0f / r : r;
+    int big = 0;
+    float r;
+    if (n >= 0) return fio_rpow_u(a, (unsigned int)n, 0);
+    m = (unsigned int)0 - (unsigned int)n;
+    r = fio_rpow_u(a, m, &big);
+    return big ? fio_rpow_u(1.0f / a, m, 0) : 1.0f / r;
 }
 
