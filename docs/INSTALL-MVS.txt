@@ -171,7 +171,10 @@ REGION with the runtime's 230K more:
   IEWL does; leave EP= out.
 
 F77CLG.jcl beside this file is a cataloged procedure that chains the
-whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.
+whole thing: FORT370 -> IFOX00 -> IEWL -> GO, in one job.  As in IBM's
+FORTHCLG, its GO step's FT05F001 is DDNAME=SYSIN, so a program's input
+for unit 5 is a //GO.SYSIN DD * after the EXEC; without one, unit 5 is
+at its end at once.
 
   The assembly step's SYSPRINT is DUMMY: what FORT370 writes assembles
   cleanly, and a listing of it is thousands of lines.  If the ASM step

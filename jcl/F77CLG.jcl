@@ -17,7 +17,9 @@
 //*  are static storage in its module; raise GO's REGION for large
 //*  ones.  Units are the DD names FTnnF001: unit 6 is FT06F001 (or
 //*  SYSPRINT), unit 5 FT05F001 (or SYSIN), and any other unit the
-//*  program uses needs its DD.
+//*  program uses needs its DD.  As in IBM's FORTHCLG, GO's FT05F001
+//*  is DDNAME=SYSIN: a program's input is //GO.SYSIN DD *, and
+//*  without one unit 5 is at its end at once.
 //*
 //*  The assembly's listing is DUMMY: IFOX00 checks what FORT370
 //*  wrote, and a clean compile assembles cleanly.  If ASM ends with
@@ -59,7 +61,7 @@
 //SYSPRINT DD SYSOUT=*
 //SYSTERM  DD SYSOUT=*
 //FT06F001 DD SYSOUT=*,DCB=(RECFM=FBA,LRECL=133,BLKSIZE=133)
-//FT05F001 DD DUMMY
+//FT05F001 DD DDNAME=SYSIN
 //SYSUDUMP DD SYSOUT=*
 //         PEND
 //*
