@@ -8,6 +8,36 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-19
+
+Tagged `v2026.10.19`: the runtime library as a TRANSMIT file, F77CLG's
+unit 5, and FORMATs checked; three issues users opened.  Built from
+`5dbb3ab`: FORT370.xmit SHA256 `4c2c50c6f3f1b532…`, 568,000 bytes;
+F77RT.xmit, new, SHA256 `a38af62b26081bed…`, 476,400 bytes; F77RT.upd,
+the same runtime with a new date, SHA256 `a3251adbe8684290…`, 487,920
+bytes.  All 192 FCVS programs, 93 tests, the 600K source, the 85-deep
+nesting test, a unit at each size limit, ANCORR, AIDAFC and the pi
+spigot compile on the guest to the host's assembler, byte for byte, in
+REGION=6144K.
+
+- F77RT.xmit is the runtime library as a TSO TRANSMIT file, RECEIVEd as
+  FORT370.xmit is, so the library needs no job of its own (#22).
+  F77RT.upd, the same library as IEBUPDTE input, stays for a system
+  without RECEIVE.  xmit370 makes TRANSMIT files of text libraries, and
+  F77RT's members are object decks reached by 137 aliases, so
+  bench/xmitpds.py writes it; for text libraries it writes the very
+  bytes xmit370 does (bench/xmitpds-check.py).
+- F77CLG's GO step has FT05F001 DD DDNAME=SYSIN, as IBM's FORTHCLG
+  does: a program's input for unit 5 is //GO.SYSIN DD * after the EXEC
+  (#23).  Without one, unit 5 is at its end at once, as it was.
+- A FORMAT statement, and a format that is one character constant, is
+  checked when it is compiled (#24).  An nH that runs past the end of
+  the format, a count with no descriptor after it (5H1234567 is 5H12345
+  and then 67), a letter that is no edit descriptor, a width left out
+  and parentheses that do not pair are refused, as FORTRAN H refuses
+  them.  What follows the last ) is ignored, as F77 says, and a comma
+  left out between two items is taken, as IBM's compilers took it.
+
 ## 2026-10-18
 
 Tagged `v2026.10.18`: one fix, from a user's program.  Built from
