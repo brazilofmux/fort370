@@ -1,14 +1,17 @@
 fort370 for MVS 3.8j -- installing the compiler
 ===============================================
 
-Two files make the MVS package:
+The MVS package is the compiler and its runtime:
 
   FORT370.xmit   one load module, FORT370: the FORTRAN 77 compiler,
                  which runs on the guest and writes S/370 assembler
-  F77RT.upd      the fort370 runtime as a library: IEBUPDTE input that
-                 makes the PDS F77RT, from which the linkage editor or
-                 the loader takes, by automatic call, what a compiled
-                 program uses of fort370's runtime and of libc370
+  F77RT.xmit     the fort370 runtime as a library, the PDS F77RT, from
+                 which the linkage editor or the loader takes, by
+                 automatic call, what a compiled program uses of
+                 fort370's runtime and of libc370; RECEIVEd as
+                 FORT370.xmit is
+  F77RT.upd      the same library as IEBUPDTE input, for a system
+                 without RECEIVE; either one will do
 
 Nothing here needs a C compiler on MVS.  Both were cross-built on a
 host with mvslovers' cc370 and libc370, and these are the results.
@@ -50,12 +53,12 @@ blocks and IEBGENER it in, as for any XMIT.
     //SYSPRINT DD SYSOUT=*
     //SYSIN    DD DUMMY
 
-F77RT.upd lands the same way, as your.FORT370.F77RT.UPD; section 2
-makes the runtime library of it.
+F77RT.xmit lands the same way, as your.FORT370.F77RT.XMIT (or F77RT.upd
+as your.FORT370.F77RT.UPD); section 2 makes the runtime library of it.
 
 
-2.  RECEIVE the compiler, and make the runtime library
------------------------------------------------------
+2.  RECEIVE the compiler and the runtime library
+------------------------------------------------
 
 On TK5 the NJE38 RECEIVE is the one that works; it takes the whole
 command on one line.
@@ -66,9 +69,15 @@ command on one line.
     //SYSTSIN  DD *
     RECEIVE INDATASET('your.FORT370.XMIT') -
       DATASET('your.FORT370.LOAD') DIR(5) NOPROMPT
+    RECEIVE INDATASET('your.FORT370.F77RT.XMIT') -
+      DATASET('your.FORT370.F77RT') NOPROMPT
     /*
 
-IEBUPDTE makes the runtime library of F77RT.upd:
+  The library is a PDS of object decks, RECFM=FB, LRECL=80: each member
+  one deck, named for an entry point it defines, with an alias for each
+  of the others.  RECEIVE allocates it from the transmission.
+
+Or, without RECEIVE, IEBUPDTE makes the same library of F77RT.upd:
 
     //LIB      EXEC PGM=IEBUPDTE,PARM=NEW
     //SYSPRINT DD SYSOUT=*
@@ -308,9 +317,10 @@ from a fort370 checkout:
     make mvs
 
 which builds out/mvs/FORT370.xmit (the compiler, with cc370) and
-out/mvs/F77RT.upd (the runtime library, with the libc370 members the
-runtime calls, bench/mkrtlib.py, which also links every test program
-from it the way automatic call does).  The assembler's and linker's clock is pinned
+out/mvs/F77RT.xmit and F77RT.upd (the runtime library, with the libc370
+members the runtime calls, bench/mkrtlib.py, which also links every test
+program from it the way automatic call does; bench/xmitpds.py writes the
+TRANSMIT form, and reads it back to check it).  The assembler's and linker's clock is pinned
 (MVSDATE, MVSTIME in the Makefile), since as370 and ld370 stamp the
 date and time into what they write; two builds of the same source are
 then the same bytes, and the SHA256 above reproduces.

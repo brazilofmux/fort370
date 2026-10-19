@@ -217,6 +217,24 @@ def main():
     if check(members(decks), progs): sys.exit('mkrtlib: the library does not link every test program')
     open(out, 'wb').write(lib)
     mems = members(decks)
+    # the same library as a TSO TRANSMIT file, RECEIVEd as FORT370.xmit is
+    # (fort370 issue 22), its time the build's pinned clock (LDDATE yyddd,
+    # LDTIME hhmmss, as ld370 stamps FORT370.xmit)
+    import datetime, xmitpds
+    ld, lt = os.environ.get('LDDATE'), os.environ.get('LDTIME')
+    ftime = None
+    if ld and lt:
+        day = datetime.date(2000 + int(ld[:2]), 1, 1) + datetime.timedelta(days=int(ld[2:]) - 1)
+        ftime = day.strftime('%Y%m%d') + lt
+    xm = xmitpds.xmit('IBMUSER.FORT370.F77RT',
+                      [(m, [d[i:i + 80] for i in range(0, len(d), 80)]) for m, al, d in mems],
+                      {a: m for m, al, d in mems for a in al},
+                      ftime=ftime, user='IBMUSER', touser='DUMMY')
+    back = xmitpds.read(xm)
+    if back != ({m: [d[i:i + 80] for i in range(0, len(d), 80)] for m, al, d in mems},
+                {a: m for m, al, d in mems for a in al}):
+        sys.exit('mkrtlib: F77RT.xmit does not read back as the library')
+    open(os.path.splitext(out)[0] + '.xmit', 'wb').write(xm)
     print(f'{out}: {len(objs)} runtime objects and {len(names)} libc370 members, '
           f'{len(mems)} members and {sum(len(a) for m, a, d in mems)} aliases, {len(lib) // 80} cards; '
           f'all {len(progs)} test programs link from it')

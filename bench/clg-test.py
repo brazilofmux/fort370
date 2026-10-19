@@ -3,9 +3,9 @@
 says: FORT370 compiles on the guest, IFOX00 assembles, IEWL links with
 F77RT, the program runs; no host in the loop but to submit the job.
 
-  1. install: FORT370.xmit RECEIVEd into HERC01.FORT370.LOAD, F77RT.upd
-     (both through HEXIN) made the library HERC01.FORT370.F77RT by
-     IEBUPDTE;
+  1. install: FORT370.xmit RECEIVEd into HERC01.FORT370.LOAD, and
+     F77RT.xmit into the library HERC01.FORT370.F77RT (both through
+     HEXIN); with --upd, F77RT.upd made into it by IEBUPDTE instead;
   2. one job: jcl/F77CLG.jcl as an instream procedure, one invocation
      per program, its source DD * on the compile step, scratch DDs
      FT01F001-FT04F001 and FT07F001-FT30F001 on the GO step;
@@ -24,9 +24,11 @@ JOBCARD = ("//HERC01S  JOB (TEST),'FORT370 CLG',CLASS=A,MSGCLASS=Z,\n"
            "//         USER=HERC01,PASSWORD=@HERC01PW@\n")
 
 
-def install():
+def install(upd=False):
+    """F77RT RECEIVEd from F77RT.xmit, as INSTALL.txt's first way; with
+    upd, made by IEBUPDTE from F77RT.upd, its second."""
     comp = os.path.join(REPO, 'out', 'mvs', 'FORT370.xmit')
-    rt = os.path.join(REPO, 'out', 'mvs', 'F77RT.upd')
+    rt = os.path.join(REPO, 'out', 'mvs', 'F77RT.upd' if upd else 'F77RT.xmit')
     jcl = JOBCARD
     jcl += ("//DEL      EXEC PGM=IEFBR14\n"
             "//DD1      DD DSN=HERC01.FORT370.CLGX,DISP=(MOD,DELETE),\n"
@@ -51,29 +53,34 @@ def install():
             "//SYSTSIN  DD *\n"
             "RECEIVE INDATASET('HERC01.FORT370.CLGX') -\n"
             "  DATASET('HERC01.FORT370.LOAD') DIR(5) NOPROMPT\n"
-            "/*\n"
-            "//LIB      EXEC PGM=IEBUPDTE,PARM=NEW\n"
-            "//SYSPRINT DD SYSOUT=Z\n"
-            "//SYSUT2   DD DSN=HERC01.FORT370.F77RT,DISP=(NEW,CATLG),UNIT=SYSDA,\n"
-            "//            SPACE=(CYL,(2,1,40)),DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)\n"
-            "//SYSIN    DD DSN=HERC01.FORT370.F77UPD,DISP=SHR\n")
+            + ("" if upd else "RECEIVE INDATASET('HERC01.FORT370.F77UPD') -\n"
+                              "  DATASET('HERC01.FORT370.F77RT') NOPROMPT\n") +
+            "/*\n")
+    if upd:
+        jcl += ("//LIB      EXEC PGM=IEBUPDTE,PARM=NEW\n"
+                "//SYSPRINT DD SYSOUT=Z\n"
+                "//SYSUT2   DD DSN=HERC01.FORT370.F77RT,DISP=(NEW,CATLG),UNIT=SYSDA,\n"
+                "//            SPACE=(CYL,(2,1,40)),DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)\n"
+                "//SYSIN    DD DSN=HERC01.FORT370.F77UPD,DISP=SHR\n")
     deck = os.path.join(WORK, 'install.jcl')
     open(deck, 'w').write(jcl)
     out = os.path.join(WORK, 'install.out')
     ship.run_deck(deck, out)
     t = open(out, 'rb').read().decode('latin-1')
-    print('installed' if re.search(r'RCV\s+IKJEFT01\s+RC= 0000', t) and re.search(r'LIB\s+IEBUPDTE\s+RC= 0000', t) else 'install FAILED, see ' + out)
+    ok = re.search(r'RCV\s+IKJEFT01\s+RC= 0000', t) and (not upd or re.search(r'LIB\s+IEBUPDTE\s+RC= 0000', t))
+    print(('installed, F77RT by ' + ('IEBUPDTE' if upd else 'RECEIVE')) if ok else 'install FAILED, see ' + out)
 
 
 def main():
     args = sys.argv[1:]
-    inst = True
-    if args and args[0] == '--no-install':
-        inst = False
+    inst, upd = True, False
+    while args and args[0] in ('--no-install', '--upd'):
+        if args[0] == '--no-install': inst = False
+        else: upd = True
         args = args[1:]
     if not args: sys.exit(__doc__)
     os.makedirs(WORK, exist_ok=True)
-    if inst: install()
+    if inst: install(upd)
     proc = open(os.path.join(REPO, 'jcl', 'F77CLG.jcl')).read()
     proc = proc[:proc.index('//         PEND')] + '//         PEND\n'
     jcl = JOBCARD + proc

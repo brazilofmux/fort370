@@ -84,10 +84,11 @@ out/mvs/FORT370.xmit: $(SRC) runtime/s370/millicode.c runtime/s370/f77std.h Make
 	$(MVSCLOCK) cc370 -O1 -c -o out/mvs/millicode.o runtime/s370/millicode.c
 	cd out/mvs && $(MVSCLOCK) cc370 -o FORT370 f77.o millicode.o -Wl,--sparse-text -flinker-output=xmit
 
-# The runtime as object decks for IEWL on MVS (bench/mkrtlib.py)
-out/mvs/F77RT.upd: runtime bench/mkrtlib.py out/f77
+# The runtime library for MVS: F77RT.upd (IEBUPDTE input) and F77RT.xmit
+# (TSO TRANSMIT), the same PDS (bench/mkrtlib.py, bench/xmitpds.py)
+out/mvs/F77RT.upd: runtime bench/mkrtlib.py bench/xmitpds.py out/f77
 	@mkdir -p out/mvs
-	python3 bench/mkrtlib.py $@
+	$(MVSCLOCK) python3 bench/mkrtlib.py $@
 
 clean:
 	rm -rf out
