@@ -8,6 +8,41 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-19.1
+
+Tagged `v2026.10.19.1`: what MINOS 4.0 found, Murtagh and Saunders's
+optimizer of 1981, some 9,700 lines, sent by René Ferland.  Its test
+problem now runs on TK5 as on OS/390, line for line, given the EPS of
+the OS/390 run.  Built from `610bddb`: FORT370.xmit
+SHA256 `f7dd78d1a9fed621…`, 568,000 bytes; F77RT.xmit SHA256
+`8485e2143446dd1d…`, 478,640 bytes; F77RT.upd SHA256
+`85f62584e9e80829…`, 490,160 bytes.  All 192 FCVS programs, 97 tests,
+the 600K source and the 85-deep nesting test compile on the guest to
+the host's assembler, byte for byte, in REGION=6144K; the FCVS runs
+3346 tests passed and the 2 failed by design.
+
+- `X**N` with a negative INTEGER exponent no longer overflows on the
+  way to a number it can hold: `16.0**(-65)`, the smallest HFP number,
+  abended S0CC computing 16.0**65.  Such a power is now (1/X)**-N;
+  any other is computed as before, bit for bit what FORTRAN H's
+  library gives.  A last squaring that no bit of the exponent used is
+  gone too: it made 16.0**62 overflow.  (H overflows on
+  16.0**(-65) as well, and its library goes on with 16**(-63).)
+- A subprogram may have a name the C library inside the runtime uses.
+  MINOS has a SUBROUTINE FOPEN; it took the place of libc370's fopen,
+  and the program ended before its first statement.  F77RT's 67 such
+  names now begin with #, which no Fortran name has.  SQRT, SIN, EXIT
+  and the rest of what FORTRAN H's library also has keep their names,
+  and a subprogram of the same name replaces them, as under H.
+- A unit whose data needs a second base register lost a value in a
+  loop: the register allocator runs twice for such a unit, and the
+  second time a compare fused into its branch no longer kept its
+  operands live around the loop.  A value loaded before the loop and
+  read only by that compare shared its storage with the loop's
+  temporaries.  MINOS read two of its five specifications.
+- Zero under a scale factor, `1PE10.2`, is written `0.00E+00`, as
+  IBM's library writes it, not `0.00E-01`.
+
 ## 2026-10-19
 
 Tagged `v2026.10.19`: the runtime library as a TRANSMIT file, F77CLG's

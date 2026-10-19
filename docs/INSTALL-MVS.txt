@@ -20,15 +20,15 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 4c2c50c6f3f1b5323a814221f176f1c091089d73b54e4e5f1e3fc3f17ab29956
+  FORT370.xmit  SHA256 f7dd78d1a9fed621d25ac5cfa5380cb30e9e2dea955e15559158cb35c057f280
                 568000 bytes, FB80 when it lands on the guest
-  F77RT.xmit    SHA256 a38af62b26081bed171ccbc98cded529f7015dcdf31c1495e0be509d19101663
-                476400 bytes, FB80
-  F77RT.upd     SHA256 a3251adbe86842905770146466d02b5101d545e6e6243e2a2fcea86fa055ecd9
-                487920 bytes, FB80
-  built         from fort370 5dbb3ab (release 2026-10-19) with mvslovers'
+  F77RT.xmit    SHA256 8485e2143446dd1d4c8a4db55573df0563953452210f26f4730e87546d5c84d4
+                478640 bytes, FB80
+  F77RT.upd     SHA256 85f62584e9e80829483bf531b96495bda4d665e647e39de6358148d44a5ae27d
+                490160 bytes, FB80
+  built         from fort370 610bddb (release 2026-10-19.1) with mvslovers'
                 cc370 1.6.3 and libc370 2.16.0
-  tested        all 192 FCVS programs, 93 test programs and a unit
+  tested        all 192 FCVS programs, 97 test programs and a unit
                 at each size limit compiled on the guest by this
                 module in REGION=6144K, the assembler byte for
                 byte the host compiler's (bench/port-sweep.py);
@@ -216,8 +216,15 @@ there is none).  OPEN FILE='NAME' names a DD.  A subprogram's local
 variables keep their values from one call to the next, as FORTRAN H's
 and VS FORTRAN's do, with or without SAVE.  A direct-access
 file is a DASD data set of fixed blocks, RECL bytes each; a new one is
-formatted as it is written.  STOP ends the program with its code as
-the step's return code.
+formatted as it is written.  A unit opened with STATUS='SCRATCH'
+needs its DD as well; fort370 allocates none.  STOP ends the program
+with its code as the step's return code.
+
+A subprogram may have any name but F77MAIN, F77@GO and the runtime's
+own, which begin F77.  The names libc370 uses inside F77RT begin with
+#, out of a program's way.  A subprogram named SQRT, SIN, EXP, EXIT
+or another of the functions FORTRAN H's library also has replaces the
+library's, as it does under FORTRAN H.
 
 The language is FORTRAN 77 with IBM's COMPLEX*16 (DOUBLE COMPLEX
 too): its constants, a complex constant with a DOUBLE PRECISION part,
