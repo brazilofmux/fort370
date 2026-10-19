@@ -6900,6 +6900,144 @@ static void f77_wr_finish(void) {
     h_cbase[r] = h_ncarg;
 }
 
+/* fort370: a format the compiler can see -- a FORMAT statement, or a
+ * format that is one character constant -- is checked here for what is
+ * certainly wrong, which the runtime would otherwise read some other
+ * way (fort370 issue 24): an nH that runs past the end of the format,
+ * a count with no descriptor after it (5H1234567 is 5H12345 and then
+ * 67), a letter that is no edit descriptor, I F E D G or L without its
+ * width, and parentheses that do not match; what follows the last )
+ * is ignored, as F77 says.  What IBM's compilers took,
+ * a comma left out between two items among them, is taken here too.
+ * In a FORMAT statement the lexer has made each nH a quoted string
+ * already, so both forms are read. */
+static int f77_fmt_digits(const char *s, int n, int *i) {
+    int v;
+    v = 0;
+    if (*i >= n || s[*i] < '0' || s[*i] > '9') return -1;
+    while (*i < n && s[*i] >= '0' && s[*i] <= '9') { v = v * 10 + (s[*i] - '0'); *i = *i + 1; }
+    return v;
+}
+static void f77_fmt_bad(const char *what) {
+    char m[96];
+    strcpy(m, "FORMAT: ");
+    strcat(m, what);
+    f77_error(m);
+}
+static void f77_check_format(const char *s, int n) {
+    int i, depth, c, k, cnt;
+    while (n > 0 && s[n - 1] == ' ') n = n - 1;
+    i = 0;
+    while (i < n && s[i] == ' ') i = i + 1;
+    if (i >= n || s[i] != '(') { f77_fmt_bad("a format begins with ("); return; }
+    i = i + 1;
+    depth = 1;
+    while (i < n) {
+        c = s[i];
+        if (c == ' ' || c == ',' || c == '/' || c == ':') { i = i + 1; continue; }
+        if (c == ')') {
+            depth = depth - 1;
+            i = i + 1;
+            if (depth == 0) return;       /* what follows is ignored (F77 13.1.1) */
+            continue;
+        }
+        if (c == '(') { depth = depth + 1; i = i + 1; continue; }
+        if (c == '\'' || c == '"') {
+            int q;
+            q = c;
+            i = i + 1;
+            for (;;) {
+                if (i >= n) { f77_fmt_bad("a quoted string runs past the end of the format"); return; }
+                if (s[i] == q) {
+                    if (i + 1 < n && s[i + 1] == q) { i = i + 2; continue; }
+                    i = i + 1;
+                    break;
+                }
+                i = i + 1;
+            }
+            continue;
+        }
+        cnt = -1;
+        if (c == '+' || c == '-') {          /* a scale factor's sign: -2P */
+            i = i + 1;
+            cnt = f77_fmt_digits(s, n, &i);
+            if (cnt < 0 || i >= n || (s[i] != 'P' && s[i] != 'p')) { f77_fmt_bad("a sign belongs to a scale factor, nP"); return; }
+        } else if (c >= '0' && c <= '9') {
+            cnt = f77_fmt_digits(s, n, &i);
+        }
+        if (i >= n) { f77_fmt_bad("the format ends without its )"); return; }
+        c = s[i];
+        if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
+        if (cnt >= 0 && c == 'H') {
+            if (cnt == 0) { f77_fmt_bad("0H is no Hollerith string"); return; }
+            if (i + 1 + cnt > n) {
+                char m[80];
+                sprintf(m, "%dH wants %d characters, and the format has %d left", cnt, cnt, n - i - 1);
+                f77_fmt_bad(m);
+                return;
+            }
+            i = i + 1 + cnt;
+            continue;
+        }
+        if (cnt >= 0 && c == '(') { depth = depth + 1; i = i + 1; continue; }   /* a group repeated */
+        if (cnt >= 0 && (c == 'X' || c == 'P')) { i = i + 1; continue; }
+        if (c == 'X') { i = i + 1; continue; }        /* X alone: IBM's 1X */
+        if (c == 'T') {
+            i = i + 1;
+            if (i < n && (s[i] == 'L' || s[i] == 'R' || s[i] == 'l' || s[i] == 'r')) i = i + 1;
+            if (f77_fmt_digits(s, n, &i) < 0) { f77_fmt_bad("T, TL and TR take a column"); return; }
+            continue;
+        }
+        if (c == 'S') {
+            i = i + 1;
+            if (i < n && (s[i] == 'P' || s[i] == 'S' || s[i] == 'p' || s[i] == 's')) i = i + 1;
+            continue;
+        }
+        if (c == 'B') {
+            i = i + 1;
+            if (i < n && (s[i] == 'N' || s[i] == 'Z' || s[i] == 'n' || s[i] == 'z')) { i = i + 1; continue; }
+            f77_fmt_bad("B is BN or BZ");
+            return;
+        }
+        if (c == 'A' || c == 'Z' || c == 'O') {    /* the width may be left out */
+            i = i + 1;
+            (void)f77_fmt_digits(s, n, &i);
+            continue;
+        }
+        if (c == 'I' || c == 'F' || c == 'E' || c == 'D' || c == 'G' || c == 'L') {
+            i = i + 1;
+            if (f77_fmt_digits(s, n, &i) < 0) {
+                char m[48];
+                sprintf(m, "%c needs a width", c);
+                f77_fmt_bad(m);
+                return;
+            }
+            if (i < n && s[i] == '.') {
+                i = i + 1;
+                if (f77_fmt_digits(s, n, &i) < 0) { f77_fmt_bad("a . needs digits after it"); return; }
+            }
+            if ((c == 'E' || c == 'G' || c == 'D') && i < n && (s[i] == 'E' || s[i] == 'e')) {
+                i = i + 1;
+                if (f77_fmt_digits(s, n, &i) < 0) { f77_fmt_bad("Ee needs its digits"); return; }
+            }
+            continue;
+        }
+        if (cnt >= 0) {
+            f77_fmt_bad(c == ')' || c == ',' ? "a count with no descriptor after it"
+                                             : "a count before something that is no edit descriptor");
+            return;
+        }
+        k = c;
+        {
+            char m[64];
+            sprintf(m, "%c is no edit descriptor", k);
+            f77_fmt_bad(m);
+        }
+        return;
+    }
+    f77_fmt_bad("the format ends without its )");
+}
+
 /* WRITE (unit, fmt) list  --  unit and fmt may each be `*`. */
 /* The control list of a READ or WRITE: ( [UNIT=]u [, [FMT=]f] [, END=l]
  * [, ERR=l] [, IOSTAT=v] [, REC=r] ) in any order once keyworded.
@@ -6915,6 +7053,17 @@ static int f77_io_fmt_spec(void) {
     if (lx_t == T_STAR) { f77_tok(); return -1; }
     if (lx_t == T_ICON) { int l; l = lex_ival; f77_tok(); return l; }
     if (lx_t == T_SCON || (lx_t == T_NAME && f77_sty[f77_sym(lex_name)] == TY_CHAR)) {
+        /* fort370: a format that is one character constant is checked
+         * as a FORMAT statement is (fort370 issue 24) */
+        if (lx_t == T_SCON && f77_inline_depth == 0) {
+            int sidx, slen;
+            sidx = lex_sidx; slen = lex_slen;
+            f77_fmt_dyn = f77_expr();
+            /* the constant itself, not one end of a // */
+            if (f77_fmt_dyn >= 0 && h_kind[f77_fmt_dyn] == HI_SADDR && h_val[f77_fmt_dyn] == sidx)
+                f77_check_format(lex_strpool + lex_str_off[sidx], slen);
+            return -3;
+        }
         f77_fmt_dyn = f77_expr();
         return -3;
     }
@@ -7750,7 +7899,12 @@ static void f77_statement(void) {
 
     if (f77_starts("PROGRAM")) goto done;      /* name is documentation */
 
-    if (f77_starts("FORMAT")) goto done;       /* collected in phase 1 */
+    if (f77_starts("FORMAT")) {                /* collected in phase 1 */
+        /* fort370: checked here, once, where its line is known */
+        if (f77_inline_depth == 0 && lx_stmt_len > 6 && lx_stmt[6] == '(')
+            f77_check_format(lx_stmt + 6, lx_stmt_len - 6);
+        goto done;
+    }
 
     if ((n = f77_starts("WRITE")) != 0) { f77_stmt_write(n); goto done; }
     if ((n = f77_starts("PRINT")) != 0) { f77_stmt_print(n); goto done; }

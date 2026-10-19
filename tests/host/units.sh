@@ -7,7 +7,9 @@
 # own line even after a CALL whose callee was spliced in its place; a
 # DO or block IF still open at END, and a stray END DO; two subprograms
 # or ENTRY points of one name, and two names that are one external name
-# in eight characters; a function called with a type other than its own.  tests/s370/mainlast.f has a main program after
+# in eight characters; a function called with a type other than its own;
+# a FORMAT, or a format that is one constant, that is certainly wrong
+# (an nH past its end, a count with no descriptor, an unknown letter).  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -49,6 +51,14 @@ printf '      INTEGER A(8)\n      X = SIZE8(A)\n      END\n      INTEGER FUNCTIO
 expect fntype "line 2: SIZE8 is REAL here but INTEGER where it is defined (line 4)"
 printf '      LOGICAL LF\n      J = 0\n      IF (LF(1)) J = 1\n      END\n      INTEGER FUNCTION LF(I)\n      LF = I\n      END\n' > $T/fnlog.f
 expect fnlog "line 3: LF is LOGICAL here but INTEGER where it is defined (line 5)"
+printf "      WRITE (6, \047(1X,5H123)\047)\n      END\n" > $T/fmtholl.f
+expect fmtholl "line 1: FORMAT: 5H wants 5 characters, and the format has 4 left"
+printf "      WRITE (6, \047(1X,5H1234567)\047)\n      END\n" > $T/fmtcount.f
+expect fmtcount "line 1: FORMAT: a count with no descriptor after it"
+printf '      WRITE (6, 100) 1\n  100 FORMAT (1X, Q5)\n      END\n' > $T/fmtletter.f
+expect fmtletter "line 2: FORMAT: Q is no edit descriptor"
+printf '      WRITE (6, 100) 1\n  100 FORMAT (1X, I, 2(F8.2)\n      END\n' > $T/fmtwidth.f
+expect fmtwidth "line 2: FORMAT: I needs a width"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice and a function's type mistaken refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken and a broken FORMAT refused"
 [ $bad = 0 ]
