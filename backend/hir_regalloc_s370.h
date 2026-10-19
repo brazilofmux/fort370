@@ -367,6 +367,47 @@ static int s370_mem_regs(int inst, int *out) {
     return 0;
 }
 
+/* The values a fused compare-and-branch reads: the compare's operands
+ * and those of the fused instructions between it and the branch.  The
+ * branch re-emits them (ra_extend_fused_cmp), so they are used at the
+ * branch.  They are NOPs by then on a second allocation (a static area
+ * past the data bases' reach, s370_function), which ra_compute_ends
+ * would skip: a value loaded before a loop and read only by the loop's
+ * test lost its liveness around the loop, and its spill slot was
+ * shared with the loop body's temporaries (MINOS's SPECS2 stopped
+ * reading its specs, Rene Ferland, 2026-10-19).  Returns how many. */
+static int ra_fused_uses(int brc, int *out) {
+    int cmp;
+    int c;
+    int n;
+    int lim;
+    n = 0;
+    cmp = hcg_brc_fuse[brc];
+    if (cmp < 0) return 0;
+    out[n] = h_src1[cmp]; n = n + 1;
+    out[n] = h_src2[cmp]; n = n + 1;
+    c = h_src1[brc];
+    lim = 0;
+    while (c >= 0 && c != cmp && lim < 64 && n < 128) {
+        if (hcg_cmp_fused[c]) {
+            out[n] = h_src1[c]; n = n + 1;
+            out[n] = h_src2[c]; n = n + 1;
+        }
+        c = h_src1[c];
+        lim = lim + 1;
+    }
+    /* a NOP no longer says whether its src2 is a value: only indexes
+     * of instructions are taken, and a use too many only lengthens a
+     * live range */
+    c = 0;
+    lim = 0;
+    while (c < n) {
+        if (out[c] >= 0 && out[c] < h_ninst) { out[lim] = out[c]; lim = lim + 1; }
+        c = c + 1;
+    }
+    return lim;
+}
+
 static void ra_compute_ends(void) {
     int i;
     int j;
@@ -410,6 +451,13 @@ static void ra_compute_ends(void) {
             j = 0;
             while (j < h_val[inst]) { ra_extend(h_carg[h_cbase[inst] + j], p); j = j + 1; }
         }
+        if (k == HI_BRC) {
+            int fu[130];
+            int nf;
+            nf = ra_fused_uses(inst, fu);
+            j = 0;
+            while (j < nf) { ra_extend(fu[j], p); j = j + 1; }
+        }
         if (k == HI_PHI && h_pbase[inst] >= 0) {
             j = 0;
             while (j < h_pcnt[inst]) {
@@ -452,6 +500,17 @@ static void ra_compute_ends(void) {
             j = 0;
             while (j < h_val[inst]) {
                 src = h_carg[h_cbase[inst] + j];
+                if (src >= 0 && ra_pos[src] >= 0 && h_blk[src] != h_blk[inst]) ra_backprop(src, h_blk[inst]);
+                j = j + 1;
+            }
+        }
+        if (k == HI_BRC) {
+            int fu[130];
+            int nf;
+            nf = ra_fused_uses(inst, fu);
+            j = 0;
+            while (j < nf) {
+                src = fu[j];
                 if (src >= 0 && ra_pos[src] >= 0 && h_blk[src] != h_blk[inst]) ra_backprop(src, h_blk[inst]);
                 j = j + 1;
             }
