@@ -220,6 +220,14 @@ formatted as it is written.  A unit opened with STATUS='SCRATCH'
 needs its DD as well; fort370 allocates none.  STOP ends the program
 with its code as the step's return code.
 
+A format in a CHARACTER variable, array or expression is checked when
+the statement uses it, as the compiler checks a FORMAT statement, and
+its blanks outside its strings and nH text are not significant:
+( 3I 2) is (3I2).  A format certainly wrong, (HI,MOM) among them, ends
+the program with a message naming it (a READ with ERR= or IOSTAT=
+takes that instead), and so does a format with no data edit
+descriptor when items are left to transfer.
+
 A subprogram may have any name but F77MAIN, F77@GO and the runtime's
 own, which begin F77.  The names libc370 uses inside F77RT begin with
 #, out of a program's way.  A subprogram named SQRT, SIN, EXP, EXIT

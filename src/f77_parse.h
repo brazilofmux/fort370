@@ -6951,9 +6951,19 @@ static void f77_wr_finish(void) {
 static int f77_fmt_digits(const char *s, int n, int *i) {
     int v;
     v = 0;
+    while (*i < n && s[*i] == ' ') *i = *i + 1;
     if (*i >= n || s[*i] < '0' || s[*i] > '9') return -1;
-    while (*i < n && s[*i] >= '0' && s[*i] <= '9') { v = v * 10 + (s[*i] - '0'); *i = *i + 1; }
+    while (*i < n && ((s[*i] >= '0' && s[*i] <= '9') || s[*i] == ' ')) {
+        if (s[*i] != ' ') v = v * 10 + (s[*i] - '0');
+        *i = *i + 1;
+    }
     return v;
+}
+/* the next character that is not a blank, or 0 at the end; blanks in a
+ * format are not significant outside its strings (fort370 issue 25) */
+static int f77_fmt_peek(const char *s, int n, int *i) {
+    while (*i < n && s[*i] == ' ') *i = *i + 1;
+    return *i < n ? s[*i] : 0;
 }
 static void f77_fmt_bad(const char *what) {
     char m[96];
@@ -6998,13 +7008,15 @@ static void f77_check_format(const char *s, int n) {
         if (c == '+' || c == '-') {          /* a scale factor's sign: -2P */
             i = i + 1;
             cnt = f77_fmt_digits(s, n, &i);
-            if (cnt < 0 || i >= n || (s[i] != 'P' && s[i] != 'p')) { f77_fmt_bad("a sign belongs to a scale factor, nP"); return; }
+            k = f77_fmt_peek(s, n, &i);
+            if (cnt < 0 || (k != 'P' && k != 'p')) { f77_fmt_bad("a sign belongs to a scale factor, nP"); return; }
         } else if (c >= '0' && c <= '9') {
             cnt = f77_fmt_digits(s, n, &i);
         }
-        if (i >= n) { f77_fmt_bad("the format ends without its )"); return; }
+        if (f77_fmt_peek(s, n, &i) == 0) { f77_fmt_bad("the format ends without its )"); return; }
         c = s[i];
         if (c >= 'a' && c <= 'z') c = c - 'a' + 'A';
+        if (cnt < 0 && c == 'H') { f77_fmt_bad("H needs its count, nH"); return; }
         if (cnt >= 0 && c == 'H') {
             if (cnt == 0) { f77_fmt_bad("0H is no Hollerith string"); return; }
             if (i + 1 + cnt > n) {
@@ -7021,18 +7033,21 @@ static void f77_check_format(const char *s, int n) {
         if (c == 'X') { i = i + 1; continue; }        /* X alone: IBM's 1X */
         if (c == 'T') {
             i = i + 1;
-            if (i < n && (s[i] == 'L' || s[i] == 'R' || s[i] == 'l' || s[i] == 'r')) i = i + 1;
+            k = f77_fmt_peek(s, n, &i);
+            if (k == 'L' || k == 'R' || k == 'l' || k == 'r') i = i + 1;
             if (f77_fmt_digits(s, n, &i) < 0) { f77_fmt_bad("T, TL and TR take a column"); return; }
             continue;
         }
         if (c == 'S') {
             i = i + 1;
-            if (i < n && (s[i] == 'P' || s[i] == 'S' || s[i] == 'p' || s[i] == 's')) i = i + 1;
+            k = f77_fmt_peek(s, n, &i);
+            if (k == 'P' || k == 'S' || k == 'p' || k == 's') i = i + 1;
             continue;
         }
         if (c == 'B') {
             i = i + 1;
-            if (i < n && (s[i] == 'N' || s[i] == 'Z' || s[i] == 'n' || s[i] == 'z')) { i = i + 1; continue; }
+            k = f77_fmt_peek(s, n, &i);
+            if (k == 'N' || k == 'Z' || k == 'n' || k == 'z') { i = i + 1; continue; }
             f77_fmt_bad("B is BN or BZ");
             return;
         }
@@ -7049,11 +7064,12 @@ static void f77_check_format(const char *s, int n) {
                 f77_fmt_bad(m);
                 return;
             }
-            if (i < n && s[i] == '.') {
+            if (f77_fmt_peek(s, n, &i) == '.') {
                 i = i + 1;
                 if (f77_fmt_digits(s, n, &i) < 0) { f77_fmt_bad("a . needs digits after it"); return; }
             }
-            if ((c == 'E' || c == 'G' || c == 'D') && i < n && (s[i] == 'E' || s[i] == 'e')) {
+            k = f77_fmt_peek(s, n, &i);
+            if ((c == 'E' || c == 'G' || c == 'D') && (k == 'E' || k == 'e')) {
                 i = i + 1;
                 if (f77_fmt_digits(s, n, &i) < 0) { f77_fmt_bad("Ee needs its digits"); return; }
             }

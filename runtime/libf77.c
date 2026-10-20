@@ -291,6 +291,224 @@ static int fio_number(void) {
     return v;
 }
 
+/* fort370: a format given at run time -- a CHARACTER variable, an
+ * array, an expression -- is checked before it is used, as the compiler
+ * checks the ones it can see (fort370 issues 24, 25).  Blanks are not
+ * significant in a format outside its quoted strings and nH text (F77
+ * 13.1.2, 3.1.6): VS FORTRAN takes ( 3I 2), and a format built with
+ * WRITE (FMT, '(''('',I2,''I'',I2,'')'')') has them.  fio_fmt_prep
+ * copies the format to fio_fbuf without them, up to its closing ),
+ * a "string" made an 'string'; fio_fmt_check then refuses what is
+ * certainly wrong.  A malformed format used to be read some other way:
+ * (HI,MOM) skipped the M, O and M and reverted with no data descriptor,
+ * one empty record per pass, 150,000 records. */
+static char fio_fbuf[FIO_MAXFMT];
+static const char *fio_fmt_why;          /* why the format was refused */
+static int   fio_since_data;             /* a data descriptor since the last reversion */
+static int   fio_ftext;                  /* fio_fbuf's end of the last nH or quoted text */
+
+/* Digits here are a width, not a count: the last character copied
+ * takes one (Iw, Tc, TLc, Fw.d, Ew.dEe), and BZ's Z does not. */
+static int fio_fmt_width_next(int j) {
+    int c, b;
+    if (j == 0 || j == fio_ftext) return 0;
+    c = toupper((unsigned char)fio_fbuf[j - 1]);
+    b = j >= 2 ? toupper((unsigned char)fio_fbuf[j - 2]) : 0;
+    if (c == 'Z') return b != 'B';
+    return c == 'I' || c == 'F' || c == 'E' || c == 'D' || c == 'G' ||
+           c == 'L' || c == 'A' || c == 'O' || c == 'T' || c == 'R' || c == '.';
+}
+
+static int fio_fmt_prep(const char *fmt) {
+    int i, j, depth, q, n;
+    i = 0;
+    j = 0;
+    depth = 0;
+    fio_ftext = -1;
+    while (fmt[i] == ' ') i++;
+    if (fmt[i] != '(') { fio_fmt_why = "a format begins with ("; return -1; }
+    for (;;) {
+        int c = fmt[i];
+        if (j >= FIO_MAXFMT - 2) { fio_fmt_why = "the format is too long, or ends without its )"; return -1; }
+        if (c == 0) { fio_fmt_why = "the format ends without its )"; return -1; }
+        if (c == ' ') { i++; continue; }
+        if (c == '\'' || c == '"') {
+            q = c;
+            fio_fbuf[j++] = '\'';
+            i++;
+            for (;;) {
+                if (fmt[i] == 0 || j >= FIO_MAXFMT - 3) { fio_fmt_why = "a quoted string runs past the end of the format"; return -1; }
+                if (fmt[i] == q) {
+                    if (fmt[i + 1] != q) { i++; break; }
+                    i++;                             /* '' or "" stands for one */
+                }
+                if (fmt[i] == '\'') fio_fbuf[j++] = '\'';
+                fio_fbuf[j++] = fmt[i++];
+            }
+            fio_fbuf[j++] = '\'';
+            fio_ftext = j;
+            continue;
+        }
+        if (fio_isdigit(c) && !fio_fmt_width_next(j)) {
+            /* a count: nH takes the n characters after it as they are */
+            n = 0;
+            while (fio_isdigit(fmt[i]) || fmt[i] == ' ') {
+                if (fmt[i] != ' ') {
+                    if (j >= FIO_MAXFMT - 2) { fio_fmt_why = "the format is too long"; return -1; }
+                    n = n * 10 + (fmt[i] - '0');
+                    fio_fbuf[j++] = fmt[i];
+                }
+                i++;
+            }
+            if (fmt[i] == 'H' || fmt[i] == 'h') {
+                if (n == 0) { fio_fmt_why = "0H is no Hollerith string"; return -1; }
+                if (j + n >= FIO_MAXFMT - 2) { fio_fmt_why = "the format is too long"; return -1; }
+                fio_fbuf[j++] = fmt[i++];
+                while (n-- > 0) {
+                    if (fmt[i] == 0) { fio_fmt_why = "nH wants more characters than the format has"; return -1; }
+                    fio_fbuf[j++] = fmt[i++];
+                }
+                fio_ftext = j;
+            }
+            continue;
+        }
+        fio_fbuf[j++] = (char)c;
+        i++;
+        if (c == '(') depth++;
+        if (c == ')' && --depth == 0) break;  /* what follows is ignored (F77 13.1.1) */
+    }
+    fio_fbuf[j] = 0;
+    return 0;
+}
+
+static int fio_fmt_digits(const char *s, int *i) {
+    int v = 0;
+    if (!fio_isdigit(s[*i])) return -1;
+    while (fio_isdigit(s[*i])) { v = v * 10 + (s[*i] - '0'); *i = *i + 1; }
+    return v;
+}
+
+/* The compiler's f77_check_format, on fio_fbuf: no blanks, an nH's
+ * count known good, one ) at the end. */
+static int fio_fmt_check(void) {
+    const char *s = fio_fbuf;
+    static char why[64];
+    int i = 1, c, cnt;
+    for (;;) {
+        c = s[i];
+        if (c == 0) return 0;
+        if (c == ',' || c == '/' || c == ':' || c == '(' || c == ')') { i++; continue; }
+        if (c == '\'') {
+            i++;
+            for (;;) {
+                if (s[i] == '\'') { if (s[i + 1] == '\'') { i += 2; continue; } i++; break; }
+                i++;
+            }
+            continue;
+        }
+        cnt = -1;
+        if (c == '+' || c == '-') {
+            i++;
+            cnt = fio_fmt_digits(s, &i);
+            if (cnt < 0 || toupper((unsigned char)s[i]) != 'P') { fio_fmt_why = "a sign belongs to a scale factor, nP"; return -1; }
+        } else if (fio_isdigit(c)) {
+            cnt = fio_fmt_digits(s, &i);
+        }
+        c = toupper((unsigned char)s[i]);
+        if (c == 'H') {
+            if (cnt < 0) { fio_fmt_why = "H needs its count, nH"; return -1; }
+            i = i + 1 + cnt;                 /* fio_fmt_prep counted it */
+            continue;
+        }
+        if (cnt >= 0 && c == '(') { i++; continue; }
+        if (c == 'X' || (cnt >= 0 && c == 'P')) { i++; continue; }
+        if (c == 'T') {
+            i++;
+            c = toupper((unsigned char)s[i]);
+            if (c == 'L' || c == 'R') i++;
+            if (fio_fmt_digits(s, &i) < 0) { fio_fmt_why = "T, TL and TR take a column"; return -1; }
+            continue;
+        }
+        if (c == 'S') {
+            i++;
+            c = toupper((unsigned char)s[i]);
+            if (c == 'P' || c == 'S') i++;
+            continue;
+        }
+        if (c == 'B') {
+            i++;
+            c = toupper((unsigned char)s[i]);
+            if (c == 'N' || c == 'Z') { i++; continue; }
+            fio_fmt_why = "B is BN or BZ";
+            return -1;
+        }
+        if (c == 'A' || c == 'Z' || c == 'O') {
+            i++;
+            (void)fio_fmt_digits(s, &i);
+            continue;
+        }
+        if (c == 'I' || c == 'F' || c == 'E' || c == 'D' || c == 'G' || c == 'L') {
+            i++;
+            if (fio_fmt_digits(s, &i) < 0) {
+                sprintf(why, "%c needs a width", c);
+                fio_fmt_why = why;
+                return -1;
+            }
+            if (s[i] == '.') {
+                i++;
+                if (fio_fmt_digits(s, &i) < 0) { fio_fmt_why = "a . needs digits after it"; return -1; }
+            }
+            if ((c == 'E' || c == 'G' || c == 'D') && toupper((unsigned char)s[i]) == 'E') {
+                i++;
+                if (fio_fmt_digits(s, &i) < 0) { fio_fmt_why = "Ee needs its digits"; return -1; }
+            }
+            continue;
+        }
+        if (cnt >= 0) {
+            fio_fmt_why = c == ')' || c == ',' || c == '/' || c == ':' ? "a count with no descriptor after it"
+                                                : "a count before something that is no edit descriptor";
+            return -1;
+        }
+        sprintf(why, "%c is no edit descriptor", s[i]);
+        fio_fmt_why = why;
+        return -1;
+    }
+}
+
+/* The format as it was given, for the message: up to its ) or 80
+ * characters. */
+static void fio_fmt_fail(const char *fmt) {
+    int n = 0, depth = 0;
+    while (fmt[n] && n < 80) {
+        if (fmt[n] == '(') depth++;
+        if (fmt[n] == ')' && --depth == 0) { n++; break; }
+        n++;
+    }
+    fprintf(stderr, "f77: FORMAT: %s\n  in: %.*s\n", fio_fmt_why, n, fmt);
+}
+
+/* 0, fio_fmt the checked format; -1 refused, the message written. */
+static int fio_fmt_use(const char *fmt) {
+    if (fmt != fio_fbuf) {
+        if (fio_fmt_prep(fmt) < 0 || fio_fmt_check() < 0) { fio_fmt_fail(fmt); return -1; }
+    }
+    fio_fmt = fio_fbuf;
+    return 0;
+}
+
+/* Items remain and the format is at its end: it is used again from
+ * the reversion point (F77 13.3) -- unless it has had no data
+ * descriptor since it last was, when it would make empty records for
+ * ever.  F77 forbids it; VS FORTRAN stops the program too. */
+static void fio_no_data(void) {
+    if (!fio_since_data) {
+        fio_flush_line();
+        fprintf(stderr, "f77: FORMAT: no data edit descriptor for the items left\n");
+        exit(2);
+    }
+    fio_since_data = 0;
+}
+
 /* Walk the format, emitting literal items, until a DATA descriptor is
  * reached.  Returns its letter, or 0 if the format ran out with no data
  * descriptor left (which ends the record). */
@@ -312,6 +530,7 @@ static int fio_next_desc(void) {
              * line. */
             if (fio_gdepth > 0) { fio_gdepth = 0; }
             if (fio_draining || fio_revert < 0) return 0;
+            fio_no_data();
             fio_pos = fio_revert;
             if (fio_fmt[fio_pos] == 0) return 0;
             if (fio_reading) fio_next_record();
@@ -377,6 +596,7 @@ static int fio_next_desc(void) {
                  * a CHARACTER entity has no terminator after it, so
                  * this, not the NUL, is what ends it. */
                 if (fio_draining || fio_revert < 0) return 0;
+                fio_no_data();
                 fio_pos = fio_revert;
                 if (fio_fmt[fio_pos] == 0) return 0;
                 if (fio_reading) fio_next_record();
@@ -465,7 +685,8 @@ static int fio_next_desc(void) {
                 else fio_pos = save;
             }
             fio_rep = n;
-            fio_desc = (c >= 'a' && c <= 'z') ? c - 'a' + 'A' : c;
+            fio_desc = toupper((unsigned char)c);
+            fio_since_data = 1;
             return fio_desc;
         }
 
@@ -814,9 +1035,10 @@ static void fio_wr_setup(const char *fmt) {
         return;
     }
     fio_listed = 0;
-    fio_fmt = fmt;
+    if (fio_fmt_use(fmt) < 0) exit(2);
     fio_pos = 0;
     fio_revert = -1;
+    fio_since_data = 0;
     /* Skip the outer parenthesis; just inside it is the reversion
      * point.  (fort370: it was the parenthesis itself, so a reversion
      * made the whole format a group and its last ')' a group's end,
@@ -1627,9 +1849,15 @@ static int fio_rd_setup(const char *fmt, int has_end) {
     fio_desc = 0;
     fio_len = 0;
     fio_listed = (fmt == 0);
-    fio_fmt = fmt ? fmt : "";
+    fio_fmt = "";
     fio_pos = 0;
     fio_revert = -1;
+    fio_since_data = 0;
+    if (!fio_listed && fio_fmt_use(fmt) < 0) {
+        fio_reading = 0;
+        if (has_end & 2) return 2;
+        exit(2);
+    }
     if (!fio_listed) {
         while (fio_fmt[fio_pos] == ' ') fio_pos++;
         if (fio_fmt[fio_pos] == '(') { fio_pos++; fio_revert = fio_pos; }   /* inside it: see fio_wr_setup's */
