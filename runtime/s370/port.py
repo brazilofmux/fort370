@@ -808,6 +808,19 @@ def gen(name, what, body):
 # HFP's largest number, REAL or DOUBLE PRECISION, is (1-16**-6)*16**63
 rep('#define F77_RHUGE 3.40e38\n#define F77_DHUGE 1.79e308',
     '#define F77_RHUGE 7.2e75\n#define F77_DHUGE 7.2e75')
+# NAMELIST packs its records to the unit's record length (fort370 issue 4)
+rep('''static int fio_nml_width(int unit) {
+    (void)unit;
+    return 133;
+}''', '''static int fio_nml_width(int unit) {
+    FILE *f = unit >= 0 && unit < FIO_MAXUNIT ? fio_ufile[unit] : 0;
+    int n;
+    if (!f && unit == 6) f = stdout;
+    if (!f || f == F77_NOFILE) return 133;
+    n = f->lrecl;
+    if ((f->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_V) n = n - 4;
+    return n > 0 ? n : 133;
+}''')
 dint = cut('double f77_dint(double v) {', '#define trunc fio_trunc')
 chars = cut('/* --- CHARACTER primitives', 'void f77_wr_l(int v) {')
 powi = cut('/* --- ** with an INTEGER exponent', '/* --- OPEN / CLOSE / REWIND')

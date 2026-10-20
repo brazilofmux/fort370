@@ -9,7 +9,8 @@
 # or ENTRY points of one name, and two names that are one external name
 # in eight characters; a function called with a type other than its own;
 # a FORMAT, or a format that is one constant, that is certainly wrong
-# (an nH past its end, a count with no descriptor, an unknown letter).  tests/s370/mainlast.f has a main program after
+# (an nH past its end, a count with no descriptor, an unknown letter);
+# a NAMELIST READ with a list, and a NAMELIST group defined twice.  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -59,6 +60,10 @@ printf '      WRITE (6, 100) 1\n  100 FORMAT (1X, Q5)\n      END\n' > $T/fmtlett
 expect fmtletter "line 2: FORMAT: Q is no edit descriptor"
 printf '      WRITE (6, 100) 1\n  100 FORMAT (1X, I, 2(F8.2)\n      END\n' > $T/fmtwidth.f
 expect fmtwidth "line 2: FORMAT: I needs a width"
+printf '      NAMELIST /G/ A, B\n      READ (5, G) A\n      END\n' > $T/nmllist.f
+expect nmllist "line 2: a NAMELIST READ has no list"
+printf '      NAMELIST /G/ A /G/ B\n      END\n' > $T/nmltwice.f
+expect nmltwice "line 1: a NAMELIST group of that name is already defined"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken and a broken FORMAT refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT and a misused NAMELIST refused"
 [ $bad = 0 ]

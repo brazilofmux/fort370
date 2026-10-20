@@ -337,7 +337,7 @@ static void f77_scan_units(void) {
                 f77_starts("DATA") || f77_starts("SAVE") ||
                 f77_starts("EQUIVALENCE") || f77_starts("PARAMETER") ||
                 f77_starts("ENTRY") || f77_starts("EXTERNAL") ||
-                f77_starts("CHARACTER"))
+                f77_starts("CHARACTER") || f77_starts("NAMELIST"))
                 f77_unosplice[f77_nunit - 1] = 1;
         }
         if (started && f77_nunit > 0 && f77_starts("ENTRY") &&

@@ -91,7 +91,8 @@ def zerofill(deck):
 # F77WRBEG) come after one of them, and a member, once in, defines all
 # its names.  check() below proves it over the test programs.
 DOORS = ['F77WRBEG', 'F77WRBI', 'F77RDBEG', 'F77RDBI', 'F77WUB@R', 'F77RUB@R', 'F77SRC@R',
-         'F77OPEN', 'F77CLOSE', 'F77INQR', 'F77INQ', 'F77REWND', 'F77BKSP', 'F77ENDF', 'F77PAUSE']
+         'F77OPEN', 'F77CLOSE', 'F77INQR', 'F77INQ', 'F77REWND', 'F77BKSP', 'F77ENDF', 'F77PAUSE',
+         'F77NMLBG']
 
 
 def esd(deck):

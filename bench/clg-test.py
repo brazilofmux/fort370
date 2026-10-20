@@ -8,7 +8,8 @@ F77RT, the program runs; no host in the loop but to submit the job.
      HEXIN); with --upd, F77RT.upd made into it by IEBUPDTE instead;
   2. one job: jcl/F77CLG.jcl as an instream procedure, one invocation
      per program, its source DD * on the compile step, scratch DDs
-     FT01F001-FT04F001 and FT07F001-FT30F001 on the GO step;
+     FT01F001-FT04F001 and FT07F001-FT30F001 on the GO step (VB/260),
+     and FT31F001 (FB/80, card images);
   3. print each program's lines that begin with ">" (the convention of
      tests/s370) and its steps' return codes.
 
@@ -95,6 +96,9 @@ def main():
         for u in list(range(1, 5)) + list(range(7, 31)):
             jcl += (f"//GO.FT{u:02d}F001 DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
                     f"//            DCB=(RECFM=VB,LRECL=260,BLKSIZE=2604)\n")
+        # unit 31: card images, for what is written to be punched
+        jcl += ("//GO.FT31F001 DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
+                "//            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)\n")
     deck = os.path.join(WORK, 'clg.jcl')
     open(deck, 'w').write(jcl)
     out = os.path.join(WORK, 'clg.out')
