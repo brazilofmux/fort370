@@ -8,6 +8,33 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-20.2
+
+Tagged `v2026.10.20.2`: INTEGER*2 and LOGICAL*1 (issue #10), found by
+MINOS 4.0 on a problem René Ferland sent, after Jong-Shi Pang.  Built
+from `a6bcad5`: FORT370.xmit SHA256 `ee8fe4347ca19051…`, 582,560
+bytes; F77RT.xmit SHA256 `f6069644076841d3…`, 516,320 bytes; F77RT.upd
+SHA256 `18f0cccf1f3bf638…`, 527,520 bytes.  All 192 FCVS programs, 102
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design.
+
+- INTEGER*2 is a halfword and LOGICAL*1 a byte, as in FORTRAN H; they
+  were accepted and given a fullword.  MINOS keeps its INTEGER*2
+  arrays in its REAL*8 work array, four to a word; at four bytes the
+  row numbers ran into the matrix, and the first element, 1.0, read as
+  the row number 1 -- a pivot of 5.1E-85, and an error exit.  Now they
+  take 2 bytes and 1 in arrays, COMMON, EQUIVALENCE, DATA and
+  unformatted records; COMMON is not padded after them, as in H.  A
+  value stored in an INTEGER*2, by assignment or READ, keeps its low
+  16 bits, sign extended (40000 is -25536, as H has it); A editing
+  moves its 2 bytes.  In expressions they are fullwords, as H
+  computes them.  MINOS as written (NWORDH = 4) solves the problem as
+  OS/390 does: 116 iterations, objective 1.1446656411256E+01.
+- A FUNCTION's length may follow its name: INTEGER FUNCTION F*2(I), as
+  H writes it, and CHARACTER FUNCTION C*3(I), standard F77, which was
+  refused.  INTEGER*2 FUNCTION F(I) and IMPLICIT INTEGER*2 work too.
+
 ## 2026-10-20.1
 
 Tagged `v2026.10.20.1`: formats given at run time (issue #25).  Built
