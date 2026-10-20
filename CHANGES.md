@@ -8,6 +8,35 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-20
+
+Tagged `v2026.10.20`: NAMELIST (issue #4), asked for by fovea1959 with
+its records no longer than the unit's.  Built from `62615a5`:
+FORT370.xmit SHA256 `230a902d2c1bcccf…`, 582,160 bytes; F77RT.xmit
+SHA256 `cdfb0f2337d6f08e…`, 505,280 bytes; F77RT.upd SHA256
+`431354bbd4c56749…`, 516,560 bytes.  All 192 FCVS programs, 100 tests,
+the 600K source and the 85-deep nesting test compile on the guest to
+the host's assembler, byte for byte, in REGION=6144K; the FCVS runs
+3346 tests passed and the 2 failed by design.
+
+- NAMELIST, as FORTRAN H has it: NAMELIST /GROUP/ A, B, C, then
+  READ (u, GROUP) and WRITE (u, GROUP), or NML=GROUP.  WRITE writes
+  H's records, measured on TK5: &GROUP, NAME=value,... and &END, each
+  record beginning with a blank, the fields H's widths, a value never
+  split across records.  H fills 132 columns; here a record is as long
+  as the unit's DD says (LRECL, less 4 for RECFM=V, 133 when nothing
+  says), so a group written to an FB/80 data set is card images, and
+  FORTRAN H reads them back.  An exponent is written E+10 where H
+  writes E 10.
+- NAMELIST READ takes &GROUP or $GROUP, up to &END, $END or /;
+  NAME=, NAME(i,j)=, repeat counts (2*7.25) and values left empty;
+  H's own records, its blank for an exponent's + sign among them;
+  other groups' data before the one read are skipped.  END=, ERR= and
+  IOSTAT= work as for any READ.  A CHARACTER item, which H has not, is
+  written and read as 'text'.  An item may be a dummy argument or an
+  adjustable array; an assumed-size array's last dimension counts as 1.
+- bench/clg-test.py gives each GO step an FB/80 unit, FT31F001.
+
 ## 2026-10-19.1
 
 Tagged `v2026.10.19.1`: what MINOS 4.0 found, Murtagh and Saunders's
