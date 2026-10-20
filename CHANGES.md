@@ -8,6 +8,32 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-20.1
+
+Tagged `v2026.10.20.1`: formats given at run time (issue #25).  Built
+from `767b165`: FORT370.xmit SHA256 `ef25b1a0df4b9166…`, 582,160
+bytes; F77RT.xmit SHA256 `3c51870a7a4d1352…`, 515,040 bytes; F77RT.upd
+SHA256 `08bb21ebeb9054fe…`, 526,240 bytes.  All 192 FCVS programs, 101
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design.
+
+- Blanks in a format held in a CHARACTER variable, array or
+  expression are not significant outside its quoted strings and nH
+  text, as in a FORMAT statement: `( 3I 2)` is `(3I2)`.  A blank
+  stopped a width or a count, and a format written at run time,
+  `WRITE (FMT, '(''('',I2,''I'',I2,'')'')') N, W`, printed something
+  else.
+- Such a format is checked when the statement uses it, as the compiler
+  checks a FORMAT statement.  One certainly wrong ends the program with
+  a message naming it (`f77: FORMAT: H needs its count, nH`, `in:
+  (HI,MOM)`), or gives a READ with ERR= or IOSTAT= its error; before,
+  the runtime skipped what it did not know, and `(HI,MOM)` wrote
+  150,000 empty records.  A format with no data edit descriptor while
+  items remain ends the program too.
+- The compiler's check of a format that is one constant (#24) refused
+  `'( 3I 2)'`; it skips blanks now, and says an H needs its count.
+
 ## 2026-10-20
 
 Tagged `v2026.10.20`: NAMELIST (issue #4), asked for by fovea1959 with
