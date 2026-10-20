@@ -105,6 +105,8 @@ void f77_pause(const char *s, int len) __asm__("F77PAUSE");
 int f77_rd_begin(int unit, const char *fmt, int has_end) __asm__("F77RDBEG");
 int f77_rd_begin_int(char *buf, int len, int nrec, const char *fmt, int has_end) __asm__("F77RDBI");
 void f77_rd_i(int *p) __asm__("F77RDI");
+void f77_rd_in(void *p, int n) __asm__("F77RDIN");
+void f77_wr_in(int v, int n) __asm__("F77WRIN");
 void f77_rd_d(double *p) __asm__("F77RDD");
 void f77_rd_r(float *p) __asm__("F77RDR");
 void f77_rd_s(char *p, int len) __asm__("F77RDS");

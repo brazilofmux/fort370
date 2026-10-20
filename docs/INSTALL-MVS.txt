@@ -241,8 +241,14 @@ CDSIN and CDCOS, later IBM's DIMAG and DREAL, and the generic names
 (ABS, SQRT, REAL, AIMAG, CONJG...) taking it as gfortran's do.  As in
 H, COMPLEX with DOUBLE PRECISION is COMPLEX*16.  REAL*8 and COMPLEX*16
 may be written in type statements, IMPLICIT, after a name (COMPLEX
-Z*16) and before FUNCTION.  Other lengths, INTEGER*2 and LOGICAL*1,
-are accepted and get a fullword.
+Z*16) and before FUNCTION.  INTEGER*2 is a halfword and LOGICAL*1 a
+byte, as in H: in arrays, COMMON, EQUIVALENCE, DATA and unformatted
+records they take 2 bytes and 1, COMMON is not padded after them, and
+a value stored in an INTEGER*2, by assignment or READ, keeps its low
+16 bits, sign extended (40000 is -25536).  In an expression they are
+fullwords, as H computes them.  A FUNCTION's length may follow its
+name, INTEGER FUNCTION F*2(I) and CHARACTER FUNCTION C*8(X), or its
+type.  Other lengths are accepted and get a fullword.
 From MIL-STD-1753 (1978): END DO, as a labelled DO's terminal
 statement, and DO WHILE (e), labelled or not.  And, as VAX FORTRAN and
 later Fortran 90 have it, a DO without a label ended by END DO, and a

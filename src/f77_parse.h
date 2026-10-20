@@ -224,11 +224,17 @@ static signed char *f77_sintrinsic; /* named in INTRINSIC */
  * apart for list-directed output (T/F vs a number) is this flag on the
  * symbol, carried through expressions in ex_log. */
 static signed char *f77_slog;
+/* fort370: the storage of an INTEGER*2 (2) or LOGICAL*1 (1) item --
+ * its value is TY_INT, as FORTRAN H computes in fullword registers, but
+ * it is loaded and stored at this width (fort370 issue 10); 0 for a
+ * fullword or any other type. */
+static signed char *f77_snar;
 /* fort370: indexed by letter - 'A', which in EBCDIC runs to 40 ('A' to
  * 'Z' has gaps there), so the tables span 'A'..'Z' in the execution
  * character set: 26 on a host, 41 on MVS. */
 #define F77_IMP_N ('Z' - 'A' + 1)
 static int  f77_imp_log[F77_IMP_N];
+static int  f77_imp_nar[F77_IMP_N];          /* IMPLICIT INTEGER*2, LOGICAL*1 per letter */
 static int  ex_log;
 static int  f77_decl_log;              /* the type statement being parsed is LOGICAL */
 static int  f77_imp_len[F77_IMP_N];           /* IMPLICIT CHARACTER*n per letter */
@@ -278,8 +284,18 @@ static int f77_lenty(int ty, int n, int say) {
     return ty;
 }
 
+/* fort370: the storage width of a length on INTEGER or LOGICAL --
+ * INTEGER*2 a halfword, LOGICAL*1 a byte, as FORTRAN H has them (issue
+ * 10); 0 for a fullword, INTEGER*4 and LOGICAL*4 among them. */
+static int f77_lennar(int ty, int n, int lg) {
+    if (ty != TY_INT) return 0;
+    if (lg) return n == 1 ? 1 : 0;
+    return n == 2 ? 2 : 0;
+}
+
 /* Element size: a CHARACTER element is its length. */
 static int f77_esize(int s) {
+    if (f77_snar[s]) return f77_snar[s];
     if (f77_sty[s] == TY_CHAR) return f77_slen[s] > 0 ? f77_slen[s] : 1;
     if (f77_sty[s] == TY_CPLX) return 8;
     if (f77_sty[s] == TY_DCPLX) return 16;
@@ -542,9 +558,11 @@ static int f77_sym(char *nm) {
     f77_sexternal[f77_nsym] = 0;
     f77_sintrinsic[f77_nsym] = 0;
     f77_slog[f77_nsym] = 0;
+    f77_snar[f77_nsym] = 0;
     if (f77_imp_ready && nm[0] >= 'A' && nm[0] <= 'Z') {
         if (f77_sty[f77_nsym] == TY_CHAR) f77_slen[f77_nsym] = f77_imp_len[nm[0] - 'A'];
         f77_slog[f77_nsym] = f77_imp_log[nm[0] - 'A'];
+        f77_snar[f77_nsym] = f77_imp_nar[nm[0] - 'A'];
     }
     f77_sparam[f77_nsym] = 0;
     f77_styped[f77_nsym] = 0;
@@ -593,6 +611,7 @@ static int f77_sym_temp(int ty) {
     f77_sexternal[s] = 0;
     f77_sintrinsic[s] = 0;
     f77_slog[s] = 0;
+    f77_snar[s] = 0;
     f77_dim_row(s, 0);
     f77_frame = f77_frame + f77_tysize(ty);
     f77_sval[s] = hi_emit(HI_ALLOCA, f77_slotty(ty), -1, -1, 0 - f77_frame, NULL);
@@ -622,6 +641,7 @@ static int  f77_uline[F77_MAX_UNIT];
 static int  f77_urty[F77_MAX_UNIT];    /* FUNCTION result type */
 static int  f77_urlen[F77_MAX_UNIT];   /* CHARACTER FUNCTION result length, -1 = (*) */
 static int  f77_urlog[F77_MAX_UNIT];   /* LOGICAL FUNCTION */
+static int  f77_urnar[F77_MAX_UNIT];   /* INTEGER*2 or LOGICAL*1 FUNCTION: f77_snar of the result */
 /* ENTRY: a secondary entry into a subprogram is compiled as a unit of
  * its own -- the parent's declarations, then the statements from the
  * ENTRY to END -- with f77_uentry_parent naming the parent (-1 for an
@@ -672,9 +692,11 @@ static int f77_sym_param(char *nm, int index) {
     f77_sexternal[s] = 0;
     f77_sintrinsic[s] = 0;
     f77_slog[s] = 0;
+    f77_snar[s] = 0;
     if (f77_imp_ready && nm[0] >= 'A' && nm[0] <= 'Z') {
         if (f77_sty[s] == TY_CHAR) f77_slen[s] = f77_imp_len[nm[0] - 'A'];
         f77_slog[s] = f77_imp_log[nm[0] - 'A'];
+        f77_snar[s] = f77_imp_nar[nm[0] - 'A'];
     }
     f77_dim_row(s, 0);
     f77_sval[s] = hi_emit(HI_PARAM, HL_ADDR_TY, -1, -1, index, NULL);
@@ -862,6 +884,7 @@ static int f77_actual_addr(void);
 static int f77_urty_of(int u);
 static int f77_load_at(int addr, int ty);
 static int f77_load_sym(int s);
+static int f77_mty(int s);
 static void f77_store_sym_val(int s, int v, int vty, int vhi);
 static void f77_store_at(int addr, int ty, int v, int vty, int vhi);
 static int f77_can_inline(int u);
@@ -1464,7 +1487,7 @@ static int f77_load_sym(int s) {
         ex_hi = hi_emit(HI_LOAD, wty, f77_shi[s], -1, 0, NULL);
         return v;
     }
-    v = f77_load_at(f77_sval[s], f77_sty[s]);
+    v = f77_load_at(f77_sval[s], f77_mty(s));
     /* fort370: and a local scalar in static storage (SAVE, or DATA's
      * initial value) outside COMMON: only this unit can reach it, so if
      * the unit never stores it its value cannot change -- LEN in
@@ -1489,12 +1512,46 @@ static void f77_store_sym_val(int s, int v, int vty, int vhi) {
         hi_emit(HI_STORE, wty, f77_shi[s], vhi, 0, NULL);
         return;
     }
-    f77_store_at(f77_sval[s], f77_sty[s], v, vty, vhi);
+    f77_store_at(f77_sval[s], f77_mty(s), v, vty, vhi);
 }
+
+/* fort370: a value stored to an INTEGER*2 is cut to 16 bits and sign
+ * extended, as STH and then LH make it, so that one kept in a register
+ * reads back as memory would (FORTRAN H: K = 40000 is -25536).  A
+ * LOGICAL*1 value is 0 or 1 already. */
+static int f77_narrow(int v, int ty) {
+    if (ty != TY_SHORT) return v;
+    if (h_kind[v] == HI_ICONST)
+        return f77_iconst(((h_val[v] & 0xFFFF) ^ 0x8000) - 0x8000);
+    v = hi_emit(HI_SLL, TY_INT, v, f77_iconst(16), 0, NULL);
+    return hi_emit(HI_SRA, TY_INT, v, f77_iconst(16), 0, NULL);
+}
+
+/* fort370: the type a symbol is loaded and stored as -- its own, or
+ * for INTEGER*2 a halfword and for LOGICAL*1 an unsigned byte (issue
+ * 10).  f77_load_at and f77_store_at take these and give and take
+ * TY_INT values. */
+#define F77_TY_BYTE (TY_CHAR | TY_UNSIGNED)
+static int f77_mty(int s) {
+    if (f77_snar[s] == 2) return TY_SHORT;
+    if (f77_snar[s] == 1) return F77_TY_BYTE;
+    return f77_sty[s];
+}
+
+/* The last INTEGER*2 or LOGICAL*1 load and its memory type: an
+ * unformatted WRITE whose item is that very value writes 2 or 1 bytes. */
+static int f77_nar_ld = -1;
+static int f77_nar_ty;
 
 /* Load a value of type `ty` from `addr`, setting ex_ty/ex_hi. */
 static int f77_load_at(int addr, int ty) {
     int v;
+    if (ty == TY_SHORT || ty == F77_TY_BYTE) {
+        ex_ty = TY_INT;
+        f77_nar_ld = hi_emit(HI_LOAD, ty, addr, -1, 0, NULL);
+        f77_nar_ty = ty;
+        return f77_nar_ld;
+    }
     ex_ty = ty;
     if (f77_ispair(ty)) {
         int a4;
@@ -1510,6 +1567,12 @@ static int f77_load_at(int addr, int ty) {
 
 /* Store `v` (hi word `vhi`) of type `vty` to `addr` as type `ty`. */
 static void f77_store_at(int addr, int ty, int v, int vty, int vhi) {
+    if (ty == TY_SHORT || ty == F77_TY_BYTE) {
+        v = f77_cvt(v, &vhi, vty, TY_INT);
+        v = f77_narrow(v, ty);
+        hi_emit(HI_STORE, ty, addr, v, 0, NULL);
+        return;
+    }
     v = f77_cvt(v, &vhi, vty, ty);
     if (f77_ispair(ty)) {
         int a4;
@@ -2537,7 +2600,7 @@ static int f77_primary(void) {
             int addr;
             f77_tok();
             addr = f77_subscript_addr(s);
-            v = f77_load_at(addr, f77_sty[s]);
+            v = f77_load_at(addr, f77_mty(s));
             ex_log = f77_slog[s];
             return v;
         }
@@ -3023,6 +3086,7 @@ static void f77_scan_from(int off) {
 
 static void f77_store_sym(int s, int v, int vty, int vhi) {
     f77_sstored[s] = 1;
+    if (f77_snar[s]) { f77_store_at(f77_sval[s], f77_mty(s), v, vty, vhi); return; }
     v = f77_cvt(v, &vhi, vty, f77_sty[s]);
     if (f77_sty[s] == TY_DOUBLE || f77_sty[s] == TY_CPLX) {
         int addr4;
@@ -3113,7 +3177,7 @@ static void f77_stmt_assign(void) {
     if (addr == f77_sval[s] && f77_srank[s] == 0)
         f77_store_sym_val(s, v, vty, ex_hi);
     else
-        f77_store_at(addr, f77_sty[s], v, vty, ex_hi);
+        f77_store_at(addr, f77_mty(s), v, vty, ex_hi);
 }
 
 static int f77_stf_find(char *nm) {
@@ -3821,7 +3885,9 @@ static int f77_decl_init(int s);
 static void f77_stmt_decl(int ty, int skip) {
     int s;
     int clen;
+    int tnar;
     clen = 1;
+    tnar = 0;
     f77_scan_from(skip);
     /* Type-level length: REAL*8 X, CHARACTER*10 S.  Per-name forms
      * (REAL X*8, CHARACTER S*10) are below. */
@@ -3832,6 +3898,7 @@ static void f77_stmt_decl(int ty, int skip) {
             clen = f77_char_len();
         } else if (f77_star_len(&n)) {
             ty = f77_lenty(ty, n, 1);
+            tnar = f77_lennar(ty, n, f77_decl_log);
         }
         if (lx_t == T_COMMA) f77_tok();       /* CHARACTER*10, A, B */
     }
@@ -3842,6 +3909,7 @@ static void f77_stmt_decl(int ty, int skip) {
             f77_sty[s] = ty;
             f77_styped[s] = 1;
             f77_slog[s] = f77_decl_log;
+            f77_snar[s] = tnar;
             if (ty == TY_CHAR) f77_slen[s] = clen;
         }
         f77_tok();
@@ -3854,6 +3922,7 @@ static void f77_stmt_decl(int ty, int skip) {
                 f77_slen[s] = f77_char_len();
             } else if (f77_star_len(&n)) {
                 f77_sty[s] = f77_lenty(f77_sty[s], n, 1);
+                f77_snar[s] = f77_lennar(f77_sty[s], n, f77_slog[s]);
             }
             if (lx_t == T_LP) f77_parse_dims(s);
         }
@@ -4081,8 +4150,10 @@ static void f77_stmt_implicit(int skip) {
     for (;;) {
         int clen;
         int lg;
+        int nar;
         clen = 1;
         lg = 0;
+        nar = 0;
         if (lx_t != T_NAME) { f77_error("IMPLICIT needs a type"); return; }
         if (strcmp(lex_name, "INTEGER") == 0) ty = TY_INT;
         else if (strcmp(lex_name, "REAL") == 0) ty = TY_FLOAT;
@@ -4098,7 +4169,7 @@ static void f77_stmt_implicit(int skip) {
         if (lx_t == T_STAR) {
             int n;
             if (ty == TY_CHAR) { f77_tok(); clen = f77_char_len(); }
-            else if (f77_star_len(&n)) ty = f77_lenty(ty, n, 1);
+            else if (f77_star_len(&n)) { ty = f77_lenty(ty, n, 1); nar = f77_lennar(ty, n, lg); }
         }
         if (clen < 0) { f77_error("IMPLICIT CHARACTER*(*) is not allowed"); return; }
         if (lx_t != T_LP) { f77_error("IMPLICIT needs (letter-ranges)"); return; }
@@ -4124,7 +4195,7 @@ static void f77_stmt_implicit(int skip) {
                 f77_error("bad IMPLICIT letter range");
                 return;
             }
-            for (c = lo; c <= hi; c++) { f77_imp_map[c - 'A'] = ty; f77_imp_len[c - 'A'] = clen; f77_imp_log[c - 'A'] = lg; }
+            for (c = lo; c <= hi; c++) { f77_imp_map[c - 'A'] = ty; f77_imp_len[c - 'A'] = clen; f77_imp_log[c - 'A'] = lg; f77_imp_nar[c - 'A'] = nar; }
             if (lx_t != T_COMMA) break;
             f77_tok();
         }
@@ -4139,6 +4210,7 @@ static void f77_stmt_implicit(int skip) {
         if (f77_styped[s] || f77_sparam[s]) continue;
         ty = f77_imp_map[f77_sname[s][0] - 'A'];
         f77_slog[s] = f77_imp_log[f77_sname[s][0] - 'A'];
+        f77_snar[s] = f77_imp_nar[f77_sname[s][0] - 'A'];
         if (ty == f77_sty[s] &&
             (ty != TY_CHAR || f77_slen[s] == f77_imp_len[f77_sname[s][0] - 'A'])) continue;
         if (s == f77_result_sym) {
@@ -4997,7 +5069,7 @@ static void f77_layout_static(void) {
         } else {
             int v;
             v = (f77_di_ty[i] == TY_INT) ? f77_di_i[i] : (int)f77_di_d[i];
-            f77_image_int(ps_ginit_pool + off, (unsigned int)v, 4);
+            f77_image_int(ps_ginit_pool + off, (unsigned int)v, f77_snar[s] ? f77_snar[s] : 4);
         }
     }
 }
@@ -5140,6 +5212,10 @@ static void f77_close_top_do(void) {
                 vlo = f77_fp64_call2("__fp64_add", vlo, vhi,
                                      ctl_step[ctl_n], shi, &vhi);
                 f77_store_sym_val(s, vlo, TY_DOUBLE, vhi);
+            } else if (f77_snar[s]) {         /* INTEGER*2 I: DO 10 I = ... */
+                v = f77_load_at(f77_sval[s], f77_mty(s));
+                v = hi_emit(HI_ADD, TY_INT, v, ctl_step[ctl_n], 0, NULL);
+                f77_store_at(f77_sval[s], f77_mty(s), v, TY_INT, -1);
             } else {
                 v = hi_emit(HI_LOAD, TY_INT, f77_sval[s], -1, 0, NULL);
                 v = hi_emit(HI_ADD, TY_INT, v, ctl_step[ctl_n], 0, NULL);
@@ -5408,6 +5484,21 @@ static int f77_function_kw_end(int *ty_out) {
         n = f77_name_at(fn);
         if (n == 0) return -1;
     }
+    /* fort370: the length after the name, CHARACTER FUNCTION F*10(X)
+     * (F77 8.5) and IBM's INTEGER FUNCTION F*2(I) */
+    if (fn + n + 1 < lx_stmt_len && lx_stmt[fn + n] == '*' && lx_isdigit(lx_stmt[fn + n + 1]) &&
+        (ty != TY_CHAR || f77_hdr_clen == 1)) {
+        int k;
+        int ln;
+        k = fn + n + 1;
+        ln = 0;
+        while (k < lx_stmt_len && lx_isdigit(lx_stmt[k])) { ln = ln * 10 + (lx_stmt[k] - '0'); k = k + 1; }
+        if (k >= lx_stmt_len || lx_stmt[k] != '(' || f77_match_paren(k) != lx_stmt_len) return -1;
+        if (ty == TY_CHAR) f77_hdr_clen = ln;
+        else if (f77_hdr_len == 0) { ty = f77_lenty(ty, ln, 0); f77_hdr_len = ln; }
+        *ty_out = ty;
+        return fn;
+    }
     /* F77 8.5: the dummy list in parens is required, and nothing
      * follows it.  FUNCTIONAL(1)=10 is an array assignment, not
      * FUNCTION AL with dummy 1. */
@@ -5415,6 +5506,13 @@ static int f77_function_kw_end(int *ty_out) {
     if (f77_match_paren(fn + n) != lx_stmt_len) return -1;
     *ty_out = ty;
     return fn;
+}
+
+/* After a FUNCTION header's name token: its length, F*2, if any. */
+static void f77_hdr_skip_len(void) {
+    if (lx_t != T_STAR) return;
+    f77_tok();
+    if (lx_t == T_ICON) f77_tok();
 }
 
 /* If this statement is a `[type] FUNCTION name(...)` header, return the
@@ -5786,9 +5884,11 @@ static int f77_bind_actual(char *nm, int addr) {
     f77_sexternal[s] = 0;
     f77_sintrinsic[s] = 0;
     f77_slog[s] = 0;
+    f77_snar[s] = 0;
     if (f77_imp_ready && nm[0] >= 'A' && nm[0] <= 'Z') {
         if (f77_sty[s] == TY_CHAR) f77_slen[s] = f77_imp_len[nm[0] - 'A'];
         f77_slog[s] = f77_imp_log[nm[0] - 'A'];
+        f77_snar[s] = f77_imp_nar[nm[0] - 'A'];
     }
     /* fort370: and taken as stored.  A dummy's loads are asserted
      * loop-invariant (f77_ldro_note) because nothing else may change
@@ -5851,6 +5951,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     int save_imp_map[F77_IMP_N];     /* the caller's IMPLICIT, which the */
     int save_imp_len[F77_IMP_N];     /* callee does not share */
     int save_imp_log[F77_IMP_N];
+    int save_imp_nar[F77_IMP_N];
     int save_imp_ready;
     int save_imp_none;
     int b_cont;
@@ -5895,12 +5996,14 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     memcpy(save_imp_map, f77_imp_map, sizeof save_imp_map);
     memcpy(save_imp_len, f77_imp_len, sizeof save_imp_len);
     memcpy(save_imp_log, f77_imp_log, sizeof save_imp_log);
+    memcpy(save_imp_nar, f77_imp_nar, sizeof save_imp_nar);
     save_imp_ready = f77_imp_ready;
     save_imp_none = f77_imp_none;
     for (i = 0; i < F77_IMP_N; i++) {
         f77_imp_map[i] = (i >= 'I' - 'A' && i <= 'N' - 'A') ? TY_INT : TY_FLOAT;
         f77_imp_len[i] = 1;
         f77_imp_log[i] = 0;
+        f77_imp_nar[i] = 0;
     }
     f77_imp_ready = 1;
     f77_imp_none = 0;
@@ -5935,6 +6038,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     else skip = f77_function_skip();
     f77_scan_from(skip);
     if (lx_t == T_NAME) f77_tok();
+    f77_hdr_skip_len();
     i = 0;
     if (lx_t == T_LP) {
         f77_tok();
@@ -5954,6 +6058,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
         rty = f77_urty[u];
         result = f77_sym(f77_uname[u]);
         f77_sty[result] = rty;
+        f77_snar[result] = f77_urnar[u];
         f77_sarg[result] = 0;
         f77_realloc_sym(result);
     }
@@ -5977,6 +6082,7 @@ static int f77_inline_unit_body(int u, int *addrs, int nargs) {
     memcpy(f77_imp_map, save_imp_map, sizeof save_imp_map);
     memcpy(f77_imp_len, save_imp_len, sizeof save_imp_len);
     memcpy(f77_imp_log, save_imp_log, sizeof save_imp_log);
+    memcpy(f77_imp_nar, save_imp_nar, sizeof save_imp_nar);
     f77_imp_ready = save_imp_ready;
     f77_imp_none = save_imp_none;
     f77_inline_depth = f77_inline_depth - 1;
@@ -6190,7 +6296,7 @@ static void f77_emit_copyin(void) {
              * ADDI base,4, address-taken, never promoted -- so no
              * load was saved while the extra live values spilled. */
             hi = -1;
-            v = f77_load_at(a, f77_sty[s]);
+            v = f77_load_at(a, f77_mty(s));
             hi = ex_hi;
             f77_sarg[s] = 0;
             f77_frame = f77_frame + 4;
@@ -6221,7 +6327,7 @@ static void f77_emit_copyout(void) {
         s = f77_ci_sym[i];
         if (!f77_sarg[s]) {
             v = f77_load_sym(s);
-            f77_store_at(f77_ci_addr[i], f77_sty[s], v, f77_sty[s], ex_hi);
+            f77_store_at(f77_ci_addr[i], f77_mty(s), v, f77_sty[s], ex_hi);
         }
         i = i + 1;
     }
@@ -6323,6 +6429,7 @@ static void f77_bind_unit(int u) {
             f77_imp_map[c] = (c >= 'I' - 'A' && c <= 'N' - 'A') ? TY_INT : TY_FLOAT;
             f77_imp_len[c] = 1;
             f77_imp_log[c] = 0;
+            f77_imp_nar[c] = 0;
         }
     }
     f77_imp_ready = 1;
@@ -6346,6 +6453,7 @@ static void f77_bind_unit(int u) {
     f77_scan_from(skip);
     if (lx_t != T_NAME) { f77_error("subprogram needs a name"); return; }
     f77_tok();
+    f77_hdr_skip_len();
 
     /* A CHARACTER FUNCTION takes its result buffer and length as two
      * hidden leading arguments; the dummies follow. */
@@ -6393,6 +6501,7 @@ static void f77_bind_unit(int u) {
         f77_result_sym = f77_sym(f77_uname[u]);
         f77_sty[f77_result_sym] = f77_urty[u];
         f77_slog[f77_result_sym] = f77_urlog[u];
+        f77_snar[f77_result_sym] = f77_urnar[u];
         /* A typed header (INTEGER FUNCTION F...) is an explicit
          * declaration; a bare FUNCTION F relies on implicit typing,
          * which a later IMPLICIT may not change (phase 1 already told
@@ -6496,6 +6605,12 @@ static void f77_wr_item(int v, int vty, int vhi) {
     } else if (vty == TY_FLOAT) {
         h_carg[h_ncarg] = v; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
         r = hi_emit(HI_CALL, TY_INT, -1, -1, 1, "f77_wr_r");
+    } else if (v == f77_nar_ld && vty == TY_INT) {
+        /* fort370: an INTEGER*2 or LOGICAL*1 item, its width with it --
+         * A editing writes its bytes */
+        h_carg[h_ncarg] = v; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+        h_carg[h_ncarg] = f77_iconst(f77_tysize(f77_nar_ty)); h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
+        r = hi_emit(HI_CALL, TY_INT, -1, -1, 2, "f77_wr_in");
     } else {
         h_carg[h_ncarg] = v; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
         r = hi_emit(HI_CALL, TY_INT, -1, -1, 1, "f77_wr_i");
@@ -6520,6 +6635,15 @@ static void f77_rd_item(int addr, int ty) {
         int args[2];
         args[0] = addr; args[1] = f77_rd_len;
         f77_call_i("f77_rd_s", 2, args);
+        return;
+    }
+    if (ty == TY_SHORT || ty == F77_TY_BYTE) {
+        /* fort370: an INTEGER*2 or LOGICAL*1, its width with it: the
+         * runtime keeps the low bytes (H keeps 4464 of 70000), and A
+         * editing reads its bytes */
+        int args[2];
+        args[0] = addr; args[1] = f77_iconst(f77_tysize(ty));
+        f77_call_i("f77_rd_in", 2, args);
         return;
     }
     cb = h_ncarg;
@@ -6557,7 +6681,7 @@ static int f77_rd_target(int *tyo) {
     }
     f77_sstored[s] = 1;
     f77_tok();
-    *tyo = f77_sty[s];
+    *tyo = f77_mty(s);
     if (f77_sty[s] == TY_CHAR) {
         int a;
         a = f77_char_ref(s);
@@ -6631,9 +6755,9 @@ static void f77_whole_item(int s, int off) {
         args[1] = (f77_slen[s] >= 0) ? f77_iconst(f77_slen[s]) : f77_slenv[s];
         f77_call_i(f77_io_rd ? "f77_rd_s" : "f77_wr_a", 2, args);
     } else if (f77_io_rd) {
-        f77_rd_item(addr, f77_sty[s]);
+        f77_rd_item(addr, f77_mty(s));
     } else {
-        v = f77_load_at(addr, f77_sty[s]);
+        v = f77_load_at(addr, f77_mty(s));
         vhi = ex_hi;
         f77_wr_item(v, f77_sty[s], vhi);
     }
@@ -6805,7 +6929,8 @@ static void f77_wr_one(void) {
             }
 
             f77_sstored[sv] = 1;
-            hi_emit(HI_STORE, TY_INT, f77_sval[sv], m1, 0, NULL);
+            if (f77_snar[sv]) f77_store_at(f77_sval[sv], f77_mty(sv), m1, TY_INT, -1);
+            else hi_emit(HI_STORE, TY_INT, f77_sval[sv], m1, 0, NULL);
             t1 = hi_emit(HI_SUB, TY_INT, m2, m1, 0, NULL);
             t2 = hi_emit(HI_ADD, TY_INT, t1, m3, 0, NULL);
             t3 = hi_emit(HI_DIV, TY_INT, t2, m3, 0, NULL);
@@ -6839,9 +6964,15 @@ static void f77_wr_one(void) {
 
             {
                 int iv;
-                iv = hi_emit(HI_LOAD, TY_INT, f77_sval[sv], -1, 0, NULL);
-                iv = hi_emit(HI_ADD, TY_INT, iv, m3, 0, NULL);
-                hi_emit(HI_STORE, TY_INT, f77_sval[sv], iv, 0, NULL);
+                if (f77_snar[sv]) {
+                    iv = f77_load_at(f77_sval[sv], f77_mty(sv));
+                    iv = hi_emit(HI_ADD, TY_INT, iv, m3, 0, NULL);
+                    f77_store_at(f77_sval[sv], f77_mty(sv), iv, TY_INT, -1);
+                } else {
+                    iv = hi_emit(HI_LOAD, TY_INT, f77_sval[sv], -1, 0, NULL);
+                    iv = hi_emit(HI_ADD, TY_INT, iv, m3, 0, NULL);
+                    hi_emit(HI_STORE, TY_INT, f77_sval[sv], iv, 0, NULL);
+                }
                 iv = hi_emit(HI_LOAD, TY_INT, trip, -1, 0, NULL);
                 iv = hi_emit(HI_ADDI, TY_INT, iv, -1, -1, NULL);
                 hi_emit(HI_STORE, TY_INT, trip, iv, 0, NULL);
@@ -6868,7 +6999,13 @@ static void f77_wr_one(void) {
          * else goes through a temporary */
         int args[2];
         if (ex_ty == TY_CHAR) { args[0] = v; args[1] = ex_len; }
-        else {
+        else if (v == f77_nar_ld && ex_ty == TY_INT) {
+            /* fort370: an INTEGER*2 or LOGICAL*1 item, at its width */
+            int tmp;
+            tmp = f77_char_temp(4);
+            f77_store_at(tmp, f77_nar_ty, v, TY_INT, -1);
+            args[0] = tmp; args[1] = f77_iconst(f77_tysize(f77_nar_ty));
+        } else {
             int tmp;
             tmp = f77_char_temp(f77_tysize(ex_ty));
             f77_store_at(tmp, ex_ty, v, ex_ty, ex_hi);

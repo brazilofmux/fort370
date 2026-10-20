@@ -64,6 +64,7 @@
     X(f77_sexternal, F77_MAX_SYM) \
     X(f77_sintrinsic, F77_MAX_SYM) \
     X(f77_slog, F77_MAX_SYM) \
+    X(f77_snar, F77_MAX_SYM) \
     X(f77_eq_parent, F77_MAX_SYM) \
     X(f77_eq_delta, F77_MAX_SYM) \
     X(f77_sparam, F77_MAX_SYM) \

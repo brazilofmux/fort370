@@ -241,6 +241,7 @@ static int  f77_nent;
 static void f77_collect_dummies(int skip, int unit) {
     f77_scan_from(skip);
     if (lx_t == T_NAME) f77_tok();
+    f77_hdr_skip_len();
     if (lx_t != T_LP) return;
     f77_tok();
     while (lx_t == T_NAME || lx_t == T_STAR) {
@@ -406,6 +407,7 @@ static void f77_scan_units(void) {
                 else
                     f77_urty[f77_nunit] = rty;
                 f77_urlog[f77_nunit] = f77_hdr_log;
+                f77_urnar[f77_nunit] = f77_starts("FUNCTION") ? 0 : f77_lennar(rty, f77_hdr_len, f77_hdr_log);
                 if (rty == TY_CHAR && f77_hdr_clen == -2) {
                     f77_scan_from(f77_hdr_clen_off);
                     f77_urlen[f77_nunit] = f77_char_len();
@@ -416,6 +418,7 @@ static void f77_scan_units(void) {
                 f77_ukind[f77_nunit] = F77_UNIT_SUBR;
                 f77_urty[f77_nunit] = TY_INT;
                 f77_urlog[f77_nunit] = 0;
+                f77_urnar[f77_nunit] = 0;
             }
             f77_nunit = f77_nunit + 1;
             started = 1;
@@ -428,8 +431,10 @@ static void f77_scan_units(void) {
             skip = 0;
             int clen;
             int lg;
+            int tnar;
             clen = 1;
             lg = 0;
+            tnar = 0;
             if (f77_starts("INTEGER")) { ty = TY_INT; skip = 7; }
             else if (f77_starts("LOGICAL")) { ty = TY_INT; skip = 7; lg = 1; }
             else if (f77_starts("DOUBLEPRECISION")) { ty = TY_DOUBLE; skip = 15; }
@@ -444,7 +449,7 @@ static void f77_scan_units(void) {
                 if (lx_t == T_STAR) {
                     int n;
                     if (ty == TY_CHAR) { f77_tok(); clen = f77_char_len(); }
-                    else if (f77_star_len(&n)) ty = f77_lenty(ty, n, 0);
+                    else if (f77_star_len(&n)) { ty = f77_lenty(ty, n, 0); tnar = f77_lennar(ty, n, lg); }
                     if (lx_t == T_COMMA) f77_tok();
                 }
                 while (lx_t == T_NAME) {
@@ -458,10 +463,15 @@ static void f77_scan_units(void) {
                         if (is_fn) { f77_urty[f77_nunit - 1] = TY_CHAR; f77_urlen[f77_nunit - 1] = l; }
                     } else if (lx_t == T_STAR) {
                         int n;
-                        if (f77_star_len(&n) && is_fn) f77_urty[f77_nunit - 1] = f77_lenty(ty, n, 0);
+                        if (f77_star_len(&n) && is_fn) {
+                            f77_urty[f77_nunit - 1] = f77_lenty(ty, n, 0);
+                            f77_urlog[f77_nunit - 1] = lg;
+                            f77_urnar[f77_nunit - 1] = f77_lennar(ty, n, lg);
+                        }
                     } else if (is_fn) {
                         f77_urty[f77_nunit - 1] = ty;
                         f77_urlog[f77_nunit - 1] = lg;
+                        f77_urnar[f77_nunit - 1] = tnar;
                         if (ty == TY_CHAR) f77_urlen[f77_nunit - 1] = clen;
                     } else {
                         int q;
@@ -515,6 +525,7 @@ static void f77_scan_units(void) {
             f77_ukind[f77_nunit] = f77_ukind[par];
             f77_urty[f77_nunit] = (f77_ukind[par] == F77_UNIT_FUNC) ? f77_ent_ty[q] : TY_INT;
             f77_urlog[f77_nunit] = 0;
+            f77_urnar[f77_nunit] = 0;
             f77_urlen[f77_nunit] = 1;
             strcpy(f77_uname[f77_nunit], f77_ent_name[q]);
             f77_uentry_parent[f77_nunit] = par;

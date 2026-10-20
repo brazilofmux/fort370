@@ -1731,6 +1731,32 @@ void f77_rd_i(int *p) {
     fio_consumed();
 }
 
+/* fort370: an INTEGER*2 or LOGICAL*1 item, n bytes of storage (issue
+ * 10).  A editing takes and gives its n bytes as they lie in storage,
+ * as FORTRAN H's does: A2 of an INTEGER*2 is its two characters.  Any
+ * other descriptor reads a fullword and keeps its low n bytes, a
+ * halfword sign extended -- H keeps 4464 of 70000. */
+void f77_rd_in(void *p, int n) {
+    int t;
+    if (!fio_listed && fio_want() == 'A') { f77_rd_s((char *)p, n); return; }
+    t = n == 2 ? *(short *)p : *(unsigned char *)p;     /* a null value leaves it */
+    f77_rd_i(&t);
+    if (n == 2) *(short *)p = (short)t;
+    else *(unsigned char *)p = (unsigned char)t;
+}
+
+void f77_wr_i(int v);
+void f77_wr_in(int v, int n) {
+    if (!fio_listed && fio_want() == 'A') {
+        short h = (short)v;
+        unsigned char c = (unsigned char)v;
+        if (n == 2) fio_hol_out(&h, 2);
+        else fio_hol_out(&c, 1);
+        return;
+    }
+    f77_wr_i(v);
+}
+
 void f77_rd_d(double *p) {
     int d;
     if (fio_listed) {
