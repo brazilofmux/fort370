@@ -2286,6 +2286,19 @@ void f77_nml_dim(int lo, int ext) {
     if (nml_ndim < NML_MAXDIM) { nml_lo[nml_ndim] = lo; nml_ext[nml_ndim] = ext; nml_ndim++; }
 }
 
+/* An INTEGER or LOGICAL element of elen bytes: 4, or 2 and 1 for
+ * INTEGER*2 and LOGICAL*1. */
+static int nml_get_int(const char *p, int elen) {
+    if (elen == 2) return *(const short *)p;
+    if (elen == 1) return (signed char)*p;
+    return *(const int *)p;
+}
+static void nml_put_int(char *p, int elen, int v) {
+    if (elen == 2) *(short *)p = (short)v;
+    else if (elen == 1) *p = (char)v;
+    else *(int *)p = v;
+}
+
 /* One value of the input into element p of an item. */
 static void nml_store(const struct nml_val *v, int code, char *p, int elen) {
     const char *s = nml_text + v->start;
@@ -2293,8 +2306,8 @@ static void nml_store(const struct nml_val *v, int code, char *p, int elen) {
     if (code == 6) {
         int i = 0;
         if (i < n && s[i] == '.') i++;
-        if (i < n && toupper((unsigned char)s[i]) == 'T') *(int *)p = 1;
-        else if (i < n && toupper((unsigned char)s[i]) == 'F') *(int *)p = 0;
+        if (i < n && toupper((unsigned char)s[i]) == 'T') nml_put_int(p, elen, 1);
+        else if (i < n && toupper((unsigned char)s[i]) == 'F') nml_put_int(p, elen, 0);
         else nml_fail("a LOGICAL value is not T or F");
         return;
     }
@@ -2317,7 +2330,7 @@ static void nml_store(const struct nml_val *v, int code, char *p, int elen) {
         buf[n] = 0;
         r = f77_rd_begin_int(buf, n, 1, 0, 3);
         if (r != 0) { nml_fail("a value could not be read"); return; }
-        if (code == 1) f77_rd_i((int *)p);
+        if (code == 1) { int iv; f77_rd_i(&iv); nml_put_int(p, elen, iv); }
         else if (code == 2) f77_rd_r((float *)p);
         else if (code == 3) f77_rd_d((double *)p);
         else if (code == 4) f77_rd_c((float *)p);
@@ -2332,7 +2345,7 @@ void f77_nml_item(const char *name, int nlen, int code, void *addr, int elen, in
     if (nlen > 31) nlen = 31;
     for (k = 0; k < nlen; k++) nm[k] = (char)toupper((unsigned char)name[k]);
     nm[nlen] = 0;
-    size = code == 1 || code == 2 || code == 6 ? 4 : code == 3 || code == 4 ? 8 : code == 5 ? 16 : elen;
+    size = code == 2 ? 4 : code == 3 || code == 4 ? 8 : code == 5 ? 16 : elen;
     if (!nml_reading) {
         char buf[64];
         char eq[40];
@@ -2343,7 +2356,7 @@ void f77_nml_item(const char *name, int nlen, int code, void *addr, int elen, in
         nml_put(eq, nlen + 1);
         for (e = 0; e < nelem; e++) {
             char *p = (char *)addr + (long)e * size;
-            if (code == 1) { nml_fmt(buf, 11, "(I11)", 1, p); nml_value(buf, 11); }
+            if (code == 1) { int iv = nml_get_int(p, elen); nml_fmt(buf, 11, "(I11)", 1, &iv); nml_value(buf, 11); }
             else if (code == 2) { nml_real(buf, *(float *)p, 0); nml_value(buf, 15); }
             else if (code == 3) { nml_real(buf, *(double *)p, 1); nml_value(buf, 23); }
             else if (code == 4 || code == 5) {
@@ -2362,7 +2375,7 @@ void f77_nml_item(const char *name, int nlen, int code, void *addr, int elen, in
                 if (pad > 0) { memmove(out + pad, out, (size_t)n); memset(out, ' ', (size_t)pad); n = w; }
                 nml_value(out, n);
             }
-            else if (code == 6) nml_value(*(int *)p ? "T" : "F", 1);
+            else if (code == 6) nml_value(nml_get_int(p, elen) ? "T" : "F", 1);
             else {
                 char out[FIO_MAXLINE];
                 int n = 0, i;

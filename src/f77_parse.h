@@ -7435,7 +7435,7 @@ static void f77_nml_io(int unit_val, int reading) {
         args[2] = f77_iconst(code);
         args[3] = f77_sval[s];
         if (ty == TY_CHAR) args[4] = f77_slen[s] >= 0 ? f77_iconst(f77_slen[s]) : f77_slenv[s];
-        else args[4] = f77_iconst(f77_tysize(ty));
+        else args[4] = f77_iconst(f77_esize(s));
         args[5] = n;
         f77_call_i("f77_nml_item", 6, args);
     }
