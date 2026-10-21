@@ -11,7 +11,9 @@
 # a FORMAT, or a format that is one constant, that is certainly wrong
 # (an nH past its end, a count with no descriptor, an unknown letter,
 # an H with no count);
-# a NAMELIST READ with a list, and a NAMELIST group defined twice.  tests/s370/mainlast.f has a main program after
+# a NAMELIST READ with a list, and a NAMELIST group defined twice;
+# a READ or WRITE whose unit is CHARACTER (an internal file) with no
+# format, as READ('(I5)') N is.  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -67,6 +69,10 @@ printf '      NAMELIST /G/ A, B\n      READ (5, G) A\n      END\n' > $T/nmllist.
 expect nmllist "line 2: a NAMELIST READ has no list"
 printf '      NAMELIST /G/ A /G/ B\n      END\n' > $T/nmltwice.f
 expect nmltwice "line 1: a NAMELIST group of that name is already defined"
+printf "      READ(\047(I5)\047) N\n      END\n" > $T/intnofmt.f
+expect intnofmt "line 1: a CHARACTER unit is an internal file and needs a format"
+printf "      CHARACTER*8 C\n      WRITE(C) N\n      END\n" > $T/intunf.f
+expect intunf "line 2: a CHARACTER unit is an internal file and needs a format"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT and a misused NAMELIST refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST and an internal file with no format refused"
 [ $bad = 0 ]

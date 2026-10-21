@@ -7375,6 +7375,13 @@ static int f77_io_control(int is_read, int *unit_val, int *fmt_label) {
     if (lx_t != T_RP) { f77_error("expected ) after the control list"); return 0; }
     f77_tok();
     if (!have_unit) { f77_error("the control list needs a unit"); return 0; }
+    /* A CHARACTER unit is an internal file, and an internal file is
+     * read and written only with a format (F77 12.2.5): READ('(I5)') N
+     * is a format written where the unit goes. */
+    if (f77_io_int && (*fmt_label == -4 || *fmt_label == -5)) {
+        f77_error("a CHARACTER unit is an internal file and needs a format");
+        return 0;
+    }
     return 1;
 }
 
