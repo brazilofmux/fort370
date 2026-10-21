@@ -8,6 +8,38 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-21
+
+Tagged `v2026.10.21`: an intrinsic's name passed as an argument, found
+by NPSOL, which René Ferland sent; and three run-time fixes found by
+the SLOW-32 port of the front end.  Built from `300e9ef`: FORT370.xmit
+SHA256 `132d9191d5267370…`, 582,640 bytes; F77RT.xmit SHA256
+`c99e8fb0b81a8d31…`, 520,000 bytes; F77RT.upd SHA256
+`cd7d2a06caabd517…`, 531,120 bytes.  All 192 FCVS programs, 105
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design.
+
+- A name that is an intrinsic's, passed bare as an argument, is a
+  variable unless an INTRINSIC statement names it (F77 8.8, 15.10).
+  It was taken for the intrinsic, and the call refused when that
+  intrinsic cannot be passed: NPSOL's LSADDS passes IFIX, an INTEGER,
+  to LSADD.  Compiled with an earlier release, assigning the variable
+  before the call gets past it.
+- NAMELIST: an INTEGER*2 or LOGICAL*1 item is read and written at its
+  own width.  It was taken as a fullword, so an INTEGER*2 array ran
+  into what followed it, and a LOGICAL*1 READ clobbered the next three
+  bytes.  The scan for &END or $END no longer looks one byte past the
+  record.
+- A format given as a CHARACTER variable, array or expression ends at
+  its length.  It was read to the first zero byte, so a format missing
+  its ) could run on into the storage after it and come out valid.  An
+  array named whole is all its elements (F77 13.1.1); a dummy array,
+  whose declared extents may not be its size -- F(*), F(1) -- is read
+  to its ), as H reads it.  The runtime gains an entry, F77FMTLM; the
+  others are unchanged, so objects compiled by an earlier release link
+  and run with this F77RT.
+
 ## 2026-10-20.2
 
 Tagged `v2026.10.20.2`: INTEGER*2 and LOGICAL*1 (issue #10), found by
