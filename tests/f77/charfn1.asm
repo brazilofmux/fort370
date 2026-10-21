@@ -126,21 +126,26 @@ L00041   DS    0H
          LTR   3,3
          BC    7,L00016
 L00017   DS    0H
+         LA    0,3
+         ST    0,P00025+0
+         LA    1,P00025
+         L     15,C00042
+         BALR  14,15
          LA    0,6
          ST    0,P00025+0
-         L     0,C00042
+         L     0,C00043
          ST    0,P00025+4
          LA    1,P00025
-         L     15,C00043
+         L     15,C00044
          BALR  14,15
          LA    0,T00007
          ST    0,P00025+0
          LA    0,10
          ST    0,P00025+4
          LA    1,P00025
-         L     15,C00044
-         BALR  14,15
          L     15,C00045
+         BALR  14,15
+         L     15,C00046
          BALR  14,15
 L00018   DS    0H
          L     3,T00005
@@ -151,28 +156,28 @@ L00011   DS    0H
          LA    0,0
          ST    0,P00025+0
          LA    1,P00025
-         L     15,C00046
+         L     15,C00047
          BALR  14,15
          B     L00020
 L00012   DS    0H
          LA    0,1
          ST    0,P00025+0
          LA    1,P00025
-         L     15,C00046
+         L     15,C00047
          BALR  14,15
          B     L00020
 L00014   DS    0H
          LA    0,2
          ST    0,P00025+0
          LA    1,P00025
-         L     15,C00046
+         L     15,C00047
          BALR  14,15
          B     L00020
 L00016   DS    0H
          LA    0,3
          ST    0,P00025+0
          LA    1,P00025
-         L     15,C00046
+         L     15,C00047
          BALR  14,15
          B     L00020
 L00019   DS    0H
@@ -206,11 +211,12 @@ C00034   DC    F'2'
 C00036   DC    A(Q00002)
 C00038   DC    F'3'
 C00040   DC    A(Q00003)
-C00042   DC    A(Q00004)
-C00043   DC    V(F77WRBEG)
-C00044   DC    V(F77WRA)
-C00045   DC    V(F77WREND)
-C00046   DC    V(EXIT)
+C00042   DC    V(F77FMTLM)
+C00043   DC    A(Q00004)
+C00044   DC    V(F77WRBEG)
+C00045   DC    V(F77WRA)
+C00046   DC    V(F77WREND)
+C00047   DC    V(EXIT)
 C00024   DC    H'-1'
 Q00001   DC    C'FIRST AID'
 Q00002   DC    C'SECONDRATE'
@@ -219,94 +225,94 @@ Q00004   DC    C'(A)'
 * CF
 CF       CSECT
          USING *,15
-         B     L00058
+         B     L00059
          DC    AL1(2),CL7'CF'
-L00058   STM   14,12,12(13)
+L00059   STM   14,12,12(13)
          BALR  12,0
          USING *,12
          DROP  15
-         B     L00059
-L00060   DC    A(S00047)
-L00059   L     15,L00060
+         B     L00060
+L00061   DC    A(S00048)
+L00060   L     15,L00061
          ST    13,4(,15)
          ST    15,8(,13)
          MVC   76(4,15),76(13)
          LR    13,15
-         USING S00047,13
-         ST    1,S00047+72
-L00051   DS    0H
+         USING S00048,13
+         ST    1,S00048+72
+L00052   DS    0H
          L     3,8(,1)
          LA    3,0(,3)
          L     4,0(,1)
          L     2,0(,3)
-         S     2,C00061
-         C     2,C00062
+         S     2,C00062
+         C     2,C00063
          LA    3,1
-         BC    8,L00063
+         BC    8,L00064
          SR    3,3
-L00063   DS    0H
-         C     2,C00062
-         BC    4,L00053
-L00052   DS    0H
-         LTR   3,3
-         BC    7,L00054
-L00055   DS    0H
-         LR    0,4
-         ST    0,P00064+0
-         LA    0,10
-         ST    0,P00064+4
-         L     0,C00065
-         ST    0,P00064+8
-         LA    0,10
-         ST    0,P00064+12
-         LA    1,P00064
-         L     15,C00066
-         BALR  14,15
-         ICM   2,8,0(4)
-         SRA   2,24
-         LR    0,2
-         B     L00057
+L00064   DS    0H
+         C     2,C00063
+         BC    4,L00054
 L00053   DS    0H
+         LTR   3,3
+         BC    7,L00055
+L00056   DS    0H
          LR    0,4
-         ST    0,P00064+0
+         ST    0,P00065+0
          LA    0,10
-         ST    0,P00064+4
-         L     0,C00067
-         ST    0,P00064+8
-         LA    0,9
-         ST    0,P00064+12
-         LA    1,P00064
-         L     15,C00066
+         ST    0,P00065+4
+         L     0,C00066
+         ST    0,P00065+8
+         LA    0,10
+         ST    0,P00065+12
+         LA    1,P00065
+         L     15,C00067
          BALR  14,15
          ICM   2,8,0(4)
          SRA   2,24
          LR    0,2
-         B     L00057
+         B     L00058
 L00054   DS    0H
          LR    0,4
-         ST    0,P00064+0
+         ST    0,P00065+0
          LA    0,10
-         ST    0,P00064+4
+         ST    0,P00065+4
          L     0,C00068
-         ST    0,P00064+8
-         LA    0,10
-         ST    0,P00064+12
-         LA    1,P00064
-         L     15,C00066
+         ST    0,P00065+8
+         LA    0,9
+         ST    0,P00065+12
+         LA    1,P00065
+         L     15,C00067
          BALR  14,15
          ICM   2,8,0(4)
          SRA   2,24
          LR    0,2
-         B     L00057
-L00056   DS    0H
+         B     L00058
+L00055   DS    0H
+         LR    0,4
+         ST    0,P00065+0
+         LA    0,10
+         ST    0,P00065+4
+         L     0,C00069
+         ST    0,P00065+8
+         LA    0,10
+         ST    0,P00065+12
+         LA    1,P00065
+         L     15,C00067
+         BALR  14,15
+         ICM   2,8,0(4)
+         SRA   2,24
+         LR    0,2
+         B     L00058
 L00057   DS    0H
+L00058   DS    0H
          L     13,4(,13)
          L     14,12(,13)
          LM    2,12,28(13)
          SR    15,15
          BR    14
          DROP  12
-S00047   DS    0D
+S00048   DS    0D
          DS    18F
          DS    F
          DS    F
@@ -315,16 +321,16 @@ S00047   DS    0D
          DS    D
          DS    8D
          DS    D
-P00064   DS    4F
-C00061   DC    F'2'
-C00062   DC    F'0'
-C00065   DC    A(Q00050)
-C00066   DC    V(F77STRCP)
-C00067   DC    A(Q00048)
+P00065   DS    4F
+C00062   DC    F'2'
+C00063   DC    F'0'
+C00066   DC    A(Q00051)
+C00067   DC    V(F77STRCP)
 C00068   DC    A(Q00049)
-Q00048   DC    C'FIRST AID'
-Q00049   DC    C'SECONDRATE'
-Q00050   DC    C'THIRDCLASS'
+C00069   DC    A(Q00050)
+Q00049   DC    C'FIRST AID'
+Q00050   DC    C'SECONDRATE'
+Q00051   DC    C'THIRDCLASS'
 F77@GO   CSECT
          L     15,8(,15)
          BR    15

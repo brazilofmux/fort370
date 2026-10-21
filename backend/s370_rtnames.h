@@ -25,6 +25,7 @@ static char *s370_rt_map[] = {
     "f77_rd_begin_int", "F77RDBI",
     "f77_rd_i",         "F77RDI",
     "f77_rd_in",        "F77RDIN",
+    "f77_fmt_lim",      "F77FMTLM",
     "f77_wr_in",        "F77WRIN",
     "f77_rd_d",         "F77RDD",
     "f77_rd_r",         "F77RDR",

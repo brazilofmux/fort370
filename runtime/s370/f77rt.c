@@ -599,8 +599,24 @@ static void fio_fmt_fail(const char *fmt) {
     fprintf(stderr, "f77: FORMAT: %s\n  in: %.*s\n", fio_fmt_why, n, fmt);
 }
 
+/* A CHARACTER format is its declared length, not up to a 0 byte (F77
+ * 13.1.1): f77_fmt_lim, called just before the begin, gives that
+ * length, and the format is read from a copy that ends there.  -1 for
+ * a FORMAT statement or an ASSIGNed label, whose text ends in a 0. */
+static int fio_fmt_lim = -1;
+static char fio_flim[FIO_MAXFMT + 1];
+void f77_fmt_lim(int n) { fio_fmt_lim = n; }
+
 /* 0, fio_fmt the checked format; -1 refused, the message written. */
 static int fio_fmt_use(const char *fmt) {
+    int lim = fio_fmt_lim;
+    fio_fmt_lim = -1;
+    if (fmt && lim >= 0) {
+        int n = lim < FIO_MAXFMT ? lim : FIO_MAXFMT;
+        memcpy(fio_flim, fmt, (size_t)n);
+        fio_flim[n] = 0;
+        fmt = fio_flim;
+    }
     if (fmt != fio_fbuf) {
         if (fio_fmt_prep(fmt) < 0 || fio_fmt_check() < 0) { fio_fmt_fail(fmt); return -1; }
     }
@@ -1119,6 +1135,7 @@ static void fio_wr_setup(const char *fmt) {
     fio_first_item = 1;
     fio_prev_char = 0;
     if (fmt == 0) {
+        fio_fmt_lim = -1;
         fio_listed = 1;
         fio_fmt = "";
         fio_pos = 0;
@@ -1683,6 +1700,7 @@ static int fio_rd_setup(const char *fmt, int has_end) {
     fio_pos = 0;
     fio_revert = -1;
     fio_since_data = 0;
+    if (fio_listed) fio_fmt_lim = -1;
     if (!fio_listed && fio_fmt_use(fmt) < 0) {
         fio_reading = 0;
         if (has_end & 2) return 2;
@@ -2057,6 +2075,12 @@ void f77_nml_dim(int lo, int ext);
 void f77_nml_item(const char *name, int nlen, int code, void *addr, int elen, int nelem);
 int f77_nml_end(void);
 
+static void *nml_grow(void *p, size_t n) {
+    p = realloc(p, n);
+    if (!p) { fprintf(stderr, "f77: out of storage for a NAMELIST\n"); fio_exit(2); }
+    return p;
+}
+
 static void nml_text_add(const char *s, int n) {
     if (nml_tlen + n + 2 > nml_tcap) {
         int cap = nml_tcap ? nml_tcap * 2 : 4096;
@@ -2123,7 +2147,7 @@ static void nml_parse(void) {
             if (sep && a) {             /* an empty place: a null value */
                 if (nml_nval >= nml_cval) {
                     nml_cval = nml_cval ? nml_cval * 2 : 64;
-                    nml_val = (struct nml_val *)realloc(nml_val, sizeof *nml_val * (size_t)nml_cval);
+                    nml_val = (struct nml_val *)nml_grow(nml_val, sizeof *nml_val * (size_t)nml_cval);
                 }
                 nml_val[nml_nval].start = i; nml_val[nml_nval].len = 0; nml_val[nml_nval].rep = 1;
                 nml_nval++; a->count++;
@@ -2136,7 +2160,7 @@ static void nml_parse(void) {
             int j = i, k = 0;
             if (nml_nasg >= nml_casg) {
                 nml_casg = nml_casg ? nml_casg * 2 : 16;
-                nml_asg = (struct nml_asg *)realloc(nml_asg, sizeof *nml_asg * (size_t)nml_casg);
+                nml_asg = (struct nml_asg *)nml_grow(nml_asg, sizeof *nml_asg * (size_t)nml_casg);
             }
             a = &nml_asg[nml_nasg++];
             while (j < nml_tlen && nml_namech(nml_text[j]) && k < 31) a->name[k++] = (char)toupper((unsigned char)nml_text[j++]);
@@ -2190,7 +2214,7 @@ static void nml_parse(void) {
             }
             if (nml_nval >= nml_cval) {
                 nml_cval = nml_cval ? nml_cval * 2 : 64;
-                nml_val = (struct nml_val *)realloc(nml_val, sizeof *nml_val * (size_t)nml_cval);
+                nml_val = (struct nml_val *)nml_grow(nml_val, sizeof *nml_val * (size_t)nml_cval);
             }
             nml_val[nml_nval].start = s;
             nml_val[nml_nval].len = j - s;         /* r* alone: a null, r times */
@@ -2238,7 +2262,7 @@ static int nml_read_group(void) {
                 int c = rec[j];
                 if (q) { if (c == q) q = 0; continue; }
                 if (c == '\'' || c == '"') { q = c; continue; }
-                if (c == '/' || ((c == '&' || c == '$') && j + 3 < n + 1 &&
+                if (c == '/' || ((c == '&' || c == '$') && j + 3 < n &&
                     toupper((unsigned char)rec[j + 1]) == 'E' && toupper((unsigned char)rec[j + 2]) == 'N' &&
                     toupper((unsigned char)rec[j + 3]) == 'D')) {
                     nml_text_add(rec + i, j - i);

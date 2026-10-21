@@ -3377,6 +3377,10 @@ static void f77_stmt_assign_label(int skip) {
  * time by comparing the value against every FORMAT label of the unit
  * (a branchless select chain -- the unit has a handful). */
 static int f77_fmt_dyn;
+/* The length of a CHARACTER format (-3), for f77_fmt_lim: the
+ * expression's, or for an unsubscripted array the whole array's (F77
+ * 13.1.1); -1 leaves it unbounded, as for an adjustable array. */
+static int f77_fmt_dynlen;
 
 /* The unit of a WRITE/READ control list.  A CHARACTER entity makes it
  * an internal file: f77_io_int is set with the record length and count
@@ -7044,6 +7048,7 @@ static void f77_wr_begin(int unit_val, int fmt_label) {
     int r;
     int fs;
     int fa;
+    if (fmt_label == -3 && f77_fmt_dynlen >= 0) f77_call_i("f77_fmt_lim", 1, &f77_fmt_dynlen);
     cb = h_ncarg;
     h_carg[h_ncarg] = unit_val; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
     if (f77_io_int) {
@@ -7255,12 +7260,28 @@ static int f77_io_fmt_spec(void) {
             int sidx, slen;
             sidx = lex_sidx; slen = lex_slen;
             f77_fmt_dyn = f77_expr();
+            f77_fmt_dynlen = ex_len;
             /* the constant itself, not one end of a // */
             if (f77_fmt_dyn >= 0 && h_kind[f77_fmt_dyn] == HI_SADDR && h_val[f77_fmt_dyn] == sidx)
                 f77_check_format(lex_strpool + lex_str_off[sidx], slen);
             return -3;
         }
-        f77_fmt_dyn = f77_expr();
+        {
+            int fs = -1, d;
+            if (lx_t == T_NAME) {
+                int after = (int)(lx_rte - lx_stmt);
+                fs = f77_sym(lex_name);
+                if (f77_srank[fs] == 0 || (after < lx_stmt_len && lx_stmt[after] == '(')) fs = -1;
+            }
+            f77_fmt_dyn = f77_expr();
+            f77_fmt_dynlen = ex_len;
+            if (fs >= 0) {
+                for (d = 0; d < f77_srank[fs]; d++)
+                    if (f77_sextv[fs][d] >= 0 || f77_sext[fs][d] <= 0) break;
+                f77_fmt_dynlen = d < f77_srank[fs] ? -1
+                    : hi_emit(HI_MUL, TY_INT, ex_len, f77_iconst(f77_sym_nelem(fs)), 0, NULL);
+            }
+        }
         return -3;
     }
     if (lx_t == T_NAME) {
@@ -7574,6 +7595,7 @@ static void f77_stmt_read(int skip) {
         return;
     }
 
+    if (fmt_label == -3 && f77_fmt_dynlen >= 0) f77_call_i("f77_fmt_lim", 1, &f77_fmt_dynlen);
     cb = h_ncarg;
     h_carg[h_ncarg] = unit_val; h_carg_tag[h_ncarg] = 0; h_ncarg = h_ncarg + 1;
     if (f77_io_int) {
