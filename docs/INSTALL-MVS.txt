@@ -321,10 +321,13 @@ a unit is one in the last hexadecimal place of the result):
   an integer's range the result means nothing, in both.
 
 Errors: fort370's runtime prints no messages for floating point.  An
-overflow in arithmetic (1.0E70*1.0E70) abends with S0CC and a division
-by zero with S0CF; FORTLIB intercepts those (IHC207I, IHC209I), carries
-on with the largest number or zero, and ends the program after ten
-such errors.  Underflow is zero, as in H.  A function's argument out of
+overflow in arithmetic (1.0E70*1.0E70) abends with S0CC, and a division
+by zero with S0CF, or S0C9 for INTEGER; FORTLIB intercepts those
+(IHC207I, IHC209I), carries on with the largest number after an
+overflow and with the dividend after a division (1/0 is 1), and ends
+the program after ten such errors.  A division whose quotient is never
+used is not compiled at all, so it cannot abend; H compiles it, and
+says IHC209I.  Underflow is zero, as in H.  A function's argument out of
 its domain gets a value and no message, where FORTLIB prints an IHC
 message for each and carries on:
 
