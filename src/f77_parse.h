@@ -3379,7 +3379,9 @@ static void f77_stmt_assign_label(int skip) {
 static int f77_fmt_dyn;
 /* The length of a CHARACTER format (-3), for f77_fmt_lim: the
  * expression's, or for an unsubscripted array the whole array's (F77
- * 13.1.1); -1 leaves it unbounded, as for an adjustable array. */
+ * 13.1.1).  -1 leaves it unbounded, read to its ): a dummy array's
+ * extents are not its size -- F(*), and the F(1) of older programs,
+ * are recorded with an extent of 1. */
 static int f77_fmt_dynlen;
 
 /* The unit of a WRITE/READ control list.  A CHARACTER entity makes it
@@ -7278,7 +7280,7 @@ static int f77_io_fmt_spec(void) {
             if (fs >= 0) {
                 for (d = 0; d < f77_srank[fs]; d++)
                     if (f77_sextv[fs][d] >= 0 || f77_sext[fs][d] <= 0) break;
-                f77_fmt_dynlen = d < f77_srank[fs] ? -1
+                f77_fmt_dynlen = f77_sarg[fs] || d < f77_srank[fs] ? -1
                     : hi_emit(HI_MUL, TY_INT, ex_len, f77_iconst(f77_sym_nelem(fs)), 0, NULL);
             }
         }
