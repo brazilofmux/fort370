@@ -384,6 +384,7 @@ static int  f77_stf_sym[F77_MAX_STF];
 static int  f77_stf_nargs[F77_MAX_STF];
 static char (*f77_stf_arg)[F77_MAX_STF_ARGS][F77_MAX_NAME];
 static int (*f77_stf_argty)[F77_MAX_STF_ARGS];
+static int (*f77_stf_arglen)[F77_MAX_STF_ARGS];   /* a CHARACTER dummy's length */
 static int  f77_stf_text[F77_MAX_STF];
 static int  f77_stf_len[F77_MAX_STF];
 static int  f77_stf_n;
@@ -3229,6 +3230,7 @@ static int f77_stf_define(void) {
         if (n < F77_MAX_STF_ARGS) {
             strcpy(f77_stf_arg[f77_stf_n][n], lex_name);
             f77_stf_argty[f77_stf_n][n] = f77_sty[f77_sym(lex_name)];
+            f77_stf_arglen[f77_stf_n][n] = f77_slen[f77_sym(lex_name)];
         }
         n = n + 1;
         f77_tok();
@@ -3250,6 +3252,26 @@ static int f77_stf_define(void) {
     f77_stf_n = f77_stf_n + 1;
     lx_t = T_EOF;            /* the body is kept as text, parsed where it is used */
     return 1;
+}
+
+/* A CHARACTER actual of a statement function: its value is an address,
+ * copied into a temporary of the dummy's length, blank-padded or cut
+ * (F77 15.4.2), and the dummy bound to that.  Stored as a value it was
+ * the address's low byte (NPSOL's OPSCAN, SOLID(STRING(I:I))). */
+static int f77_stf_char_arg(int dlen, int v, int vlen) {
+    int s;
+    s = f77_sym_temp(TY_CHAR);
+    f77_sstored[s] = 1;
+    if (dlen < 0) {              /* CHARACTER*(*): the actual itself */
+        f77_slen[s] = -1;
+        f77_slenv[s] = vlen;
+        f77_sval[s] = v;
+        return s;
+    }
+    f77_slen[s] = dlen;
+    f77_sval[s] = f77_char_temp(dlen);
+    f77_char_assign(f77_sval[s], f77_iconst(dlen), v, vlen);
+    return s;
 }
 
 /* Reference: NAME(a1, ...) with the scanner on NAME. */
@@ -3282,7 +3304,9 @@ static int f77_stf_expand(int si) {
     if (lx_t != T_RP) {
         for (;;) {
             v = f77_expr(); vty = ex_ty; vhi = ex_hi;
-            if (n < f77_stf_nargs[si]) {
+            if (n < f77_stf_nargs[si] && f77_stf_argty[si][n] == TY_CHAR && vty == TY_CHAR) {
+                targs[n] = f77_stf_char_arg(f77_stf_arglen[si][n], v, ex_len);
+            } else if (n < f77_stf_nargs[si]) {
                 targs[n] = f77_sym_temp(f77_stf_argty[si][n]);
                 f77_store_sym_val(targs[n], v, vty, vhi);
             }

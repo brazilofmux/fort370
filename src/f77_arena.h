@@ -76,6 +76,7 @@
     X(f77_styped, F77_MAX_SYM) \
     X(f77_stf_arg, F77_MAX_STF) \
     X(f77_stf_argty, F77_MAX_STF) \
+    X(f77_stf_arglen, F77_MAX_STF) \
     X(f77_stf_pool, F77_STF_POOL) \
     X(f77_stf_pbrk, F77_STF_POOL) \
     X(f77_stfb_name, F77_MAX_STFB) \
