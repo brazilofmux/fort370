@@ -8,6 +8,34 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-21.1
+
+Tagged `v2026.10.21.1`: a CHARACTER argument of a statement function,
+found by NPSOL, which René Ferland sent; and an internal file with no
+format (issue #27).  Built from `eb68164`: FORT370.xmit SHA256
+`ee3487be0f5d4890…`, 582,720 bytes; F77RT.xmit SHA256
+`60711221f1764bf0…`, 520,000 bytes; F77RT.upd SHA256
+`cd7d2a06caabd517…`, 531,120 bytes.  All 192 FCVS programs, 106
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K.  The
+FCVS programs compile to the same assembler as in 2026-10-21, whose
+runs passed 3346 tests and failed the 2 that fail by design.  The
+runtime is unchanged; F77RT.xmit differs only in its date.
+
+- A CHARACTER actual argument of a statement function is copied into
+  its dummy, blank-padded or cut to the dummy's length (F77 15.4.2).
+  The dummy got a byte of the actual's address instead, so NPSOL's
+  option reader, testing each character with SOLID(STRING(I:I)), took
+  a whole line for one word and refused every keyword.  A dummy of
+  length (*) takes the actual as it is.
+- A CHARACTER unit is an internal file, and an internal file needs a
+  format (F77 12.2.5).  READ('(I5)') N, a format written where the
+  unit goes, compiled as an unformatted read of an internal file and
+  failed when it ran; the compiler now says what is wrong.
+- INSTALL: after a divide check, H's standard fixup keeps the dividend
+  (1/0 is 1), and a division whose quotient is never used is not
+  compiled here, so it cannot abend; H compiles it (issue #26).
+
 ## 2026-10-21
 
 Tagged `v2026.10.21`: an intrinsic's name passed as an argument, found
