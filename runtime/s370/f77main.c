@@ -3,7 +3,16 @@
  * END returns here and exit flushes the units.  STOP calls exit
  * itself. */
 extern void F77MAIN(void);
-int main(void) { F77MAIN(); return 0; }
+/* The SPIE exit for program interrupts (f77spie.asm), set first. */
+extern void f77_spie(void) __asm__("F77SPIE");
+extern char *f77e_stack;         /* where the C stack starts (f77err.c) */
+int main(void) {
+    char here;
+    f77e_stack = &here;
+    f77_spie();
+    F77MAIN();
+    return 0;
+}
 
 /* The C stack libc370's startup allocates (its weak external @@STKLEN;
  * the default is 256K, all of it in the GO step's region).  Only the

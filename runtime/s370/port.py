@@ -675,10 +675,23 @@ rep('''    if (inq_direct && inq_recl > 0 && fio_ufile[unit]) {
         fflush(fio_ufile[unit]);
         inq_nextrec = ftell(fio_ufile[unit]) / inq_recl + 1;
     }''', '''    if (inq_direct) inq_nextrec = fio_ucur[unit] > 0 ? fio_ucur[unit] : 1;''')
+# FORTLIB's error monitor (f77err.c) writes its messages and summary on
+# unit 6, between the program's own records, and the summary before a
+# fatal error closes the units.
 rep('''static void fio_exit(int code) {
-    int u;''', '''static void fio_exit(int code) {
+    int u;''', '''void f77e_finish(void) __asm__("F77EFIN");
+static void fio_exit(int code) {
     int u;
+    f77e_finish();
     f77r_closeall();''')
+rep('''/* ENDFILE: the file ends here;''', '''/* Unit 6, for the error monitor: opened as a WRITE would open it. */
+FILE *fio_errfile(void) __asm__("F77ERRFL");
+FILE *fio_errfile(void) {
+    fio_init_units();
+    return fio_resolve(6, 1);
+}
+
+/* ENDFILE: the file ends here;''')
 # the two 64K buffers are allocated by the first statement that needs
 # them: a program without unformatted, direct access or concatenation
 # does not carry them (on MVS every byte of static storage is in the

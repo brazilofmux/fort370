@@ -164,8 +164,10 @@ static FILE *fio_in;             /* stream of the READ in progress */
 static FILE *fio_out;            /* stream of the WRITE in progress */
 
 static int fio_u0tried;                  /* unit 0's FT00F001 looked for */
+void f77e_finish(void) __asm__("F77EFIN");
 static void fio_exit(int code) {
     int u;
+    f77e_finish();
     if (f77r_closeall) f77r_closeall();
     for (u = 0; u < FIO_MAXUNIT; u++) if (fio_ufile[u]) { fclose(fio_ufile[u]); fio_ufile[u] = 0; }
     f77_flush_std();
@@ -1405,6 +1407,13 @@ void f77_wr_end(void) {
     }
     fio_flush_line();
     fio_ibuf = 0;
+}
+
+/* Unit 6, for the error monitor: opened as a WRITE would open it. */
+FILE *fio_errfile(void) __asm__("F77ERRFL");
+FILE *fio_errfile(void) {
+    fio_init_units();
+    return fio_resolve(6, 1);
 }
 
 /* ENDFILE: the file ends here; a READ past this point sees end of
