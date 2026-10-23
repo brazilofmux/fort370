@@ -699,7 +699,7 @@ static int fio_next_desc(void) {
         /* Data descriptors */
         if (c=='I'||c=='i'||c=='F'||c=='f'||c=='E'||c=='e'||
             c=='D'||c=='d'||c=='G'||c=='g'||c=='A'||c=='a'||
-            c=='L'||c=='l') {
+            c=='L'||c=='l'||c=='Z'||c=='z') {
             fio_pos++;
             fio_w = fio_isdigit(fio_fmt[fio_pos]) ? fio_number() : 0;
             fio_d = 0;
@@ -1094,6 +1094,59 @@ static void fio_hol_out(const void *item, int n) {
     fio_consumed();
 }
 
+/* fort370: Zw, IBM's hexadecimal editing, of an item of n bytes at p,
+ * as FORTRAN H's: two digits a byte, the most significant first,
+ * leading zeros kept; a w wider than 2n blank-filled on the left, one
+ * narrower the rightmost w digits.  The bytes are those of the item's
+ * value, in whatever order the machine keeps them. */
+static int fio_little(void) {
+    unsigned int one = 1;
+    return *(unsigned char *)&one;
+}
+static void fio_hex_out(const void *item, int n) {
+    const unsigned char *b = (const unsigned char *)item;
+    int w = fio_w > 0 ? fio_w : 2 * n;
+    int i, k, x;
+    if (w > 2 * n) fio_pad(w - 2 * n);
+    for (i = 2 * n - (w < 2 * n ? w : 2 * n); i < 2 * n; i++) {
+        k = fio_little() ? n - 1 - i / 2 : i / 2;
+        x = i & 1 ? b[k] & 15 : b[k] >> 4;
+        fio_putc("0123456789ABCDEF"[x]);
+    }
+    fio_consumed();
+}
+
+/* Zw input into an item of n bytes: blanks are zeros wherever they
+ * are, the digits right-justified in the item and the leftmost lost
+ * from a field too wide, and a minus sign sets the item's sign bit
+ * (H reads -0000001 as 80000001). */
+static void fio_hex_in(void *item, int n) {
+    unsigned char v[16];
+    int w = fio_w > 0 ? fio_w : 2 * n;
+    int i, j, c, x, neg = 0;
+    for (j = 0; j < n; j++) v[j] = 0;
+    for (i = 0; i < w; i++) {
+        c = fio_rpos + i < fio_rlen ? fio_rec[fio_rpos + i] : ' ';
+        if (c == ' ') x = 0;
+        else if (c == '-' || c == '+') { neg = neg || c == '-'; continue; }
+        else if (c >= '0' && c <= '9') x = c - '0';
+        else if (c >= 'A' && c <= 'F') x = c - 'A' + 10;
+        else if (c >= 'a' && c <= 'f') x = c - 'a' + 10;
+        else {
+            fprintf(stderr, "f77: bad hexadecimal input character '%c'\n", c);
+            exit(2);
+        }
+        for (j = 0; j < n; j++) {
+            v[j] = (unsigned char)((v[j] << 4) | (j + 1 < n ? v[j + 1] >> 4 : x));
+        }
+    }
+    if (neg) v[0] |= 0x80;
+    fio_rpos += w;
+    for (j = 0; j < n; j++)
+        ((unsigned char *)item)[fio_little() ? n - 1 - j : j] = v[j];
+    fio_consumed();
+}
+
 void f77_wr_i(int v) {
     char buf[32];
     int d;
@@ -1107,6 +1160,7 @@ void f77_wr_i(int v) {
     d = fio_want();
     if (d == 0) return;
     if (d == 'A') { fio_hol_out(&v, (int)sizeof v); return; }
+    if (d == 'Z') { fio_hex_out(&v, (int)sizeof v); return; }
     if (d == 'L') {
         if (fio_w > 1) fio_pad(fio_w - 1);
         fio_putc(v ? 'T' : 'F');
@@ -1140,6 +1194,7 @@ void f77_wr_d(double v) {
     d = fio_want();
     if (d == 0) return;
     if (d == 'A') { fio_hol_out(&v, (int)sizeof v); return; }   /* DOUBLE PRECISION text, 8 bytes */
+    if (d == 'Z') { fio_hex_out(&v, (int)sizeof v); return; }
     if (d == 'I') {
         snprintf(buf, sizeof buf, "%d", (int)v);
     } else if (d == 'F') {
@@ -1199,6 +1254,7 @@ void f77_wr_d(double v) {
 void f77_wr_r(float v) {
     if (fio_listed) { fio_list_out_real((double)v, 0); return; }
     if (fio_want() == 'A') { fio_hol_out(&v, (int)sizeof v); return; }   /* REAL text, 4 bytes */
+    if (fio_want() == 'Z') { fio_hex_out(&v, (int)sizeof v); return; }
     f77_wr_d((double)v);
 }
 
@@ -1256,8 +1312,8 @@ static void fio_wr_pair(double re, double im, int dbl) {
         fio_prev_char = 0;
         return;
     }
-    f77_wr_d(re);
-    f77_wr_d(im);
+    if (dbl) { f77_wr_d(re); f77_wr_d(im); }
+    else { f77_wr_r((float)re); f77_wr_r((float)im); }
 }
 void f77_wr_c(float re, float im) { fio_wr_pair((double)re, (double)im, 0); }
 void f77_wr_z(double re, double im) { fio_wr_pair(re, im, 1); }
@@ -1547,6 +1603,7 @@ void f77_wr_l(int v) {
     }
     d = fio_want();
     if (d == 0) { return; }
+    if (d == 'Z') { fio_hex_out(&v, (int)sizeof v); return; }
     if (fio_w > 1) fio_pad(fio_w - 1);
     fio_putc(v ? 'T' : 'F');
     fio_consumed();
@@ -1927,6 +1984,7 @@ void f77_rd_i(int *p) {
     if (d == 'L') *p = fio_in_logical(fio_w);
     else if (d == 'I') *p = fio_in_int(fio_w);
     else if (d == 'A') { f77_rd_s((char *)p, (int)sizeof *p); return; }   /* text into an INTEGER */
+    else if (d == 'Z') { fio_hex_in(p, (int)sizeof *p); return; }
     else *p = (int)fio_in_real(fio_w, fio_d);
     fio_consumed();
 }
@@ -1939,6 +1997,7 @@ void f77_rd_i(int *p) {
 void f77_rd_in(void *p, int n) {
     int t;
     if (!fio_listed && fio_want() == 'A') { f77_rd_s((char *)p, n); return; }
+    if (!fio_listed && fio_want() == 'Z') { fio_hex_in(p, n); return; }
     t = n == 2 ? *(short *)p : *(unsigned char *)p;     /* a null value leaves it */
     f77_rd_i(&t);
     if (n == 2) *(short *)p = (short)t;
@@ -1947,10 +2006,11 @@ void f77_rd_in(void *p, int n) {
 
 void f77_wr_i(int v);
 void f77_wr_in(int v, int n) {
-    if (!fio_listed && fio_want() == 'A') {
+    if (!fio_listed && (fio_want() == 'A' || fio_want() == 'Z')) {
         short h = (short)v;
         unsigned char c = (unsigned char)v;
-        if (n == 2) fio_hol_out(&h, 2);
+        if (fio_want() == 'Z') fio_hex_out(n == 2 ? (void *)&h : (void *)&c, n);
+        else if (n == 2) fio_hol_out(&h, 2);
         else fio_hol_out(&c, 1);
         return;
     }
@@ -1972,6 +2032,7 @@ void f77_rd_d(double *p) {
     if (d == 0) return;
     if (d == 'I') *p = (double)fio_in_int(fio_w);
     else if (d == 'A') { f77_rd_s((char *)p, (int)sizeof *p); return; }   /* text into a DOUBLE PRECISION */
+    else if (d == 'Z') { fio_hex_in(p, (int)sizeof *p); return; }
     else if (d == 'L') {
         fprintf(stderr, "f77: %c editing does not match a numeric READ item\n", d);
         exit(2);
@@ -1995,6 +2056,7 @@ void f77_rd_r(float *p) {
     if (d == 0) return;
     if (d == 'I') *p = (float)fio_in_int(fio_w);
     else if (d == 'A') { f77_rd_s((char *)p, (int)sizeof *p); return; }   /* text into a REAL */
+    else if (d == 'Z') { fio_hex_in(p, (int)sizeof *p); return; }
     else if (d == 'L') {
         fprintf(stderr, "f77: %c editing does not match a numeric READ item\n", d);
         exit(2);

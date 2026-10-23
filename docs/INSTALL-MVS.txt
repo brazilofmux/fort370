@@ -262,6 +262,14 @@ right-justified in the item whatever its type (DATA X /Z41100000/ is
 for the item lost, as in H.  Among a DATA statement's values, ZFF is
 that constant unless a PARAMETER has the name.
 
+Zw editing is H's, of any type but CHARACTER: output is the item's
+bytes in hexadecimal, leading zeros kept, blanks on the left of a
+field wider than the item and the rightmost digits in one narrower (Z4
+of 1.0 is 0000); a COMPLEX item is two REAL ones.  Input takes blanks
+as zeros wherever they are, right-justifies the digits in the item,
+loses the leftmost of a field too wide, and a minus sign sets the
+item's sign bit (-0000001 is 80000001).
+
 NAMELIST is FORTRAN H's: NAMELIST /GROUP/ A, B, C, then READ (u,
 GROUP) and WRITE (u, GROUP), or NML=GROUP.  WRITE writes H's records:
 &GROUP, then NAME=value,... and &END, each record beginning with a
