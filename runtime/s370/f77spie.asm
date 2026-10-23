@@ -27,6 +27,7 @@
 * itself abends.
 *
 F77SPIE  CSECT
+         ENTRY F77R13
          STM   14,12,12(13)
          LR    12,15
          USING F77SPIE,12
@@ -36,6 +37,11 @@ F77SPIE  CSECT
          SR    15,15
          BR    14
          DROP  12
+*
+* F77R13: the caller's R13, its save area, for the traceback
+* (f77err.c), returned in R15 as C returns an int
+F77R13   LR    15,13
+         BR    14
 *
 PIEXIT   DS    0H
          USING PIEXIT,15

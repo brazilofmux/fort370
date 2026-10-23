@@ -330,12 +330,15 @@ ALOG(0.0) the largest negative number and ALOG(-1.0) 0.0, both with
 IHC253I, ARSIN(1.5) 0.0, SIN(1.0E10) 0.7071068, TAN at a singularity
 the largest number, (-2.0)**0.5 1.4142135 and 0.0**0.0 and 0**0 zero,
 each with its message, as H's are -- run on TK5 side by side.  Five
-messages of each number are printed, each followed by STANDARD FIXUP
-TAKEN; the tenth error of a number ends the program after IHC900I with
+messages of each number are printed, each followed by a traceback, the
+routines back to the main program with the registers each was called
+with, and STANDARD FIXUP TAKEN; the tenth error of a number ends the program after IHC900I with
 return code 16; and a program that had any ends with a SUMMARY OF
 ERRORS.  The messages go to unit 6 with the program's own records.
 
-Where it differs from FORTLIB: no traceback follows a message, and
+Where it differs from FORTLIB: the traceback has no ISNs (H's has none
+at OPT=2 either), and names the main program F77MAIN; a subprogram the
+compiler put in line in its caller is not a routine of its own there.
 ERRSET, which changes the counts, is not there.  An underflow inside
 EXP (EXP(-200.0)) or ** is zero without a word, where FORTLIB's EXP
 reports its own IHC208I.  A division whose quotient is never used is
