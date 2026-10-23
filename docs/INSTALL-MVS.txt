@@ -252,7 +252,15 @@ type.  Other lengths are accepted and get a fullword.
 From MIL-STD-1753 (1978): END DO, as a labelled DO's terminal
 statement, and DO WHILE (e), labelled or not.  And, as VAX FORTRAN and
 later Fortran 90 have it, a DO without a label ended by END DO, and a
-labelled DO WHILE ended by any statement bearing the label.
+labelled DO WHILE ended by any statement bearing the label.  Also
+from MIL-STD-1753, its bit functions, compiled in line: IAND, IOR,
+IEOR, NOT, ISHFT, ISHFTC, IBITS, BTEST, IBSET, IBCLR and the
+subroutine MVBITS, on fullword INTEGERs, bit 0 the rightmost; and its
+constants in DATA, Z'1F' and O'17', and H's hexadecimal ones, Z1F,
+right-justified in the item whatever its type (DATA X /Z41100000/ is
+1.0), zeros on the left, the leftmost digits of a constant too long
+for the item lost, as in H.  Among a DATA statement's values, ZFF is
+that constant unless a PARAMETER has the name.
 
 NAMELIST is FORTRAN H's: NAMELIST /GROUP/ A, B, C, then READ (u,
 GROUP) and WRITE (u, GROUP), or NML=GROUP.  WRITE writes H's records:

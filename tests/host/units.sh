@@ -15,7 +15,9 @@
 # a READ or WRITE whose unit is CHARACTER (an internal file) with no
 # format, as READ('(I5)') N is; a substring whose constant bounds fall
 # outside its string, C(0:9), C(1:11) of a CHARACTER*10 C, or C(5:4)
-# (F77 5.7.1).  tests/s370/mainlast.f has a main program after
+# (F77 5.7.1); a hexadecimal or octal constant of DATA with a digit
+# that is not, or a sign; a bit intrinsic with the wrong number of
+# arguments or one not INTEGER, MVBITS too.  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -81,6 +83,18 @@ printf "      CHARACTER*10 C\n      C(3:11)='Q'\n      END\n" > $T/sublen.f
 expect sublen "line 2: substring outside its string"
 printf "      CHARACTER*10 C,D\n      D=C(5:4)\n      END\n" > $T/subrev.f
 expect subrev "line 2: substring outside its string"
+printf "      INTEGER I\n      DATA I /Z'1G'/\n      END\n" > $T/hexbad.f
+expect hexbad "line 2: bad hexadecimal constant"
+printf "      INTEGER I\n      DATA I /O'8'/\n      END\n" > $T/octbad.f
+expect octbad "line 2: bad octal constant"
+printf "      INTEGER I\n      DATA I /-ZFF/\n      END\n" > $T/hexneg.f
+expect hexneg "line 2: a sign cannot precede a hexadecimal or octal constant"
+printf "      I = ISHFT(3)\n      END\n" > $T/bitargs.f
+expect bitargs "line 1: wrong number of arguments to a bit intrinsic"
+printf "      I = IAND(3, 1.0)\n      END\n" > $T/bitreal.f
+expect bitreal "line 1: this intrinsic needs INTEGER arguments"
+printf "      CALL MVBITS(1, 0, 4, I)\n      END\n" > $T/mvbits4.f
+expect mvbits4 "line 1: MVBITS needs five arguments"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST, an internal file with no format and a substring outside its string refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST, an internal file with no format, a substring outside its string, a bad hexadecimal or octal constant and a bit intrinsic misused refused"
 [ $bad = 0 ]
