@@ -3,9 +3,10 @@
 * as actual arguments (F77 15.9.3), in Fortran's convention: R1 to a
 * list of addresses, the result in R0.  The runtime's C functions
 * could not be these: cc370 returns an integer in R15.  Nothing here
-* calls anything, so no save area is needed; R14 is the return, R15
-* and R0/R1 scratch, as the convention allows.  The floating-point
-* ones stay in C (f77rt.c): both conventions give FPR0.
+* calls anything; R14 is the return, R15 and R0/R1 scratch, as the
+* convention allows, and R2-R3, where more are needed, are saved in
+* the caller's save area.  The floating-point ones stay in C
+* (f77rt.c): both conventions give FPR0.
 *
 I#IABS   CSECT
          USING *,15
@@ -16,54 +17,63 @@ I#IABS   CSECT
          DROP  15
 I#ISIGN  CSECT
          USING *,15
-         L     0,4(,1)               the sign's address
-         L     0,0(,0)
-         L     15,0(,1)
-         L     15,0(,15)             the magnitude
-         LTR   0,0
-         BM    ISNEG
-         LPR   0,15
-         BR    14
-ISNEG    LNR   0,15
+         STM   2,3,28(13)            in the caller's save area
+         L     2,0(,1)
+         L     2,0(,2)               the magnitude
+         L     3,4(,1)
+         L     3,0(,3)               the sign
+         LPR   0,2
+         LTR   3,3
+         BNM   ISPOS
+         LNR   0,0
+ISPOS    LM    2,3,28(13)
          BR    14
          DROP  15
 I#IDIM   CSECT
          USING *,15
-         L     0,4(,1)
-         L     0,0(,0)               b
-         L     15,0(,1)
-         L     15,0(,15)             a
-         SR    15,0                  a - b
-         LTR   0,15
+         STM   2,3,28(13)
+         L     2,0(,1)
+         L     2,0(,2)               a
+         L     3,4(,1)
+         L     3,0(,3)               b
+         LR    0,2
+         SR    0,3                   a - b
          BP    IDIMP
          SR    0,0
-IDIMP    BR    14
+IDIMP    LM    2,3,28(13)
+         BR    14
          DROP  15
 I#MOD    CSECT
          USING *,15
-         L     0,4(,1)
-         L     0,0(,0)               b, kept in R15's place below
-         LR    15,0
-         L     0,0(,1)
-         L     1,0(,0)               a
-         LR    0,1
+         STM   2,3,28(13)
+         L     2,0(,1)
+         L     2,0(,2)               a
+         L     3,4(,1)
+         L     3,0(,3)               b
+         LR    0,2
          SRDA  0,32                  the dividend pair R0:R1
-         DR    0,15                  remainder in R0
+         DR    0,3                   remainder in R0
+         LM    2,3,28(13)
          BR    14
          DROP  15
 I#NINT   CSECT
          BALR  15,0
          USING *,15
          L     1,0(,1)               address of the REAL
+         SDR   0,0                   no low half left over
          LE    0,0(,1)
          LTDR  0,0
          BM    NNEG
          AD    0,=D'0.5'
-         B     NCVT
-NNEG     SD    0,=D'0.5'
-NCVT     AW    0,=X'4E00000000000000'    integer part as a fixed word
+         AW    0,=X'4E00000000000000'    integer part as a fixed word
          STD   0,NTMP
          L     0,NTMP+4
+         BR    14
+NNEG     SD    0,=D'0.5'
+         AW    0,=X'4E00000000000000'    its magnitude, the sign apart
+         STD   0,NTMP
+         L     0,NTMP+4
+         LCR   0,0
          BR    14
 NTMP     DS    D
          LTORG
@@ -76,11 +86,15 @@ I#IDNINT CSECT
          LTDR  0,0
          BM    DNEG
          AD    0,=D'0.5'
-         B     DCVT
-DNEG     SD    0,=D'0.5'
-DCVT     AW    0,=X'4E00000000000000'    integer part as a fixed word
+         AW    0,=X'4E00000000000000'    integer part as a fixed word
          STD   0,DTMP
          L     0,DTMP+4
+         BR    14
+DNEG     SD    0,=D'0.5'
+         AW    0,=X'4E00000000000000'    its magnitude, the sign apart
+         STD   0,DTMP
+         L     0,DTMP+4
+         LCR   0,0
          BR    14
 DTMP     DS    D
          LTORG
