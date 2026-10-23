@@ -514,14 +514,18 @@ rep('''    fseek(f, (long)(rec - 1) * fio_urecl[unit], SEEK_SET);
 # FORMAT(1X,'A',/) printed no blank line after A (Marco Verpelli,
 # 2026-10-16).  A blank is the record IBM's compilers write: on a
 # printer, its carriage control, one line.
-rep('''    fputs(fio_line, f);
+rep('''    /* All fio_len bytes: a CHARACTER item may hold X'00', which
+     * fputs took for the end of the record and dropped the rest. */
+    fwrite(fio_line, 1, (size_t)fio_len, f);
     fputc('\\n', f);
-    fio_len = 0;''', '''    if (fio_len == 0) fputc(' ', f);
-    fputs(fio_line, f);
+    fio_len = 0;''', '''    /* All fio_len bytes: a CHARACTER item may hold X'00', which
+     * fputs took for the end of the record and dropped the rest. */
+    if (fio_len == 0) fputc(' ', f);
+    fwrite(fio_line, 1, (size_t)fio_len, f);
     fputc('\\n', f);
     fio_len = 0;''')
 # formatted direct access: a record padded to RECL with blanks
-rep('''        fputs(fio_line, f);
+rep('''        fwrite(fio_line, 1, (size_t)fio_len, f);
         for (i = fio_len; i < recl; i++) fputc(' ', f);
         fio_len = 0;
         return;''', '''        memcpy(fio_urec, fio_line, (size_t)fio_len);
@@ -754,9 +758,9 @@ rep('''    FILE *f = fio_out ? fio_out : stdout;
     fio_line[fio_len] = 0;''', '''    FILE *f;
     fio_line[fio_len] = 0;''')
 rep('''    if (fio_len == 0) fputc(' ', f);
-    fputs(fio_line, f);''', '''    f = fio_out ? fio_out : stdout;
+    fwrite(fio_line, 1, (size_t)fio_len, f);''', '''    f = fio_out ? fio_out : stdout;
     if (fio_len == 0) fputc(' ', f);
-    fputs(fio_line, f);''')
+    fwrite(fio_line, 1, (size_t)fio_len, f);''')
 s = re.sub(r'\bexit\(2\);', 'fio_exit(2);', s)
 s = re.sub(r'snprintf\(buf, sizeof buf, ', 'sprintf(buf, ', s)
 s = re.sub(r'\bfopen\(nm, ', 'fio_fopen(nm, ', s)

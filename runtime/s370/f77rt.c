@@ -302,9 +302,11 @@ static void fio_flush_line(void) {
         fio_len = 0;
         return;
     }
+    /* All fio_len bytes: a CHARACTER item may hold X'00', which
+     * fputs took for the end of the record and dropped the rest. */
     f = fio_out ? fio_out : stdout;
     if (fio_len == 0) fputc(' ', f);
-    fputs(fio_line, f);
+    fwrite(fio_line, 1, (size_t)fio_len, f);
     fputc('\n', f);
     fio_len = 0;
     if (fio_unit > 0 && fio_unit < FIO_MAXUNIT && fio_unit != 5 && fio_unit != 6)
