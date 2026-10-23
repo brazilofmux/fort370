@@ -1838,21 +1838,31 @@ static void f77_char_assign(int dst, int dlen, int src, int slen) {
  * `clen`, or -1).  The scanner is on the opening parenthesis.  Sets
  * ex_len/ex_clen. */
 static int f77_substring(int base, int lenv, int clen) {
-    int e1; int e2; int c1; int c2; int t;
+    int e1; int e2; int c1; int c2; int k1; int k2; int t;
     f77_tok();
-    e1 = -1; e2 = -1; c1 = 1; c2 = clen;
+    e1 = -1; e2 = -1; c1 = 1; c2 = clen; k1 = 1; k2 = clen >= 0;
     if (lx_t != T_COLON) {
         e1 = f77_expr(); e1 = f77_cvt(e1, &ex_hi, ex_ty, TY_INT);
-        c1 = (h_kind[e1] == HI_ICONST) ? h_val[e1] : -2;
+        k1 = h_kind[e1] == HI_ICONST;
+        c1 = k1 ? h_val[e1] : -2;
     }
     if (lx_t != T_COLON) { f77_error("expected : in substring"); return base; }
     f77_tok();
     if (lx_t != T_RP) {
         e2 = f77_expr(); e2 = f77_cvt(e2, &ex_hi, ex_ty, TY_INT);
-        c2 = (h_kind[e2] == HI_ICONST) ? h_val[e2] : -2;
+        k2 = h_kind[e2] == HI_ICONST;
+        c2 = k2 ? h_val[e2] : -2;
     }
     if (lx_t != T_RP) { f77_error("expected ) after substring"); return base; }
     f77_tok();
+    /* (e1:e2) needs 1 <= e1 <= e2 <= the length (F77 5.7.1); bounds
+     * that are constants are checked here, the rest are not checked. */
+    if ((k1 && (c1 < 1 || (clen >= 0 && c1 > clen)))
+        || (k2 && (c2 < 1 || (clen >= 0 && c2 > clen)))
+        || (k1 && k2 && c1 > c2)) {
+        f77_error("substring outside its string");
+        c1 = 1; c2 = 1;
+    }
     if (e1 < 0) e1 = f77_iconst(1);
     if (e2 < 0) e2 = lenv;
     t = hi_emit(HI_ADDI, TY_INT, e1, -1, -1, NULL);

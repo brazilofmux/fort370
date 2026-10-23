@@ -13,7 +13,9 @@
 # an H with no count);
 # a NAMELIST READ with a list, and a NAMELIST group defined twice;
 # a READ or WRITE whose unit is CHARACTER (an internal file) with no
-# format, as READ('(I5)') N is.  tests/s370/mainlast.f has a main program after
+# format, as READ('(I5)') N is; a substring whose constant bounds fall
+# outside its string, C(0:9), C(1:11) of a CHARACTER*10 C, or C(5:4)
+# (F77 5.7.1).  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -73,6 +75,12 @@ printf "      READ(\047(I5)\047) N\n      END\n" > $T/intnofmt.f
 expect intnofmt "line 1: a CHARACTER unit is an internal file and needs a format"
 printf "      CHARACTER*8 C\n      WRITE(C) N\n      END\n" > $T/intunf.f
 expect intunf "line 2: a CHARACTER unit is an internal file and needs a format"
+printf "      CHARACTER*10 C,D\n      D=C(0:9)\n      END\n" > $T/sub0.f
+expect sub0 "line 2: substring outside its string"
+printf "      CHARACTER*10 C\n      C(3:11)='Q'\n      END\n" > $T/sublen.f
+expect sublen "line 2: substring outside its string"
+printf "      CHARACTER*10 C,D\n      D=C(5:4)\n      END\n" > $T/subrev.f
+expect subrev "line 2: substring outside its string"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST and an internal file with no format refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST, an internal file with no format and a substring outside its string refused"
 [ $bad = 0 ]
