@@ -1675,17 +1675,23 @@ static int f77_select(int cond, int a, int b) {
  * shift of 32 (which some targets take as one of 0). */
 static int f77_bitmask(int len) {
     int t;
-    t = hi_emit(HI_SUB, TY_INT, f77_iconst(32), len, 0, NULL);
-    return hi_emit(HI_SRL, TY_INT, f77_iconst(-1), t, 0, NULL);
+    int c;
+    c = f77_iconst(32);
+    t = hi_emit(HI_SUB, TY_INT, c, len, 0, NULL);
+    c = f77_iconst(-1);
+    return hi_emit(HI_SRL, TY_INT, c, t, 0, NULL);
 }
 
 /* The bit functions of MIL-STD-1753 2.6 on their arguments' values v:
  * bit 0 is the rightmost.  A shift count, bit position or length out
- * of the standard's range gives whatever the shifts give. */
+ * of the standard's range gives whatever the shifts give.  One emit a
+ * statement: C leaves the order of a call's arguments open, and the
+ * instructions' order must not depend on the host's compiler. */
 static int f77_bits(int in, int *v) {
     int m;
     int t;
     int k;
+    int c;
     if (in == IN_IAND) return hi_emit(HI_AND, TY_INT, v[0], v[1], 0, NULL);
     if (in == IN_IOR) return hi_emit(HI_OR, TY_INT, v[0], v[1], 0, NULL);
     if (in == IN_IEOR) return hi_emit(HI_XOR, TY_INT, v[0], v[1], 0, NULL);
@@ -1695,11 +1701,15 @@ static int f77_bits(int in, int *v) {
         if (h_kind[k] == HI_ICONST) {
             if (h_val[k] >= 32 || h_val[k] <= -32) return f77_iconst(0);
             if (h_val[k] >= 0) return hi_emit(HI_SLL, TY_INT, v[0], k, 0, NULL);
-            return hi_emit(HI_SRL, TY_INT, v[0], f77_iconst(-h_val[k]), 0, NULL);
+            c = f77_iconst(-h_val[k]);
+            return hi_emit(HI_SRL, TY_INT, v[0], c, 0, NULL);
         }
         m = hi_emit(HI_SLL, TY_INT, v[0], k, 0, NULL);
-        t = hi_emit(HI_SRL, TY_INT, v[0], hi_emit(HI_NEG, TY_INT, k, -1, 0, NULL), 0, NULL);
-        return f77_select(hi_emit(HI_SGE, TY_INT, k, f77_iconst(0), 0, NULL), m, t);
+        c = hi_emit(HI_NEG, TY_INT, k, -1, 0, NULL);
+        t = hi_emit(HI_SRL, TY_INT, v[0], c, 0, NULL);
+        c = f77_iconst(0);
+        c = hi_emit(HI_SGE, TY_INT, k, c, 0, NULL);
+        return f77_select(c, m, t);
     }
     if (in == IN_ISHFTC) {
         /* the rightmost ic bits rotated left k places, k taken into
@@ -1709,28 +1719,42 @@ static int f77_bits(int in, int *v) {
         int r;
         ic = v[2];
         m = f77_bitmask(ic);
-        k = f77_select(hi_emit(HI_SLT, TY_INT, v[1], f77_iconst(0), 0, NULL),
-                       hi_emit(HI_ADD, TY_INT, v[1], ic, 0, NULL), v[1]);
-        k = f77_select(hi_emit(HI_SEQ, TY_INT, k, ic, 0, NULL), f77_iconst(0), k);
+        c = f77_iconst(0);
+        c = hi_emit(HI_SLT, TY_INT, v[1], c, 0, NULL);
+        t = hi_emit(HI_ADD, TY_INT, v[1], ic, 0, NULL);
+        k = f77_select(c, t, v[1]);
+        c = hi_emit(HI_SEQ, TY_INT, k, ic, 0, NULL);
+        t = f77_iconst(0);
+        k = f77_select(c, t, k);
         w = hi_emit(HI_AND, TY_INT, v[0], m, 0, NULL);
-        r = hi_emit(HI_OR, TY_INT, hi_emit(HI_SLL, TY_INT, w, k, 0, NULL),
-                    hi_emit(HI_SRL, TY_INT, w, hi_emit(HI_SUB, TY_INT, ic, k, 0, NULL), 0, NULL), 0, NULL);
-        r = f77_select(hi_emit(HI_SEQ, TY_INT, k, f77_iconst(0), 0, NULL), w, r);
+        r = hi_emit(HI_SLL, TY_INT, w, k, 0, NULL);
+        c = hi_emit(HI_SUB, TY_INT, ic, k, 0, NULL);
+        t = hi_emit(HI_SRL, TY_INT, w, c, 0, NULL);
+        r = hi_emit(HI_OR, TY_INT, r, t, 0, NULL);
+        c = f77_iconst(0);
+        c = hi_emit(HI_SEQ, TY_INT, k, c, 0, NULL);
+        r = f77_select(c, w, r);
         r = hi_emit(HI_AND, TY_INT, r, m, 0, NULL);
-        t = hi_emit(HI_AND, TY_INT, v[0], hi_emit(HI_BNOT, TY_INT, m, -1, 0, NULL), 0, NULL);
+        c = hi_emit(HI_BNOT, TY_INT, m, -1, 0, NULL);
+        t = hi_emit(HI_AND, TY_INT, v[0], c, 0, NULL);
         return hi_emit(HI_OR, TY_INT, t, r, 0, NULL);
     }
-    if (in == IN_IBITS)
-        return hi_emit(HI_AND, TY_INT, hi_emit(HI_SRL, TY_INT, v[0], v[1], 0, NULL),
-                       f77_bitmask(v[2]), 0, NULL);
+    if (in == IN_IBITS) {
+        t = hi_emit(HI_SRL, TY_INT, v[0], v[1], 0, NULL);
+        m = f77_bitmask(v[2]);
+        return hi_emit(HI_AND, TY_INT, t, m, 0, NULL);
+    }
     if (in == IN_BTEST) {
         ex_log = 1;
-        return hi_emit(HI_AND, TY_INT, hi_emit(HI_SRL, TY_INT, v[0], v[1], 0, NULL),
-                       f77_iconst(1), 0, NULL);
+        t = hi_emit(HI_SRL, TY_INT, v[0], v[1], 0, NULL);
+        c = f77_iconst(1);
+        return hi_emit(HI_AND, TY_INT, t, c, 0, NULL);
     }
-    t = hi_emit(HI_SLL, TY_INT, f77_iconst(1), v[1], 0, NULL);
+    c = f77_iconst(1);
+    t = hi_emit(HI_SLL, TY_INT, c, v[1], 0, NULL);
     if (in == IN_IBSET) return hi_emit(HI_OR, TY_INT, v[0], t, 0, NULL);
-    return hi_emit(HI_AND, TY_INT, v[0], hi_emit(HI_BNOT, TY_INT, t, -1, 0, NULL), 0, NULL);
+    t = hi_emit(HI_BNOT, TY_INT, t, -1, 0, NULL);
+    return hi_emit(HI_AND, TY_INT, v[0], t, 0, NULL);
 }
 
 /* F77 intrinsic names are type-decorated (ABS/IABS/DABS, MAX0/AMAX1/
@@ -6404,10 +6428,13 @@ static void f77_stmt_call(int skip) {
             if (nargs != 5) { f77_error("MVBITS needs five arguments"); return; }
             for (k = 0; k < 5; k++) v[k] = hi_emit(HI_LOAD, TY_INT, addrs[k], -1, 0, NULL);
             m = f77_bitmask(v[2]);
-            k = hi_emit(HI_AND, TY_INT, hi_emit(HI_SRL, TY_INT, v[0], v[1], 0, NULL), m, 0, NULL);
-            m = hi_emit(HI_BNOT, TY_INT, hi_emit(HI_SLL, TY_INT, m, v[4], 0, NULL), -1, 0, NULL);
-            m = hi_emit(HI_OR, TY_INT, hi_emit(HI_AND, TY_INT, v[3], m, 0, NULL),
-                        hi_emit(HI_SLL, TY_INT, k, v[4], 0, NULL), 0, NULL);
+            k = hi_emit(HI_SRL, TY_INT, v[0], v[1], 0, NULL);
+            k = hi_emit(HI_AND, TY_INT, k, m, 0, NULL);
+            k = hi_emit(HI_SLL, TY_INT, k, v[4], 0, NULL);
+            m = hi_emit(HI_SLL, TY_INT, m, v[4], 0, NULL);
+            m = hi_emit(HI_BNOT, TY_INT, m, -1, 0, NULL);
+            m = hi_emit(HI_AND, TY_INT, v[3], m, 0, NULL);
+            m = hi_emit(HI_OR, TY_INT, m, k, 0, NULL);
             hi_emit(HI_STORE, TY_INT, addrs[3], m, 0, NULL);
             return;
         }
