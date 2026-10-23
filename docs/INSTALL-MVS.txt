@@ -20,15 +20,15 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 ee3487be0f5d489027e78a87a742816795907cfb03db4c801ff076da72d1013f
+  FORT370.xmit  SHA256 2e6b5b2f5bee595b780ee6091caaf3d3f17011dc08655d9dc5a840030fe31cf2
                 582720 bytes, FB80 when it lands on the guest
-  F77RT.xmit    SHA256 60711221f1764bf0d3c0e1ab64046b711f40979a05a25fc310e8c4cc3dd8bc51
-                520000 bytes, FB80
-  F77RT.upd     SHA256 cd7d2a06caabd517525c83a1b3e95da0ff17f8368259a17b25c8e62c48a8b6da
-                531120 bytes, FB80
-  built         from fort370 eb68164 (release 2026-10-21.1) with mvslovers'
+  F77RT.xmit    SHA256 34d1cc917cb1d0f6ecd818c1fbb6df6e8a97db716e9724d103a891dd58d9b253
+                565600 bytes, FB80
+  F77RT.upd     SHA256 850e76d307208ce8a04e0fc5f3f6aaedccd440cdc645765dcf55177e32f94a4c
+                579440 bytes, FB80
+  built         from fort370 ff0a91e (release 2026-10-23) with mvslovers'
                 cc370 1.6.3 and libc370 2.16.0
-  tested        all 192 FCVS programs, 106 test programs and a unit
+  tested        all 192 FCVS programs, 110 test programs and a unit
                 at each size limit compiled on the guest by this
                 module in REGION=6144K, the assembler byte for
                 byte the host compiler's (bench/port-sweep.py);

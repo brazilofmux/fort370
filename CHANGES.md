@@ -8,6 +8,51 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-23
+
+Tagged `v2026.10.23`: floating-point errors recovered and reported as
+FORTLIB reports them (issue #17, and #26 with it), substrings and
+records holding X'00' (issue #28), and INTEGER intrinsics passed as
+arguments.  Built from `ff0a91e`: FORT370.xmit SHA256
+`2e6b5b2f5bee595b…`, 582,720 bytes; F77RT.xmit SHA256
+`34d1cc917cb1d0f6…`, 565,600 bytes; F77RT.upd SHA256
+`850e76d307208ce8…`, 579,440 bytes.  All 192 FCVS programs, 110
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design, and none of
+them reports an error to FORTLIB's monitor.
+
+- Program interrupts are recovered as FORTLIB recovers them.  An
+  overflow abended S0CC and a division by zero S0CF or S0C9; now each
+  is IHC207I, IHC208I (underflow) or IHC209I, with FORTLIB's standard
+  fixup -- the largest number, zero, the dividend (1/0 is 1) -- and the
+  program carries on.  Five messages of each number are printed, the
+  tenth error of a number ends the program after IHC900I with return
+  code 16, and a program that had any ends with a SUMMARY OF ERRORS.
+- A mathematical function's argument out of its domain gets FORTLIB's
+  message (IHC241I-IHC269I) and its standard fixup, where it got a
+  value and no word: SQRT(-4.0) is 2.0, ALOG(-1.0) 0.0, ARSIN(1.5)
+  0.0, SIN(1.0E10) 0.7071068, (-2.0)**0.5 1.4142135, 0.0**0.0 and 0**0
+  zero, TAN at a singularity the largest number.  Texts, conditions and
+  fixups are FORTRAN H's, run side by side on TK5.  Each message is
+  followed by a traceback, the routines back to the main program.
+- The compiler calls DOUBLE PRECISION functions by their own names now
+  (DSQRT, DSIN, ... DPOW), since FORTLIB reports their errors in their
+  own words.  An object compiled by an earlier release calls SQRT for
+  both and still gets its values; its errors are told as REAL's.
+- A record holding X'00' -- a CHARACTER variable never assigned, whose
+  storage was zero -- was cut there, written or read: LINE(61:70) =
+  'abcdefghij' with LINE(1:60) unset printed a blank line.
+- A substring whose constant bounds fall outside its string, C(0:9) of
+  a CHARACTER*10 C, is a compile-time error (F77 5.7.1); it read the
+  byte before C.
+- ISIGN, IDIM and MOD passed as actual arguments read their second
+  argument from storage location 0, and NINT and IDNINT lost the sign
+  of a negative one.
+- Where it still differs from FORTLIB: no ERRSET; an underflow inside
+  EXP or ** is zero without IHC208I; the traceback names the main
+  program F77MAIN.  docs/INSTALL-MVS.txt has the details.
+
 ## 2026-10-21.1
 
 Tagged `v2026.10.21.1`: a CHARACTER argument of a statement function,
