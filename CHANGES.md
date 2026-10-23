@@ -8,6 +8,36 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-23.1
+
+Tagged `v2026.10.23.1`: MIL-STD-1753's bit functions and hexadecimal
+and octal constants in DATA (issue #9), and FORTRAN H's Z editing
+(issue #29).  Built from `1f1c3b6`: FORT370.xmit SHA256
+`473093a74a1b83f1…`, 583,040 bytes; F77RT.xmit SHA256
+`348101da6759ea14…`, 568,960 bytes; F77RT.upd SHA256
+`467d2dd9b5921dda…`, 582,720 bytes.  All 192 FCVS programs, 112
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design.
+
+- IAND, IOR, IEOR, NOT, ISHFT, ISHFTC, IBITS, BTEST, IBSET and IBCLR,
+  and the subroutine MVBITS, compiled in line on fullword INTEGERs, bit
+  0 the rightmost.  A subprogram of the same name in the file, a dummy
+  argument or EXTERNAL still takes the name, as for the other
+  intrinsics.
+- DATA takes Z'1F' and O'17', and H's Z1F.  As in H, the constant is
+  right-justified in its item whatever the item's type, zeros on its
+  left, and the leftmost digits of one too long are lost: DATA X
+  /Z41100000/ is 1.0.  ZFF among DATA's values is a name only when a
+  PARAMETER has it.
+- Zw editing, which the runtime skipped as unknown, is H's: output is
+  the item's bytes in hexadecimal, leading zeros kept, a field too
+  narrow its rightmost digits (Z4 of 1.0 is 0000); input takes blanks
+  as zeros and a minus sign as the sign bit (-0000001 is 80000001).
+- A COMPLEX item under A editing is two REAL ones, 4 characters each,
+  as under H: A, or an Aw wider than 4, wrote 8 bytes of each part, the
+  last four X'00'.
+
 ## 2026-10-23
 
 Tagged `v2026.10.23`: floating-point errors recovered and reported as
