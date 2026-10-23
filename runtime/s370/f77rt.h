@@ -133,6 +133,9 @@ void f77_inq(int code, void *p, int len) __asm__("F77INQ");
 void f77_rewind(int unit) __asm__("F77REWND");
 int f77_lstrcmp(const char *a, int la, const char *b, int lb) __asm__("F77LSTRC");
 
+/* the mathematical functions: the runtime's own calls go to the cores */
+#include "f77m.h"
+
 /* the compiler's names for AINT/ANINT and their DOUBLE PRECISION forms */
 double f77_dint(double) __asm__("F77DINT");
 double f77_dnint(double) __asm__("F77DNINT");

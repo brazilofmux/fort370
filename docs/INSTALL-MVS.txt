@@ -313,33 +313,37 @@ a unit is one in the last hexadecimal place of the result):
   unit of the result's magnitude; FORTLIB's, 14.  So is complex
   division, done in double precision, where FORTLIB's is within 12.
 
-  SIN, COS and TAN reduce any argument exactly, by the bits of 2/pi;
-  FORTLIB refuses a REAL argument of pi*2**18 or more and a DOUBLE
-  PRECISION one of pi*2**50, and below that its DOUBLE PRECISION
-  results have lost seven of their sixteen digits by 10**6.  MOD, AMOD
-  and DMOD, though, are the textbook a-INT(a/b)*b, and when a/b is past
-  an integer's range the result means nothing, in both.
+  SIN, COS and TAN reduce an argument exactly, by the bits of 2/pi, up
+  to FORTLIB's limits, pi*2**18 for REAL and pi*2**50 for DOUBLE
+  PRECISION (past them, the error below); below that FORTLIB's DOUBLE
+  PRECISION results have lost seven of their sixteen digits by 10**6.
+  MOD, AMOD and DMOD, though, are the textbook a-INT(a/b)*b, and when
+  a/b is past an integer's range the result means nothing, in both.
 
-Errors: fort370's runtime prints no messages for floating point.  An
-overflow in arithmetic (1.0E70*1.0E70) abends with S0CC, and a division
-by zero with S0CF, or S0C9 for INTEGER; FORTLIB intercepts those
-(IHC207I, IHC209I), carries on with the largest number after an
-overflow and with the dividend after a division (1/0 is 1), and ends
-the program after ten such errors.  A division whose quotient is never
-used is not compiled at all, so it cannot abend; H compiles it, and
-says IHC209I.  Underflow is zero, as in H.  A function's argument out of
-its domain gets a value and no message, where FORTLIB prints an IHC
-message for each and carries on:
+Errors are FORTLIB's.  An overflow in arithmetic (1.0E70*1.0E70), an
+underflow and a division by zero are intercepted, IHC207I, IHC208I and
+IHC209I, and the program carries on with the largest number after an
+overflow, zero after an underflow and the dividend after a division
+(1/0 is 1).  A function's argument out of its domain gets FORTLIB's
+message and its standard fixup: SQRT(-4.0) is 2.0 with IHC251I,
+ALOG(0.0) the largest negative number and ALOG(-1.0) 0.0, both with
+IHC253I, ARSIN(1.5) 0.0, SIN(1.0E10) 0.7071068, TAN at a singularity
+the largest number, (-2.0)**0.5 1.4142135 and 0.0**0.0 and 0**0 zero,
+each with its message, as H's are -- run on TK5 side by side.  Five
+messages of each number are printed, each followed by STANDARD FIXUP
+TAKEN; the tenth error of a number ends the program after IHC900I with
+return code 16; and a program that had any ends with a SUMMARY OF
+ERRORS.  The messages go to unit 6 with the program's own records.
 
-  call              fort370        FORTRAN H
-  SQRT(-4.0)        2.0            2.0
-  ALOG(0.0)         -7.2E75        -7.2E75
-  ALOG(-1.0)        -7.2E75        0.0
-  EXP(200.0)        7.2E75         7.2E75
-  ASIN(1.5)         1.5707963      0.0
-  TAN(1.5707963)    3.2E6          7.2E75 (a singularity, it says)
-  (-2.0)**0.5       0.0            1.4142135
-  0.0**0.0, 0**0    1              0
+Where it differs from FORTLIB: no traceback follows a message, and
+ERRSET, which changes the counts, is not there.  An underflow inside
+EXP (EXP(-200.0)) or ** is zero without a word, where FORTLIB's EXP
+reports its own IHC208I.  A division whose quotient is never used is
+not compiled at all, so it cannot be an error; H compiles it, and says
+IHC209I.  An object compiled by an earlier fort370 calls the REAL
+functions' names for DOUBLE PRECISION too (DSQRT was SQRT): its values
+are the same, and an error in one is reported in the REAL function's
+words.
 
 IBM's names ARSIN, ARCOS, DARSIN and DARCOS are ASIN, ACOS, DASIN and
 DACOS.

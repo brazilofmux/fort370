@@ -12,10 +12,12 @@
  * their hexadecimal digits, not decimal text, for the same reason; the
  * digits come from mpmath (the recipe is in tests/s370/math.sh).
  *
- * The external names are libm's (SQRT, SIN, ...), which is what the
- * compiler emits (backend/s370_rtnames.h) and what the runtime's own
- * calls through <math.h> resolve to; the archive's members are then
- * never pulled in.  A REAL argument arrives widened to double.
+ * These are the cores, under the runtime's own names (M@SQRT, ...),
+ * which say nothing of an argument out of their domain: the runtime's
+ * calls through <math.h> come here (f77m.h).  A program's calls go to
+ * the entries in f77mlr.c and f77mld.c, SQRT and DSQRT and the rest,
+ * which check the argument as FORTLIB does first (f77mchk.c).  A REAL
+ * argument arrives widened to double.
  *
  * A REAL result is the long one cut to short, and so within a unit and
  * nearly always the exact value truncated.  The long results, against
@@ -200,7 +202,7 @@ static int m_sqrt_low(unsigned int hi, unsigned int lo, unsigned int n4h) {
  * settle it: the rounded root is the R with (2R-1)^2 < 4 F 2^k <
  * (2R+1)^2 (never equal, the middle being odd and the outside even).
  * FORTLIB's DSQRT is correctly rounded too. */
-double f77m_sqrt(double x) __asm__("SQRT");
+double f77m_sqrt(double x) __asm__("M@SQRT");
 double f77m_sqrt(double x) {
     Hfp u;
     unsigned int hi;
@@ -354,7 +356,7 @@ static int m_exp_terms(Sum *t, double x, int sc, double xl) {
     return k;
 }
 
-double f77m_exp(double x) __asm__("EXP");
+double f77m_exp(double x) __asm__("M@EXP");
 double f77m_exp(double x) {
     Sum t;
     if (x > 174.6) return HFP_HUGE;
@@ -496,7 +498,7 @@ static void m_log_terms(Sum *t, double x) {
     SUM_ADD(t, ((f * f) * f) * p, 0);
 }
 
-double f77m_log(double x) __asm__("LOG");
+double f77m_log(double x) __asm__("M@LOG");
 double f77m_log(double x) {
     Sum t;
     if (x <= 0.0) return k_negbig.d;   /* FORTLIB: a message, and the largest negative */
@@ -507,7 +509,7 @@ double f77m_log(double x) {
 }
 
 /* log x in two parts, times 1/ln 10 in two */
-double f77m_log10(double x) __asm__("LOG10");
+double f77m_log10(double x) __asm__("M@LOG10");
 double f77m_log10(double x) {
     Sum t;
     double r;
@@ -695,7 +697,7 @@ static double m_reduce(double x, int *quad) {
     return r;
 }
 
-double f77m_sin(double x) __asm__("SIN");
+double f77m_sin(double x) __asm__("M@SIN");
 double f77m_sin(double x) {
     int q;
     double r;
@@ -706,7 +708,7 @@ double f77m_sin(double x) {
     return -m_cos_small(r);
 }
 
-double f77m_cos(double x) __asm__("COS");
+double f77m_cos(double x) __asm__("M@COS");
 double f77m_cos(double x) {
     int q;
     double r;
@@ -824,7 +826,7 @@ static double m_tan_pair(double rh, double rl, int q) {
 /* r in two parts: below 2^20 the reduction by pi/2 in four (k times
  * each of the last three exact in extended), above it Payne and
  * Hanek's with its next bits */
-double f77m_tan(double x) __asm__("TAN");
+double f77m_tan(double x) __asm__("M@TAN");
 double f77m_tan(double x) {
     Sum t;
     double kd;
@@ -847,6 +849,18 @@ double f77m_tan(double x) {
     SUM_MUL(&t, -k, k_pio2_4.d, 0);
     rh = sum_round(&t, &rl);
     return m_tan_pair(rh, rl, ((int)k) & 3);
+}
+
+/* How far x is from the nearest odd multiple of pi/2, where TAN has
+ * its singularities, in units of pi/4 (f77mchk.c's check).  Far from
+ * one, 1. */
+double f77m_tan_gap(double x) __asm__("M@TANGP");
+double f77m_tan_gap(double x) {
+    int q;
+    double r;
+    r = m_reduce(x, &q);
+    if (!(q & 1)) return 1.0;
+    return m_fabs(r) * 2.0 / c_pio2();
 }
 
 /* --- arc tangents ----------------------------------------------- */
@@ -935,7 +949,7 @@ static void m_pi_less(Sum *t) {
 static double m_pio2r(void) { Sum t; t.n = 0; t.q = 0; SUM_ADD(&t, c_pio2(), 0); SUM_ADD(&t, c_pio2_lo(), 0); return sum_round(&t, 0); }
 static double m_pir(void) { Sum t; t.n = 0; t.q = 0; SUM_ADD(&t, c_pi(), 0); SUM_ADD(&t, c_pi_lo(), 0); return sum_round(&t, 0); }
 
-double f77m_atan(double x) __asm__("ATAN");
+double f77m_atan(double x) __asm__("M@ATAN");
 double f77m_atan(double x) {
     Sum t;
     double r;
@@ -947,7 +961,7 @@ double f77m_atan(double x) {
     return x < 0.0 ? -r : r;
 }
 
-double f77m_atan2(double y, double x) __asm__("ATAN2");
+double f77m_atan2(double y, double x) __asm__("M@ATAN2");
 double f77m_atan2(double y, double x) {
     Sum t;
     double r;
@@ -1038,10 +1052,10 @@ static double m_asincos(double x, int acos) {
     return sum_round(&t, 0);
 }
 
-double f77m_asin(double x) __asm__("ASIN");
+double f77m_asin(double x) __asm__("M@ASIN");
 double f77m_asin(double x) { return m_asincos(x, 0); }
 
-double f77m_acos(double x) __asm__("ACOS");
+double f77m_acos(double x) __asm__("M@ACOS");
 double f77m_acos(double x) { return m_asincos(x, 1); }
 
 /* --- hyperbolics ------------------------------------------------ */
@@ -1080,7 +1094,7 @@ static double m_hyp(double a, double sg, int exact) {
     return sum_round(&t, 0);
 }
 
-double f77m_sinh(double x) __asm__("SINH");
+double f77m_sinh(double x) __asm__("M@SINH");
 double f77m_sinh(double x) {
     double a;
     double r;
@@ -1108,7 +1122,7 @@ double f77m_sinh(double x) {
     return x < 0.0 ? -r : r;
 }
 
-double f77m_cosh(double x) __asm__("COSH");
+double f77m_cosh(double x) __asm__("M@COSH");
 double f77m_cosh(double x) {
     double a;
     a = m_fabs(x);
@@ -1118,7 +1132,7 @@ double f77m_cosh(double x) {
 
 /* u / (u + 2), u = exp(2a) - 1, the denominator in two parts; from
  * 1.75 on, 1 - 2/(u + 2) */
-double f77m_tanh(double x) __asm__("TANH");
+double f77m_tanh(double x) __asm__("M@TANH");
 double f77m_tanh(double x) {
     Sum u;
     Sum d;
@@ -1169,7 +1183,7 @@ double f77m_tanh(double x) {
 /* --- powers ----------------------------------------------------- */
 
 /* exp(y log x), log x in two parts and their product with y in two */
-double f77m_pow(double x, double y) __asm__("POW");
+double f77m_pow(double x, double y) __asm__("M@POW");
 double f77m_pow(double x, double y) {
     Sum t;
     double r;

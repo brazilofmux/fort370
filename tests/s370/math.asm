@@ -525,41 +525,13 @@ L00028   DS    0H
          STE   0,P00043+0
          XC    P00043+4(4),P00043+4
          LA    1,P00043
-         L     15,C00051
+         L     15,C00087
          BALR  14,15
          STE   0,S00000+232
          LE    0,S00000+232
          STE   0,P00043+0
          LA    1,P00043
-         L     15,C00087
-         BALR  14,15
-         L     15,C00049
-         BALR  14,15
-         LA    0,6
-         ST    0,P00043+0
-         L     0,C00084
-         ST    0,P00043+4
-         LA    1,P00043
-         L     15,C00045
-         BALR  14,15
-         L     0,C00088
-         ST    0,P00043+0
-         LA    0,4
-         ST    0,P00043+4
-         LA    1,P00043
-         L     15,C00047
-         BALR  14,15
-         LE    0,C00086
-         STE   0,P00043+0
-         XC    P00043+4(4),P00043+4
-         LA    1,P00043
-         L     15,C00059
-         BALR  14,15
-         STE   0,S00000+232
-         LE    0,S00000+232
-         STE   0,P00043+0
-         LA    1,P00043
-         L     15,C00087
+         L     15,C00088
          BALR  14,15
          L     15,C00049
          BALR  14,15
@@ -581,13 +553,13 @@ L00028   DS    0H
          STE   0,P00043+0
          XC    P00043+4(4),P00043+4
          LA    1,P00043
-         L     15,C00053
+         L     15,C00090
          BALR  14,15
          STE   0,S00000+232
          LE    0,S00000+232
          STE   0,P00043+0
          LA    1,P00043
-         L     15,C00087
+         L     15,C00088
          BALR  14,15
          L     15,C00049
          BALR  14,15
@@ -598,7 +570,7 @@ L00028   DS    0H
          LA    1,P00043
          L     15,C00045
          BALR  14,15
-         L     0,C00090
+         L     0,C00091
          ST    0,P00043+0
          LA    0,4
          ST    0,P00043+4
@@ -608,17 +580,45 @@ L00028   DS    0H
          LE    0,C00086
          STE   0,P00043+0
          XC    P00043+4(4),P00043+4
-         LE    0,C00091
-         STE   0,P00043+8
-         XC    P00043+12(4),P00043+12
          LA    1,P00043
-         L     15,C00077
+         L     15,C00092
          BALR  14,15
          STE   0,S00000+232
          LE    0,S00000+232
          STE   0,P00043+0
          LA    1,P00043
-         L     15,C00087
+         L     15,C00088
+         BALR  14,15
+         L     15,C00049
+         BALR  14,15
+         LA    0,6
+         ST    0,P00043+0
+         L     0,C00084
+         ST    0,P00043+4
+         LA    1,P00043
+         L     15,C00045
+         BALR  14,15
+         L     0,C00093
+         ST    0,P00043+0
+         LA    0,4
+         ST    0,P00043+4
+         LA    1,P00043
+         L     15,C00047
+         BALR  14,15
+         LE    0,C00086
+         STE   0,P00043+0
+         XC    P00043+4(4),P00043+4
+         LE    0,C00094
+         STE   0,P00043+8
+         XC    P00043+12(4),P00043+12
+         LA    1,P00043
+         L     15,C00095
+         BALR  14,15
+         STE   0,S00000+232
+         LE    0,S00000+232
+         STE   0,P00043+0
+         LA    1,P00043
+         L     15,C00088
          BALR  14,15
          L     15,C00049
          BALR  14,15
@@ -627,7 +627,7 @@ L00031   DS    0H
          LA    0,0
          ST    0,P00043+0
          LA    1,P00043
-         L     15,C00092
+         L     15,C00096
          BALR  14,15
          B     L00033
 L00032   DS    0H
@@ -667,45 +667,49 @@ C00047   DC    V(F77WRA)
 C00048   DC    V(F77WRD)
 C00049   DC    V(F77WREND)
 C00050   DC    A(Q00003)
-C00051   DC    V(SQRT)
+C00051   DC    V(DSQRT)
 C00052   DC    A(Q00004)
-C00053   DC    V(EXP)
+C00053   DC    V(DEXP)
 C00054   DC    A(Q00005)
-C00055   DC    V(LOG)
+C00055   DC    V(DLOG)
 C00056   DC    A(Q00006)
-C00057   DC    V(LOG10)
+C00057   DC    V(DLOG10)
 C00058   DC    A(Q00007)
-C00059   DC    V(SIN)
+C00059   DC    V(DSIN)
 C00060   DC    A(Q00008)
-C00061   DC    V(COS)
+C00061   DC    V(DCOS)
 C00062   DC    A(Q00009)
-C00063   DC    V(TAN)
+C00063   DC    V(DTAN)
 C00064   DC    A(Q00010)
-C00065   DC    V(ATAN)
+C00065   DC    V(DATAN)
 C00066   DC    A(Q00011)
-C00068   DC    V(ATAN2)
+C00068   DC    V(DATAN2)
 C00069   DC    A(Q00012)
-C00070   DC    V(SINH)
+C00070   DC    V(DSINH)
 C00071   DC    A(Q00013)
-C00072   DC    V(COSH)
+C00072   DC    V(DCOSH)
 C00073   DC    A(Q00014)
-C00074   DC    V(TANH)
+C00074   DC    V(DTANH)
 C00075   DC    A(Q00015)
-C00077   DC    V(POW)
+C00077   DC    V(DPOW)
 C00078   DC    A(Q00016)
-C00079   DC    V(ASIN)
+C00079   DC    V(DASIN)
 C00080   DC    A(Q00017)
-C00081   DC    V(ACOS)
+C00081   DC    V(DACOS)
 C00082   DC    A(Q00018)
 C00084   DC    A(Q00019)
 C00085   DC    A(Q00020)
 C00086   DC    X'41200000'
-C00087   DC    V(F77WRR)
-C00088   DC    A(Q00021)
-C00089   DC    A(Q00022)
-C00090   DC    A(Q00023)
-C00091   DC    X'40800000'
-C00092   DC    V(EXIT)
+C00087   DC    V(SQRT)
+C00088   DC    V(F77WRR)
+C00089   DC    A(Q00021)
+C00090   DC    V(SIN)
+C00091   DC    A(Q00022)
+C00092   DC    V(EXP)
+C00093   DC    A(Q00023)
+C00094   DC    X'40800000'
+C00095   DC    V(POW)
+C00096   DC    V(EXIT)
 Q00001   DC    C'('' >'',A6,D25.17)'
 Q00019   DC    C'('' >'',A6,E16.8)'
 Q00002   DC    C'X'

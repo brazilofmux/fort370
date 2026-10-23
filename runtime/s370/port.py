@@ -56,6 +56,8 @@ h = ['/* f77rt.h -- the runtime\'s entry points, each with the eight-character',
      '#ifndef F77RT_H', '#define F77RT_H', '']
 for ty, name, args in protos:
     h.append('%s %s(%s) __asm__("%s");' % (ty, name, args, extname(name)))
+h += ['', '/* the mathematical functions: the runtime\'s own calls go to the cores */',
+      '#include "f77m.h"']
 h += ['', '/* the compiler\'s names for AINT/ANINT and their DOUBLE PRECISION forms */',
       'double f77_dint(double) __asm__("F77DINT");',
       'double f77_dnint(double) __asm__("F77DNINT");',
@@ -838,6 +840,36 @@ rep('''static int fio_nml_width(int unit) {
     if ((f->recfm & _FILE_RECFM_TYPE) == _FILE_RECFM_V) n = n - 4;
     return n > 0 ? n : 133;
 }''')
+# FORTLIB's FIXPI, FRXPI and FDXPI: a zero base with an exponent not
+# positive is an error, reported, and zero (f77err.c)
+rep('''int f77_ipow(int a, int n) {
+    int r;
+''', '''int f77e_ipow0(int n) __asm__("F77EIP0");
+int f77_ipow(int a, int n) {
+    int r;
+    if (a == 0 && n <= 0) return f77e_ipow0(n);
+''')
+rep('''double f77_dpow_i(double a, int n) {
+    unsigned int m;
+    int big = 0;
+    double r;
+''', '''double f77e_xpow0(int n, int dbl) __asm__("F77EXP0");
+double f77_dpow_i(double a, int n) {
+    unsigned int m;
+    int big = 0;
+    double r;
+    if (a == 0.0 && n <= 0) return f77e_xpow0(n, 1);
+''')
+rep('''float f77_rpow_i(float a, int n) {
+    unsigned int m;
+    int big = 0;
+    float r;
+''', '''float f77_rpow_i(float a, int n) {
+    unsigned int m;
+    int big = 0;
+    float r;
+    if (a == 0.0f && n <= 0) return (float)f77e_xpow0(n, 0);
+''')
 dint = cut('double f77_dint(double v) {', '#define trunc fio_trunc')
 chars = cut('/* --- CHARACTER primitives', 'void f77_wr_l(int v) {')
 powi = cut('/* --- ** with an INTEGER exponent', '/* --- OPEN / CLOSE / REWIND')
@@ -846,6 +878,17 @@ gen('f77misc.c', 'the CHARACTER primitives, ** with an INTEGER\n * exponent, DIN
     '#include <stdio.h>\n#include <string.h>\n#include <stdlib.h>\n#include <math.h>\n#include "f77rt.h"\n\n'
     + TRUNC + dint + '\n' + chars + powi)
 intr = cut('/* --- COMPLEX primitives', 'void f77_wr_l(int v) {')   # where the CHARACTER primitives were
+# an intrinsic passed as an argument is the function the program would
+# have called, FORTLIB's checks and all: SQRT's shim calls SQRT, DSQRT's
+# DSQRT (f77m.h); the complex functions' own calls stay with the cores
+LIBM = r'\b(sqrt|exp|log10|log|sin|cos|tan|atan2|atan|asin|acos|sinh|cosh|tanh|pow)\('
+def shim_entry(line):
+    if line.startswith('float  f77i_') or line.startswith('float f77i_'):
+        return re.sub(LIBM, r'f77f_\1(', line)
+    if line.startswith('double f77i_'):
+        return re.sub(LIBM, r'f77f_d\1(', line)
+    return line
+intr = '\n'.join(shim_entry(l) for l in intr.split('\n'))
 # whole top-level pieces: a definition with the comment above it
 pieces = re.split(r'(?m)^(?=/\* |[a-z][^\n;]*\bf77i?_\w+\([^;]*\{)', intr)
 helpers = [p for p in pieces if p.startswith('static ')]

@@ -112,8 +112,10 @@ int f77_index(const char *a, int la, const char *b, int lb) {
  * negative INTEGER exponent follows F77 integer division: 1/I**n,
  * which is 0 for |I| > 1.  Real bases take the reciprocal at the end
  * (one rounding, like powi). */
+int f77e_ipow0(int n) __asm__("F77EIP0");
 int f77_ipow(int a, int n) {
     int r;
+    if (a == 0 && n <= 0) return f77e_ipow0(n);
     if (n < 0) {
         if (a == 1) return 1;
         if (a == -1) return (n & 1) ? -1 : 1;
@@ -174,10 +176,12 @@ static float fio_rpow_u(float a, unsigned int m, int *big) {
 /* A negative exponent is 1/a**-n; when a**-n is too large to hold but
  * its reciprocal is not too small (16.0**(-65), the smallest HFP
  * number), it is (1/a)**-n instead. */
+double f77e_xpow0(int n, int dbl) __asm__("F77EXP0");
 double f77_dpow_i(double a, int n) {
     unsigned int m;
     int big = 0;
     double r;
+    if (a == 0.0 && n <= 0) return f77e_xpow0(n, 1);
     if (n >= 0) return fio_dpow_u(a, (unsigned int)n, 0);
     m = (unsigned int)0 - (unsigned int)n;
     r = fio_dpow_u(a, m, &big);
@@ -188,6 +192,7 @@ float f77_rpow_i(float a, int n) {
     unsigned int m;
     int big = 0;
     float r;
+    if (a == 0.0f && n <= 0) return (float)f77e_xpow0(n, 0);
     if (n >= 0) return fio_rpow_u(a, (unsigned int)n, 0);
     m = (unsigned int)0 - (unsigned int)n;
     r = fio_rpow_u(a, m, &big);

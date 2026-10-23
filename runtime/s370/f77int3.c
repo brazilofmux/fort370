@@ -18,19 +18,19 @@ static double fio_zmod(double re, double im) {
     return a * sqrt(1.0 + t * t);
 }
 
-float  f77i_cos(float *x)             { return (float)cos((double)*x); }
-double f77i_dcos(double *x)           { return cos(*x); }
-float  f77i_tan(float *x)             { return (float)tan((double)*x); }
-double f77i_dtan(double *x)           { return tan(*x); }
-float  f77i_asin(float *x)            { return (float)asin((double)*x); }
-double f77i_dasin(double *x)          { return asin(*x); }
-float  f77i_acos(float *x)            { return (float)acos((double)*x); }
-double f77i_dacos(double *x)          { return acos(*x); }
-float  f77i_arsin(float *x)           { return (float)asin((double)*x); }   /* IBM's names */
-double f77i_darsin(double *x)         { return asin(*x); }
-float  f77i_arcos(float *x)           { return (float)acos((double)*x); }
-double f77i_darcos(double *x)         { return acos(*x); }
-float  f77i_atan(float *x)            { return (float)atan((double)*x); }
-double f77i_datan(double *x)          { return atan(*x); }
-float  f77i_atan2(float *y, float *x) { return (float)atan2((double)*y, (double)*x); }
-double f77i_datan2(double *y, double *x) { return atan2(*y, *x); }
+float  f77i_cos(float *x)             { return (float)f77f_cos((double)*x); }
+double f77i_dcos(double *x)           { return f77f_dcos(*x); }
+float  f77i_tan(float *x)             { return (float)f77f_tan((double)*x); }
+double f77i_dtan(double *x)           { return f77f_dtan(*x); }
+float  f77i_asin(float *x)            { return (float)f77f_asin((double)*x); }
+double f77i_dasin(double *x)          { return f77f_dasin(*x); }
+float  f77i_acos(float *x)            { return (float)f77f_acos((double)*x); }
+double f77i_dacos(double *x)          { return f77f_dacos(*x); }
+float  f77i_arsin(float *x)           { return (float)f77f_asin((double)*x); }   /* IBM's names */
+double f77i_darsin(double *x)         { return f77f_dasin(*x); }
+float  f77i_arcos(float *x)           { return (float)f77f_acos((double)*x); }
+double f77i_darcos(double *x)         { return f77f_dacos(*x); }
+float  f77i_atan(float *x)            { return (float)f77f_atan((double)*x); }
+double f77i_datan(double *x)          { return f77f_datan(*x); }
+float  f77i_atan2(float *y, float *x) { return (float)f77f_atan2((double)*y, (double)*x); }
+double f77i_datan2(double *y, double *x) { return f77f_datan2(*y, *x); }

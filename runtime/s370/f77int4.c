@@ -18,12 +18,12 @@ static double fio_zmod(double re, double im) {
     return a * sqrt(1.0 + t * t);
 }
 
-float  f77i_sinh(float *x)            { return (float)sinh((double)*x); }
-double f77i_dsinh(double *x)          { return sinh(*x); }
-float  f77i_cosh(float *x)            { return (float)cosh((double)*x); }
-double f77i_dcosh(double *x)          { return cosh(*x); }
-float  f77i_tanh(float *x)            { return (float)tanh((double)*x); }
-double f77i_dtanh(double *x)          { return tanh(*x); }
+float  f77i_sinh(float *x)            { return (float)f77f_sinh((double)*x); }
+double f77i_dsinh(double *x)          { return f77f_dsinh(*x); }
+float  f77i_cosh(float *x)            { return (float)f77f_cosh((double)*x); }
+double f77i_dcosh(double *x)          { return f77f_dcosh(*x); }
+float  f77i_tanh(float *x)            { return (float)f77f_tanh((double)*x); }
+double f77i_dtanh(double *x)          { return f77f_dtanh(*x); }
 float  f77i_aint(float *x)            { return (float)trunc((double)*x); }
 double f77i_dint(double *x)           { return trunc(*x); }
 float  f77i_anint(float *x)           { return (float)round((double)*x); }

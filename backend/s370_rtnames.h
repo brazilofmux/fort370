@@ -75,12 +75,15 @@ static char *s370_rt_map[] = {
     "f77_lstrcmp",      "F77LSTRC",
     "f77_cat",          "F77CAT",
     "f77_index",        "F77INDEX",
-    /* the libm names the front end emits, to libc370's; a REAL
-     * argument is widened to DOUBLE PRECISION for these */
-    "sqrt", "SQRT", "sin", "SIN", "cos", "COS", "tan", "TAN",
-    "asin", "ASIN", "acos", "ACOS", "atan", "ATAN", "atan2", "ATAN2",
-    "exp", "EXP", "log", "LOG", "log10", "LOG10", "sinh", "SINH", "cosh", "COSH",
-    "tanh", "TANH", "pow", "POW",
+    /* the libm names the front end emits, to the runtime's entries
+     * (runtime/s370/f77m.h): FORTLIB's checks of the argument and its
+     * messages are REAL's or DOUBLE PRECISION's, so the two have their
+     * own names, FORTLIB's mostly; a REAL argument is widened to DOUBLE
+     * PRECISION for these */
+    "sqrt", "DSQRT", "sin", "DSIN", "cos", "DCOS", "tan", "DTAN",
+    "asin", "DASIN", "acos", "DACOS", "atan", "DATAN", "atan2", "DATAN2",
+    "exp", "DEXP", "log", "DLOG", "log10", "DLOG10", "sinh", "DSINH", "cosh", "DCOSH",
+    "tanh", "DTANH", "pow", "DPOW",
     "sqrtf", "SQRT", "sinf", "SIN", "cosf", "COS", "tanf", "TAN",
     "asinf", "ASIN", "acosf", "ACOS", "atanf", "ATAN", "atan2f", "ATAN2",
     "expf", "EXP", "logf", "LOG", "log10f", "LOG10", "sinhf", "SINH", "coshf", "COSH",

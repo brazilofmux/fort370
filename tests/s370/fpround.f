@@ -2,8 +2,9 @@ C     ** The floating-point repairs of 2026-10-15, self-checking: DSQRT
 C     correctly rounded (the root of 2 is 4116A09E667F3BCD, its digits
 C     after ...CC being 908B...); SIN and COS of arguments past 2**20,
 C     where the reduction by pi/2 takes the bits of 2/pi (it abended
-C     with S0CC at 1E20); ATAN2 and ** where a quotient or a product
-C     would overflow; IBM's ARSIN and DARCOS; and a constant read from
+C     with S0CC at 1E20, which is now past FORTLIB's PI*2**50 and its
+C     error, tests/s370/mathchk.f); ATAN2 and ** where a quotient or a
+C     product would overflow; IBM's ARSIN and DARCOS; and a constant read from
 C     a record the same number as the one in the source, both rounded
 C     (REAL READ rounded and the constant truncated, before).  Success
 C     prints >FPROUND and the checks passed and reaches STOP 0.
@@ -17,16 +18,16 @@ C     prints >FPROUND and the checks passed and reaches STOP 0.
       D = DSQRT(2.D0)
       IF (ID(1) .NE. 1092001950 .OR. ID(2) .NE. 1719614413) STOP 1
       NOK = NOK + 1
-      E = 1.D20
-      IF (DABS(DSIN(E) + 0.6452512852657808D0) .GT. 1.D-15) STOP 2
-      IF (DABS(DCOS(E) - 0.7639704044417283D0) .GT. 1.D-15) STOP 3
+      E = 1.D15
+      IF (DABS(DSIN(E) - 0.8582727931702358D0) .GT. 1.D-15) STOP 2
+      IF (DABS(DCOS(E) + 0.5131937377869703D0) .GT. 1.D-15) STOP 3
       E = 3.D6
       IF (DABS(DCOS(E) - 0.4777606280773224D0) .GT. 1.D-15) STOP 4
       NOK = NOK + 3
       E = 1.D70
       IF (DABS(DATAN2(E, 1.D-10) - PI / 2.D0) .GT. 1.D-15) STOP 5
       IF (2.D0 ** E .LT. 1.D75) STOP 6
-      IF ((-2.D0) ** 3.D0 + 8.D0 .GT. 1.D-14) STOP 7
+      IF (DABS(2.D0 ** 3.D0 - 8.D0) .GT. 1.D-14) STOP 7
       NOK = NOK + 3
       X = 0.5
       IF (ABS(ARSIN(X) - 0.5235988) .GT. 1.E-6) STOP 8

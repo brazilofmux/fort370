@@ -27,5 +27,5 @@ double f77i_dprod(float *a, float *b) { return (double)*a * (double)*b; }
 int    f77i_len(const char *s, int len) { (void)s; return len; }
 int    f77i_index(const char *a, const char *b, int la, int lb) { return f77_index(a, la, b, lb); }
 float  f77i_aimag(float *z)           { return z[1]; }
-float  f77i_cabs(float *z)            { return (float)sqrt((double)z[0] * z[0] + (double)z[1] * z[1]); }
+float  f77i_cabs(float *z)            { return (float)f77f_sqrt((double)z[0] * z[0] + (double)z[1] * z[1]); }
 

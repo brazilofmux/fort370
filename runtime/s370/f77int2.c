@@ -37,13 +37,13 @@ int f77_index(const char *a, int la, const char *b, int lb);
 int    f77i_iabs(int *x)              { return *x < 0 ? -*x : *x; }
 float  f77i_abs(float *x)             { return *x < 0 ? -*x : *x; }
 double f77i_dabs(double *x)           { return *x < 0 ? -*x : *x; }
-float  f77i_sqrt(float *x)            { return (float)sqrt((double)*x); }
-double f77i_dsqrt(double *x)          { return sqrt(*x); }
-float  f77i_exp(float *x)             { return (float)exp((double)*x); }
-double f77i_dexp(double *x)           { return exp(*x); }
-float  f77i_alog(float *x)            { return (float)log((double)*x); }
-double f77i_dlog(double *x)           { return log(*x); }
-float  f77i_alog10(float *x)          { return (float)log10((double)*x); }
-double f77i_dlog10(double *x)         { return log10(*x); }
-float  f77i_sin(float *x)             { return (float)sin((double)*x); }
-double f77i_dsin(double *x)           { return sin(*x); }
+float  f77i_sqrt(float *x)            { return (float)f77f_sqrt((double)*x); }
+double f77i_dsqrt(double *x)          { return f77f_dsqrt(*x); }
+float  f77i_exp(float *x)             { return (float)f77f_exp((double)*x); }
+double f77i_dexp(double *x)           { return f77f_dexp(*x); }
+float  f77i_alog(float *x)            { return (float)f77f_log((double)*x); }
+double f77i_dlog(double *x)           { return f77f_dlog(*x); }
+float  f77i_alog10(float *x)          { return (float)f77f_log10((double)*x); }
+double f77i_dlog10(double *x)         { return f77f_dlog10(*x); }
+float  f77i_sin(float *x)             { return (float)f77f_sin((double)*x); }
+double f77i_dsin(double *x)           { return f77f_dsin(*x); }
