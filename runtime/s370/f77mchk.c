@@ -4,7 +4,8 @@
  * message gives the argument as E14.7, the DOUBLE PRECISION one's as
  * D23.16, and some give its hexadecimal too.  r is 1 for REAL.
  *
- * Two of the conditions are measured, not documented: TAN's singularity
+ * Three of the conditions are measured, not documented: SIN's, COS's
+ * and TAN's largest argument (M_PI_2_18 below); and TAN's singularity
  * is an argument within 7.9E-6 (REAL) or 2**-49 (DOUBLE PRECISION) of
  * an odd multiple of pi/2, in units of pi/4 -- H flagged every argument
  * at 7.69E-6 or less and none at 8.10E-6 or more, and in DOUBLE
@@ -26,10 +27,21 @@ typedef union { double d; unsigned int w[2]; } Hfp;
  * one would round up into an overflow. */
 static double m_huge(int r) { Hfp u; u.w[0] = 0x7FFFFFFFu; u.w[1] = r ? 0 : 0xFFFFFFFFu; return u.d; }
 #define HUGE m_huge(r)
-#define M_PI_2_18 823549.6644696414      /* pi * 2**18 */
-#define M_PI_2_50 3537118876014220.0     /* pi * 2**50, near enough */
-/* SIN's fixup, SQRT(2)/2, from its digits */
-static double m_sqrt_half(void) { Hfp u; u.w[0] = 0x40B504F3u; u.w[1] = 0x33F9DE65u; return u.d; }
+/* "GE PI*2**18" and "GE PI*2**50", as FORTLIB tests them: REAL's pi
+ * 2**18 cut to short, X'45C90FDA'; DOUBLE PRECISION's the same first
+ * word, X'4DC90FDA', and any second -- 1.7E8 below pi 2**50 (measured
+ * on TK5 with SIN, TAN, DSIN and DTAN, 2026-10-24) */
+#define M_PI_2_18 823549.625
+#define M_PI_2_50 3537118706008064.0
+/* "GT 174.673" and "GE 175.366", as FORTLIB tests them: EXP's X'42AEAC50'
+ * and DEXP's X'42AEAC4F00000000', where the result would overflow, near
+ * enough; SINH's and COSH's X'42AF5DC1', DSINH's and DCOSH's the same in
+ * its first word (measured on TK5, 2026-10-24) */
+#define M_EXP_BIG(r) ((r) ? 174.673095703125 : 174.6730804443359375)
+#define M_HYP_BIG 175.3662261962890625
+/* SIN's fixup, SQRT(2)/2, as FORTLIB's: DSIN's and DCOS's X'40B504F333F9DE70',
+ * 11 units above the nearest, and SIN's and COS's that cut to short */
+static double m_sqrt_half(void) { Hfp u; u.w[0] = 0x40B504F3u; u.w[1] = 0x33F9DE70u; return u.d; }
 #define M_SQRT_HALF m_sqrt_half()
 
 static char m_text[160];
@@ -58,7 +70,7 @@ static void m_exp_big(double x, int r) {
 }
 
 double f77c_exp(double x, int r) {
-    if (x > 174.673) { m_exp_big(x, r); return HUGE; }
+    if (x >= M_EXP_BIG(r)) { m_exp_big(x, r); return HUGE; }
     return f77m_exp(x);
 }
 
@@ -139,7 +151,7 @@ double f77c_acos(double x, int r) { return m_arc_bad(x, r) ? 0.0 : f77m_acos(x);
 /* SINH of a large argument of either sign, as COSH, is the largest
  * positive number. */
 static int m_hyp_big(double x, int r) {
-    if (x > -175.366 && x < 175.366) return 0;
+    if (x > -M_HYP_BIG && x < M_HYP_BIG) return 0;
     sprintf(m_text, "%s /ARG/=/%s/, GE 175.366", r ? "SINH-COSH" : "DSINH-DCOSH", f77e_num(m_num, x, r));
     f77e_say(r ? 256 : 266, m_text);
     return 1;
@@ -171,10 +183,12 @@ double f77c_pow(double x, double y, int r) {
     if (lx != 0.0 && (y > 0.0) == (lx > 0.0)) {
         double ay = y < 0.0 ? -y : y;
         double al = lx < 0.0 ? -lx : lx;
-        if (ay > 174.673 / al) {
+        if (ay >= M_EXP_BIG(r) / al) {
             t = ay <= 7.0e75 / al ? ay * al : HUGE;
-            m_exp_big(t, r);
-            return HUGE;
+            if (t >= M_EXP_BIG(r)) {
+                m_exp_big(t, r);
+                return HUGE;
+            }
         }
     }
     return f77m_pow(x, y);

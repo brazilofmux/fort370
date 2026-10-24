@@ -287,7 +287,9 @@ static int m_exp_terms(Sum *t, double x, int sc, double xl) {
 double f77m_exp(double x) __asm__("M@EXP");
 double f77m_exp(double x) {
     Sum t;
-    if (x > 174.6) return HFP_HUGE;
+    /* up to ln of the largest number, 174.67309; past it the frame's
+     * 16^q takes the result to the largest number (m_hex) */
+    if (x > 175.0) return HFP_HUGE;
     if (x < -180.2) return 0.0;
     t.n = 0;
     t.q = 0;
@@ -1027,7 +1029,7 @@ double f77m_sinh(double x) {
     double a;
     double r;
     a = m_fabs(x);
-    if (a > 174.0) return x < 0.0 ? -HFP_HUGE : HFP_HUGE;
+    if (a > 176.0) return x < 0.0 ? -HFP_HUGE : HFP_HUGE;   /* up to 175.366, as COSH */
     if (a < 0.125) {
         /* the series, to x^13: the exponentials would cancel */
         Sum t;
@@ -1054,7 +1056,7 @@ double f77m_cosh(double x) __asm__("M@COSH");
 double f77m_cosh(double x) {
     double a;
     a = m_fabs(x);
-    if (a > 174.0) return HFP_HUGE;
+    if (a > 176.0) return HFP_HUGE;   /* m_hyp's frame takes it there from 175.366 */
     return m_hyp(a, 1.0, 0);
 }
 
@@ -1157,7 +1159,7 @@ double f77m_pow(double x, double y) {
         SUM_MUL(&t, y, lh, 0);
         SUM_MUL(&t, y, ll, 0);
         xh = sum_round(&t, &xl);
-        if (xh > 174.6) r = HFP_HUGE;
+        if (xh > 175.0) r = HFP_HUGE;
         else if (xh < -180.2) r = 0.0;
         else {
             t.n = 0;
