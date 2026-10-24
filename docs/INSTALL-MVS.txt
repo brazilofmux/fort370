@@ -118,6 +118,11 @@ Or, without RECEIVE, IEBUPDTE makes the same library of F77RT.upd:
   units, columns 1-72 (73-80 are ignored).  It may be a data set or
   DD * -- the compiler reads it as libc370's standard input.
 
+  SYSLIB, a PDS, is needed only by a source with INCLUDE: INCLUDE
+  'name' reads its member NAME (see the language, below).  F77CLG has
+  none; add //FORT.SYSLIB DD DSN=your.INCLUDE.PDS,DISP=SHR after the
+  EXEC F77CLG.
+
   SYSUT1 is a work data set.  The compiler reads the source twice,
   once to find its program units and once to compile each, holding
   one unit at a time rather than the file; SYSIN can be read only
@@ -131,8 +136,9 @@ Or, without RECEIVE, IEBUPDTE makes the same library of F77RT.upd:
   and one per COMMON block.  Feed it to IFOX00 with PARM='OBJ,NODECK'
   -- without OBJ it assembles cleanly and produces nothing.
 
-  Errors go to SYSTERM with the line number and the statement, and the
-  step ends with return code 1; SYSPUNCH is then incomplete.
+  Errors go to SYSTERM with the line number and the statement (in an
+  included text, the member's name and its own line), and the step
+  ends with return code 1; SYSPUNCH is then incomplete.
 
 
 4.  Link and run a program
@@ -260,7 +266,16 @@ constants in DATA, Z'1F' and O'17', and H's hexadecimal ones, Z1F,
 right-justified in the item whatever its type (DATA X /Z41100000/ is
 1.0), zeros on the left, the leftmost digits of a constant too long
 for the item lost, as in H.  Among a DATA statement's values, ZFF is
-that constant unless a PARAMETER has the name.
+that constant unless a PARAMETER has the name.  And MIL-STD-1753's
+INCLUDE, written INCLUDE 'name', INCLUDE (name) or INCLUDE name alone
+on its line, which copies the text it names into the source there: on
+MVS the member NAME of the PDS on the compile step's SYSLIB, the
+name's directory and extension dropped and its letters made capitals
+(INCLUDE 'common.inc' is member COMMON), so a source and its texts
+written on a host move to MVS unchanged; on a host the file, beside
+the source or in the current directory, as written or in lower case,
+with or without .f, .for or .inc.  An included text may include
+another, but not one it is being read from.
 
 Zw editing is H's, of any type but CHARACTER: output is the item's
 bytes in hexadecimal, leading zeros kept, blanks on the left of a

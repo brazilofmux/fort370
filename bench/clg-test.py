@@ -6,8 +6,11 @@ F77RT, the program runs; no host in the loop but to submit the job.
   1. install: FORT370.xmit RECEIVEd into HERC01.FORT370.LOAD, and
      F77RT.xmit into the library HERC01.FORT370.F77RT (both through
      HEXIN); with --upd, F77RT.upd made into it by IEBUPDTE instead;
-  2. one job: jcl/F77CLG.jcl as an instream procedure, one invocation
-     per program, its source DD * on the compile step, scratch DDs
+  2. one job: the texts tests/s370/*.inc made by IEBUPDTE into the PDS
+     HERC01.FORT370.INCL, a member each (INCONE for incone.inc), for
+     INCLUDE; jcl/F77CLG.jcl as an instream procedure, one invocation
+     per program, its source DD * on the compile step and SYSLIB that
+     PDS, scratch DDs
      FT01F001-FT04F001 and FT07F001-FT30F001 on the GO step (VB/260),
      and FT31F001 (FB/80, card images);
   3. print each program's lines that begin with ">" (the convention of
@@ -15,7 +18,7 @@ F77RT, the program runs; no host in the loop but to submit the job.
 
 Run from the repository root after `make mvs`; the guest arrangement is
 bench/ship.py's.  --no-install skips step 1."""
-import os, re, sys
+import glob, os, re, sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import ship
 
@@ -85,6 +88,19 @@ def main():
     proc = open(os.path.join(REPO, 'jcl', 'F77CLG.jcl')).read()
     proc = proc[:proc.index('//         PEND')] + '//         PEND\n'
     jcl = JOBCARD + proc
+    jcl += ("//INCD     EXEC PGM=IEFBR14\n"
+            "//DD1      DD DSN=HERC01.FORT370.INCL,DISP=(MOD,DELETE),\n"
+            "//            SPACE=(TRK,(1)),UNIT=SYSDA\n"
+            "//INCL     EXEC PGM=IEBUPDTE,PARM=NEW\n"
+            "//SYSPRINT DD SYSOUT=Z\n"
+            "//SYSUT2   DD DSN=HERC01.FORT370.INCL,DISP=(NEW,CATLG),UNIT=SYSDA,\n"
+            "//            SPACE=(TRK,(5,5,5)),DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)\n"
+            "//SYSIN    DD *\n")
+    for f in sorted(glob.glob(os.path.join(REPO, 'tests', 's370', '*.inc'))):
+        jcl += f"./ ADD NAME={os.path.basename(f).split('.')[0].upper()}\n"
+        for l in open(f).read().expandtabs(8).split('\n'):
+            if l.strip(): jcl += l.rstrip()[:80] + '\n'
+    jcl += "./ ENDUP\n/*\n"
     names = []
     for k, f in enumerate(args):
         step = f'P{k}'
@@ -92,7 +108,7 @@ def main():
         jcl += f"//{step:<8} EXEC F77CLG\n//FORT.SYSIN DD *\n"
         for l in open(f).read().expandtabs(8).split('\n'):
             if l.strip(): jcl += l.rstrip()[:80] + '\n'
-        jcl += "/*\n"
+        jcl += "/*\n//FORT.SYSLIB DD DSN=HERC01.FORT370.INCL,DISP=SHR\n"
         for u in list(range(1, 5)) + list(range(7, 31)):
             jcl += (f"//GO.FT{u:02d}F001 DD UNIT=SYSDA,SPACE=(TRK,(10,10)),DISP=(NEW,DELETE),\n"
                     f"//            DCB=(RECFM=VB,LRECL=260,BLKSIZE=2604)\n")

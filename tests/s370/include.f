@@ -1,0 +1,29 @@
+C     INCLUDE -- MIL-STD-1753'S INCLUDE, IN ITS THREE FORMS: 'NAME',
+C     (NAME) AND NAME.  INCONE.INC HOLDS A COMMON BLOCK AND INCLUDES
+C     INCTWO.INC, A PARAMETER; BOTH UNITS INCLUDE THEM.  ON MVS THE TEXTS
+C     ARE MEMBERS INCONE AND INCTWO OF THE PDS ON THE FORT STEP'S SYSLIB.
+C     EXPECTED:
+C     >N   41   42
+C     >S   41   42   40
+C     >F   83
+      INCLUDE 'incone.inc'
+      N = NMAX + 1
+      M = N + 1
+      WRITE (6,1) N, M
+    1 FORMAT(' >N ', 2I5)
+      CALL SUB
+      WRITE (6,2) NF(1)
+    2 FORMAT(' >F ', I5)
+      STOP
+      END
+      SUBROUTINE SUB
+      INCLUDE (INCONE)
+      WRITE (6,1) N, M, NMAX
+    1 FORMAT(' >S ', 3I5)
+      RETURN
+      END
+      INTEGER FUNCTION NF(I)
+      INCLUDE INCONE
+      NF = N + M + I - 1
+      RETURN
+      END

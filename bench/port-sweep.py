@@ -123,10 +123,18 @@ def main():
         open(os.path.join(WORK, 'src', m), 'w').write(
             '\n'.join(l.rstrip()[:80] for l in text.split('\n')).rstrip('\n') + '\n')
         sh(f77, f, os.path.join(WORK, 'ref', m + '.asm'))
+    # INCLUDE's texts: members of the same PDS, the compile steps' SYSLIB
+    incs = []
+    for f in sorted(glob.glob(os.path.join(REPO, 'tests', 's370', '*.inc'))):
+        m = os.path.basename(f).split('.')[0].upper()
+        incs.append(m)
+        text = open(f, encoding='latin-1').read().expandtabs(8)
+        open(os.path.join(WORK, 'src', m), 'w').write(
+            '\n'.join(l.rstrip()[:80] for l in text.split('\n')).rstrip('\n') + '\n')
     print(f'{len(progs)} programs staged and compiled on the host')
     if setup:
         for f in glob.glob(os.path.join(WORK, 'src', '*')):
-            if os.path.basename(f) not in [p[0] for p in progs]: os.remove(f)
+            if os.path.basename(f) not in [p[0] for p in progs] + incs: os.remove(f)
         srcx = os.path.join(WORK, 'SRC.xmit')
         sh('xmit370', 'create', '-o', srcx, '--dsn', 'HERC01.FORT370.SRC',
            '--stats-date', '2026-01-01', os.path.join(WORK, 'src'))
@@ -158,6 +166,7 @@ def main():
                     f"//SYSTERM  DD SYSOUT=Z\n"
                     f"//SYSUDUMP DD DUMMY\n"
                     f"//SYSIN    DD DSN=HERC01.FORT370.SRC({m}),DISP=SHR\n"
+                    f"//SYSLIB   DD DSN=HERC01.FORT370.SRC,DISP=SHR\n"
                     f"//SYSPUNCH DD DSN=HERC01.FORT370.ASM({m}),DISP=SHR\n"
                     + ("//SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))\n" if sysut1 else ""))
         jcl += ("//PRT      EXEC PGM=IEBPTPCH,REGION=2048K,COND=EVEN\n"

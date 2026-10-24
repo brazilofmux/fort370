@@ -79,6 +79,269 @@ static FILE *(*lx_reopen)(void);
 #define LX_CAP0 65536                    /* the window's first allocation */
 #endif
 
+/* --- INCLUDE (MIL-STD-1753 2.3) -------------------------------------
+ *
+ * INCLUDE 'name', INCLUDE (name) or INCLUDE name, alone on its line,
+ * copies the named text into the source in its place.  It is done where
+ * the source is read, below the card reader: a line that is an INCLUDE
+ * becomes a comment, and the text it names follows it, so both readings
+ * of the source (the unit scan, then each unit's compilation) see one
+ * stream, its offsets and lines the same.  On MVS the scan's copy in
+ * SYSUT1 is that stream, read back as it is.  The name is a member of
+ * the PDS on the DD SYSLIB (its directory and extension dropped, so
+ * INCLUDE 'common.inc' is member COMMON); on a host, a file beside the
+ * source, then in the current directory, as written or in lower case,
+ * with or without .f, .for or .inc.  An included text may INCLUDE
+ * another, but not one it is being read from.
+ *
+ * Messages name an included text's own lines (lx_where): lx_seg says
+ * where in the stream each piece of a file begins. */
+static int lx_isdigit(int c);
+static int lx_isalpha(int c);
+static int lx_upper(int c);
+#define LX_INC_DEPTH 8
+#define LX_INC_LINE  4096
+static FILE *lx_inc_fp[LX_INC_DEPTH];        /* [0] is the source itself */
+static char  lx_inc_nm[LX_INC_DEPTH][64];
+static int   lx_inc_line[LX_INC_DEPTH];      /* lines read from each */
+static int   lx_inc_n;                       /* files open, 0 before the first read */
+static char  lx_ibuf[LX_INC_LINE + 80];      /* the line being passed on */
+static int   lx_ipos;
+static int   lx_ilen;
+static int   lx_ixline;                      /* lines of the stream so far */
+static int   lx_inc_record = 1;              /* the first reading: note the pieces */
+static const char *lx_inname;                /* the source's file name (host) */
+#define LX_MAX_SEG 512
+static int   lx_seg_x[LX_MAX_SEG];           /* the stream's line where a piece begins */
+static int   lx_seg_o[LX_MAX_SEG];           /* its first line in its file */
+static int   lx_seg_f[LX_MAX_SEG];           /* its file: an index into lx_seg_nm, -1 the source */
+static char  lx_seg_nm[64][64];
+static int   lx_seg_nnm;
+static int   lx_nseg;
+
+/* A file's index in lx_seg_nm, added when new (the last one shared
+ * when there are more than it holds). */
+static int lx_seg_file(char *nm) {
+    int j;
+    for (j = 0; j < lx_seg_nnm; j++) if (strcmp(lx_seg_nm[j], nm) == 0) return j;
+    if (lx_seg_nnm >= 64) return 63;
+    strcpy(lx_seg_nm[j], nm);
+    lx_seg_nnm = lx_seg_nnm + 1;
+    return j;
+}
+
+static void lx_seg_note(int file, int oline) {
+    if (!lx_inc_record || lx_nseg >= LX_MAX_SEG) return;
+    lx_seg_x[lx_nseg] = lx_ixline + 1;
+    lx_seg_o[lx_nseg] = oline;
+    lx_seg_f[lx_nseg] = file;
+    lx_nseg = lx_nseg + 1;
+}
+
+/* The file and line of the stream's line x: the file's name, or 0 for
+ * the source itself. */
+static char *lx_where(int x, int *line) {
+    int i;
+    for (i = lx_nseg - 1; i >= 0; i--)
+        if (lx_seg_x[i] <= x) {
+            *line = lx_seg_o[i] + (x - lx_seg_x[i]);
+            return lx_seg_f[i] < 0 ? 0 : lx_seg_nm[lx_seg_f[i]];
+        }
+    *line = x;
+    return 0;
+}
+
+static void lx_inc_error(char *msg, char *nm) {
+    int line;
+    char *f;
+    if (!lx_inc_record) return;                    /* said at the first reading */
+    f = lx_where(lx_ixline + 1, &line);
+    fdputs("f77: ", 2);
+    if (f) { fdputs(f, 2); fdputc(' ', 2); }
+    fdputs("line ", 2);
+    fdputuint(2, (unsigned int)line);
+    fdputs(": ", 2);
+    fdputs(msg, 2);
+    fdputs(nm, 2);
+    fdputc('\n', 2);
+    f77_nerr = f77_nerr + 1;
+}
+
+/* Is the line an INCLUDE?  Its name into nm, 1 when it is. */
+static int lx_inc_is(char *ln, int n, char *nm) {
+    int i;
+    int k;
+    int col;
+    char *kw;
+    if (n == 0 || ln[0] == 'C' || ln[0] == 'c' || ln[0] == '*' || ln[0] == '!') return 0;
+    col = 1;
+    i = 0;
+    if (ln[0] == '\t') { i = 1; col = 7; }
+    while (col <= 6 && i < n) {
+        if (ln[i] == '\t') { i = i + 1; col = 7; break; }
+        if (col == 6 ? (ln[i] != ' ' && ln[i] != '0') : ln[i] != ' ') return 0;
+        i = i + 1;
+        col = col + 1;
+    }
+    if (n > 72 && ln[0] != '\t') n = 72;              /* columns 73-80 are sequence numbers */
+    while (i < n && ln[i] == ' ') i = i + 1;
+    for (kw = "INCLUDE"; *kw; kw++, i++)
+        if (i >= n || lx_upper(ln[i]) != *kw) return 0;
+    while (i < n && ln[i] == ' ') i = i + 1;
+    k = 0;
+    if (i < n && (ln[i] == '\'' || ln[i] == '(')) {
+        int close;
+        close = ln[i] == '(' ? ')' : '\'';
+        i = i + 1;
+        while (i < n && ln[i] != close && k < 63) nm[k++] = ln[i++];
+        if (i >= n) return 0;
+        i = i + 1;
+    } else {
+        while (i < n && (lx_isalpha(ln[i]) || lx_isdigit(ln[i]) || ln[i] == '@' || ln[i] == '#') && k < 63)
+            nm[k++] = ln[i++];
+    }
+    while (k > 0 && nm[k - 1] == ' ') k = k - 1;
+    nm[k] = 0;
+    while (i < n && (ln[i] == ' ' || ln[i] == '\r' || ln[i] == '\n')) i = i + 1;
+    if (i < n && ln[i] != '!') return 0;               /* more on the line: some other statement */
+    return k > 0;
+}
+
+/* Open the text an INCLUDE names. */
+static FILE *lx_inc_open(char *nm) {
+#ifdef __MVS__
+    char mem[9];
+    char dd[24];
+    char *b;
+    int k;
+    b = nm;
+    for (k = 0; nm[k]; k++) if (nm[k] == '/') b = nm + k + 1;
+    for (k = 0; b[k] && b[k] != '.'; k++) {
+        if (k >= 8) return 0;
+        mem[k] = (char)lx_upper(b[k]);
+    }
+    mem[k] = 0;
+    if (k == 0) return 0;
+    sprintf(dd, "dd:SYSLIB(%s)", mem);
+    return fopen(dd, "r");
+#else
+    static char *sfx[4] = { "", ".f", ".for", ".inc" };
+    char path[1024];
+    char low[64];
+    char dir[960];
+    int d;
+    int c;
+    int x;
+    int k;
+    FILE *fp;
+    dir[0] = 0;
+    if (lx_inname) {
+        k = (int)strlen(lx_inname);
+        while (k > 0 && lx_inname[k - 1] != '/' && lx_inname[k - 1] != '\\') k = k - 1;
+        if (k > 0 && k < (int)sizeof dir) { memcpy(dir, lx_inname, (size_t)k); dir[k] = 0; }
+    }
+    for (k = 0; nm[k] && k < 63; k++) low[k] = (char)(nm[k] >= 'A' && nm[k] <= 'Z' ? nm[k] - 'A' + 'a' : nm[k]);
+    low[k] = 0;
+    for (d = 0; d < 2; d++)
+        for (c = 0; c < 2; c++)
+            for (x = 0; x < 4; x++) {
+                if (d == 0 && !dir[0]) continue;
+                if (strlen(dir) + strlen(nm) + 5 >= sizeof path) continue;
+                sprintf(path, "%s%s%s", d == 0 ? dir : "", c ? low : nm, sfx[x]);
+                fp = fopen(path, "rb");
+                if (fp) return fp;
+            }
+    return 0;
+#endif
+}
+
+/* The next line of the stream into lx_ibuf, INCLUDEs done: 0 at its end. */
+static int lx_inc_next(void) {
+    for (;;) {
+        FILE *fp;
+        int c;
+        int n;
+        char nm[64];
+        if (lx_inc_n == 0) return 0;
+        fp = lx_inc_fp[lx_inc_n - 1];
+        n = 0;
+        while (n < LX_INC_LINE && (c = getc(fp)) != EOF) {
+            lx_ibuf[n++] = (char)c;
+            if (c == '\n') break;
+        }
+        if (n == 0) {                                  /* this file is done */
+            if (lx_inc_n == 1) return 0;
+            fclose(fp);
+            lx_inc_n = lx_inc_n - 1;
+            if (lx_inc_record)
+                lx_seg_note(lx_inc_n == 1 ? -1 : lx_seg_file(lx_inc_nm[lx_inc_n - 1]), lx_inc_line[lx_inc_n - 1] + 1);
+            continue;
+        }
+        if (lx_ibuf[n - 1] != '\n' && n < LX_INC_LINE) lx_ibuf[n++] = '\n';   /* a last line without one */
+        lx_inc_line[lx_inc_n - 1]++;
+        lx_ilen = n;
+        lx_ipos = 0;
+        if (lx_inc_is(lx_ibuf, n, nm)) {
+            FILE *ip;
+            int j;
+            /* the INCLUDE line itself, now a comment */
+            lx_ibuf[0] = 'C';
+            for (j = 1; j < lx_inc_n; j++)
+                if (strcmp(lx_inc_nm[j], nm) == 0) { lx_inc_error("INCLUDE of a text being read: ", nm); break; }
+            if (j < lx_inc_n) { lx_ixline++; return 1; }
+            if (lx_inc_n >= LX_INC_DEPTH) { lx_inc_error("INCLUDEs nested too deep: ", nm); lx_ixline++; return 1; }
+            ip = lx_inc_open(nm);
+            if (!ip) {
+#ifdef __MVS__
+                lx_inc_error("INCLUDE: no member of SYSLIB for ", nm);
+#else
+                lx_inc_error("INCLUDE: no file ", nm);
+#endif
+                lx_ixline++;
+                return 1;
+            }
+            lx_ixline++;
+            lx_inc_fp[lx_inc_n] = ip;
+            strcpy(lx_inc_nm[lx_inc_n], nm);
+            lx_inc_line[lx_inc_n] = 0;
+            lx_inc_n = lx_inc_n + 1;
+            if (lx_inc_record) lx_seg_note(lx_seg_file(nm), 1);
+            return 1;
+        }
+        lx_ixline++;
+        return 1;
+    }
+}
+
+/* fread's part, for lx_window: up to n bytes of the stream. */
+static size_t lx_read(char *dst, size_t n) {
+    size_t got;
+    got = 0;
+    while (got < n) {
+        size_t k;
+        if (lx_ipos >= lx_ilen && !lx_inc_next()) break;
+        k = (size_t)(lx_ilen - lx_ipos);
+        if (k > n - got) k = n - got;
+        memcpy(dst + got, lx_ibuf + lx_ipos, k);
+        lx_ipos = lx_ipos + (int)k;
+        got = got + k;
+    }
+    return got;
+}
+
+/* The stream begins again at the source's start: what an earlier
+ * reading left open is closed. */
+static void lx_inc_reset(FILE *fp) {
+    while (lx_inc_n > 1) { lx_inc_n = lx_inc_n - 1; fclose(lx_inc_fp[lx_inc_n]); }
+    lx_inc_fp[0] = fp;
+    strcpy(lx_inc_nm[0], "");
+    lx_inc_line[0] = 0;
+    lx_inc_n = 1;
+    lx_ipos = 0;
+    lx_ilen = 0;
+    lx_ixline = 0;
+}
+
 static void lx_window(int need) {
     int keep;
     size_t n;
@@ -111,7 +374,7 @@ static void lx_window(int need) {
             lx_buf = nb;
             lx_cap = nc;
         }
-        n = fread(lx_buf + (lx_hi - lx_lo), 1, (size_t)(lx_cap - (lx_hi - lx_lo)), lx_fp);
+        n = lx_read(lx_buf + (lx_hi - lx_lo), (size_t)(lx_cap - (lx_hi - lx_lo)));
         if (n == 0) { lx_eof = 1; break; }
         if (lx_spool) fwrite(lx_buf + (lx_hi - lx_lo), 1, n, lx_spool);
         lx_hi = lx_hi + (int)n;
@@ -131,6 +394,7 @@ static int lx_has(int p) {
 /* Start reading the source from its beginning (again). */
 static void lx_start(FILE *fp) {
     lx_fp = fp;
+    lx_inc_reset(fp);
     lx_lo = 0;
     lx_hi = 0;
     lx_eof = 0;

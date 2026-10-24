@@ -19,7 +19,9 @@
 # that is not, or a sign; a bit intrinsic with the wrong number of
 # arguments or one not INTEGER, MVBITS too; a DEFINE FILE with a format
 # letter not E, U or L, or an associated variable not INTEGER, and a
-# list-directed READ (u'r).  tests/s370/mainlast.f has a main program after
+# list-directed READ (u'r); an INCLUDE of no file, or of a text being
+# read, and an error in an included text reported at its own line, the
+# source's after it at the source's.  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -103,6 +105,15 @@ printf "      REAL K\n      DEFINE FILE 8(10,20,E,K)\n      K = 1.0\n      END\n
 expect dfvar "line 2: a DEFINE FILE's associated variable is an INTEGER variable"
 printf "      DEFINE FILE 8(10,20,E,K)\n      READ (8'1,*) I\n      END\n" > $T/dalist.f
 expect dalist "line 2: READ (u'r) and WRITE (u'r) take a FORMAT or none"
+printf "      INCLUDE 'nosuch.inc'\n      END\n" > $T/incnone.f
+expect incnone "line 1: INCLUDE: no file nosuch.inc"
+printf "      INCLUDE 'incself.inc'\n      END\n" > $T/incself.f
+printf "      X = 1\n      INCLUDE 'incself.inc'\n" > $T/incself.inc
+expect incself "incself.inc line 2: INCLUDE of a text being read: incself.inc"
+printf "      INCLUDE 'incbad.inc'\n      Z = (3\n      END\n" > $T/incbad.f
+printf "C     ONE\n      X = 1\n      Y = (2\n" > $T/incbad.inc
+expect incbad "incbad.inc line 3: expected )"
+expect incbad "line 2: expected )"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST, an internal file with no format, a substring outside its string, a bad hexadecimal or octal constant, a bit intrinsic misused and a DEFINE FILE misused refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST, an internal file with no format, a substring outside its string, a bad hexadecimal or octal constant, a bit intrinsic misused, a DEFINE FILE misused and an INCLUDE that cannot be done refused, and an included text's errors placed in it"
 [ $bad = 0 ]

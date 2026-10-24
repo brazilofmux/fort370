@@ -163,11 +163,22 @@ static void f77_arena_phase(int be) {
 #endif
 }
 
+/* "f77: line n: ", or for a line an INCLUDE brought in, "f77: NAME
+ * line n: ", its own file's line (f77_card.h, lx_where). */
+static void f77_put_where(int x) {
+    int line;
+    char *f;
+    f = lx_where(x, &line);
+    fdputs("f77: ", 2);
+    if (f) { fdputs(f, 2); fdputc(' ', 2); }
+    fdputs("line ", 2);
+    fdputuint(2, (unsigned int)line);
+    fdputs(": ", 2);
+}
+
 static void f77_error(char *msg) {
     if (f77_quiet) { f77_quiet = f77_quiet + 1; return; }
-    fdputs("f77: line ", 2);
-    fdputuint(2, (unsigned int)lx_stmt_line);
-    fdputs(": ", 2);
+    f77_put_where(lx_stmt_line);
     fdputs(msg, 2);
     fdputc('\n', 2);
     fdputs("  in: ", 2);
@@ -181,9 +192,7 @@ static void f77_error(char *msg) {
  * two names that are one external name there, the first eight
  * characters, which IEWL would take for one. */
 static void f77_report_at(int line, char *msg) {
-    fdputs("f77: line ", 2);
-    fdputuint(2, (unsigned int)line);
-    fdputs(": ", 2);
+    f77_put_where(line);
     fdputs(msg, 2);
     fdputc('\n', 2);
     f77_nerr = f77_nerr + 1;
@@ -852,6 +861,7 @@ int main(int argc, char **argv) {
         return 1;
     }
     f77_inname = inname;
+    lx_inname = inname;
     f77_keepall = keepall;
     lx_reopen = keepall ? 0 : f77_reopen_file;
     lx_keep = keepall ? 0 : 0x7FFFFFFF;
@@ -886,6 +896,7 @@ int main(int argc, char **argv) {
 
     if (f77_arena_init() != 0) { fdputs("f77: no storage for the compiler's tables\n", 2); return 1; }
     f77_scan_units();
+    lx_inc_record = 0;               /* INCLUDE's pieces are known; a second reading repeats them */
     if (f77_nunit == 0) { fdputs("f77: empty source\n", 2); return 1; }
 #ifdef F77_TARGET_S370
     if (f77_nerr == 0) f77_check_persistence();
