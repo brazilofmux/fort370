@@ -234,6 +234,16 @@ the program with a message naming it (a READ with ERR= or IOSTAT=
 takes that instead), and so does a format with no data edit
 descriptor when items are left to transfer.
 
+A specific intrinsic named in INTRINSIC may be passed as an actual
+argument (F77 15.9.3), the COMPLEX and COMPLEX*16 ones among them
+(CSQRT, CDSQRT, CONJG, DCONJG, CDABS, DIMAG and the rest), and gives
+through the dummy procedure what a direct call gives, to the bit.  As
+in FORTRAN IV, EXTERNAL SQRT (or SIN, CSQRT...) with no subprogram of
+that name in the source names the library's function: passed, it is
+that function, and SQRT(X) calls it.  A SQRT of the program's own
+must then be in the same source; one compiled separately is not the
+one EXTERNAL SQRT reaches.
+
 A subprogram may have any name but F77MAIN, F77@GO and the runtime's
 own, which begin F77.  The names libc370 uses inside F77RT begin with
 #, out of a program's way.  A subprogram named SQRT, SIN, EXP, EXIT
@@ -363,6 +373,14 @@ a unit is one in the last hexadecimal place of the result):
   COMPLEX functions (CSQRT, CEXP, CLOG, CSIN, CCOS, CABS) are within a
   unit of the result's magnitude; FORTLIB's, 14.  So is complex
   division, done in double precision, where FORTLIB's is within 12.
+
+  COMPLEX*16 functions, at the 46 arguments of tests/s370/zmath.f that
+  FORTLIB takes (2026-10-24, TK5), in units of the result's magnitude:
+  CDABS 0.5 (FORTLIB 2.1), CDSQRT 0.7 (1.5), CDLOG 0.6 (2125, near the
+  unit circle, where log|z| is small), CDEXP 1.7 (25), CDCOS 1.8
+  (10,281) and CDSIN 2.2 (4.6 million).  Each is summed in extended
+  precision and rounded once.  FORTLIB refuses arguments past its
+  limits (IHC282I-IHC285I); this runtime does not check them yet.
 
   SIN, COS and TAN reduce an argument exactly, by the bits of 2/pi, up
   to FORTLIB's limits, pi*2**18 for REAL and pi*2**50 for DOUBLE

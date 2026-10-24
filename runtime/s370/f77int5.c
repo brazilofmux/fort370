@@ -10,12 +10,12 @@ static double fio_round(double v) { return v < 0.0 ? ceil(v - 0.5) : floor(v + 0
 #define trunc fio_trunc
 #define round fio_round
 
+/* A long value cut to short, its high word: what the compiled code
+ * makes of a REAL function's long result. */
+static float fio_cut(double v) { union { double d; float f[2]; } u; u.d = v; return u.f[0]; }
+
 static double fio_zmod(double re, double im) {
-    double a = fabs(re), b = fabs(im), t;
-    if (a < b) { t = a; a = b; b = t; }
-    if (a == 0.0) return 0.0;
-    t = b / a;
-    return a * sqrt(1.0 + t * t);
+    return f77m_zabs(re, im);
 }
 
 float  f77i_sign(float *a, float *b)  { float v = *a < 0 ? -*a : *a; return *b < 0 ? -v : v; }
@@ -27,5 +27,14 @@ double f77i_dprod(float *a, float *b) { return (double)*a * (double)*b; }
 int    f77i_len(const char *s, int len) { (void)s; return len; }
 int    f77i_index(const char *a, const char *b, int la, int lb) { return f77_index(a, la, b, lb); }
 float  f77i_aimag(float *z)           { return z[1]; }
-float  f77i_cabs(float *z)            { return (float)f77f_sqrt((double)z[0] * z[0] + (double)z[1] * z[1]); }
-
+float  f77i_cabs(float *z)            { return f77_cabs(z[0], z[1]); }
+double f77i_dimag(double *z)          { return z[1]; }
+double f77i_cdabs(double *z)          { return f77_zabs(z[0], z[1]); }
+/* The COMPLEX-valued ones, result through out: a Fortran caller takes
+ * a COMPLEX function's value in FPR0 and FPR2, which C cannot return,
+ * so on MVS each is called by an assembler shim of that name
+ * (runtime/s370/f77cshim.asm) that loads them from out. */
+void   f77i_csqrt(float *z, float *out)   { f77_csqrt(out, z[0], z[1]); }
+void   f77i_cexp(float *z, float *out)    { f77_cexp(out, z[0], z[1]); }
+void   f77i_clog(float *z, float *out)    { f77_clog(out, z[0], z[1]); }
+void   f77i_csin(float *z, float *out)    { f77_csin(out, z[0], z[1]); }

@@ -10,27 +10,27 @@ static double fio_round(double v) { return v < 0.0 ? ceil(v - 0.5) : floor(v + 0
 #define trunc fio_trunc
 #define round fio_round
 
+/* A long value cut to short, its high word: what the compiled code
+ * makes of a REAL function's long result. */
+static float fio_cut(double v) { union { double d; float f[2]; } u; u.d = v; return u.f[0]; }
+
 static double fio_zmod(double re, double im) {
-    double a = fabs(re), b = fabs(im), t;
-    if (a < b) { t = a; a = b; b = t; }
-    if (a == 0.0) return 0.0;
-    t = b / a;
-    return a * sqrt(1.0 + t * t);
+    return f77m_zabs(re, im);
 }
 
-float  f77i_cos(float *x)             { return (float)f77f_cos((double)*x); }
+float  f77i_cos(float *x)             { return fio_cut(f77f_cos((double)*x)); }
 double f77i_dcos(double *x)           { return f77f_dcos(*x); }
-float  f77i_tan(float *x)             { return (float)f77f_tan((double)*x); }
+float  f77i_tan(float *x)             { return fio_cut(f77f_tan((double)*x)); }
 double f77i_dtan(double *x)           { return f77f_dtan(*x); }
-float  f77i_asin(float *x)            { return (float)f77f_asin((double)*x); }
+float  f77i_asin(float *x)            { return fio_cut(f77f_asin((double)*x)); }
 double f77i_dasin(double *x)          { return f77f_dasin(*x); }
-float  f77i_acos(float *x)            { return (float)f77f_acos((double)*x); }
+float  f77i_acos(float *x)            { return fio_cut(f77f_acos((double)*x)); }
 double f77i_dacos(double *x)          { return f77f_dacos(*x); }
-float  f77i_arsin(float *x)           { return (float)f77f_asin((double)*x); }   /* IBM's names */
+float  f77i_arsin(float *x)           { return fio_cut(f77f_asin((double)*x)); }   /* IBM's names */
 double f77i_darsin(double *x)         { return f77f_dasin(*x); }
-float  f77i_arcos(float *x)           { return (float)f77f_acos((double)*x); }
+float  f77i_arcos(float *x)           { return fio_cut(f77f_acos((double)*x)); }
 double f77i_darcos(double *x)         { return f77f_dacos(*x); }
-float  f77i_atan(float *x)            { return (float)f77f_atan((double)*x); }
+float  f77i_atan(float *x)            { return fio_cut(f77f_atan((double)*x)); }
 double f77i_datan(double *x)          { return f77f_datan(*x); }
-float  f77i_atan2(float *y, float *x) { return (float)f77f_atan2((double)*y, (double)*x); }
+float  f77i_atan2(float *y, float *x) { return fio_cut(f77f_atan2((double)*y, (double)*x)); }
 double f77i_datan2(double *y, double *x) { return f77f_datan2(*y, *x); }

@@ -18,6 +18,11 @@
 #define F77M_H
 
 double f77m_sqrt(double) __asm__("M@SQRT");
+double f77m_zabs(double, double) __asm__("M@ZABS");
+void f77m_zsqrt(double, double, double *) __asm__("M@ZSQRT");
+void f77m_zsin(double, double, double *) __asm__("M@ZSIN");
+void f77m_zcos(double, double, double *) __asm__("M@ZCOS");
+void f77m_zlog(double, double, double *) __asm__("M@ZLOG");
 double f77m_exp(double) __asm__("M@EXP");
 double f77m_log(double) __asm__("M@LOG");
 double f77m_log10(double) __asm__("M@LOG10");

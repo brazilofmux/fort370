@@ -10,12 +10,12 @@ static double fio_round(double v) { return v < 0.0 ? ceil(v - 0.5) : floor(v + 0
 #define trunc fio_trunc
 #define round fio_round
 
+/* A long value cut to short, its high word: what the compiled code
+ * makes of a REAL function's long result. */
+static float fio_cut(double v) { union { double d; float f[2]; } u; u.d = v; return u.f[0]; }
+
 static double fio_zmod(double re, double im) {
-    double a = fabs(re), b = fabs(im), t;
-    if (a < b) { t = a; a = b; b = t; }
-    if (a == 0.0) return 0.0;
-    t = b / a;
-    return a * sqrt(1.0 + t * t);
+    return f77m_zabs(re, im);
 }
 
 /* --- COMPLEX primitives ------------------------------------------------
@@ -72,10 +72,7 @@ void f77_zpow_i(double re, double im, int n, double *out) {
     if (neg) { double q[2]; f77_zdiv(1.0, 0.0, rr, ri, q); rr = q[0]; ri = q[1]; }
     out[0] = rr; out[1] = ri;
 }
-void f77_zlog(double re, double im, double *out) {
-    out[0] = log(fio_zmod(re, im));
-    out[1] = atan2(im, re);
-}
+void f77_zlog(double re, double im, double *out) { f77m_zlog(re, im, out); }
 void f77_zexp(double re, double im, double *out) {
     double e = exp(re);
     out[0] = e * cos(im);
@@ -87,20 +84,9 @@ void f77_zpow_c(double ar, double ai, double br, double bi, double *out) {
     f77_zlog(ar, ai, l);
     f77_zexp(br * l[0] - bi * l[1], br * l[1] + bi * l[0], out);
 }
-void f77_zsqrt(double re, double im, double *out) {
-    double m = fio_zmod(re, im);
-    double r = sqrt((m + fabs(re)) / 2.0);
-    if (re >= 0.0) { out[0] = r; out[1] = r == 0.0 ? 0.0 : im / (2.0 * r); }
-    else { out[0] = r == 0.0 ? 0.0 : fabs(im) / (2.0 * r); out[1] = im < 0.0 ? -r : r; }
-}
-void f77_zsin(double re, double im, double *out) {
-    out[0] = sin(re) * cosh(im);
-    out[1] = cos(re) * sinh(im);
-}
-void f77_zcos(double re, double im, double *out) {
-    out[0] = cos(re) * cosh(im);
-    out[1] = -sin(re) * sinh(im);
-}
+void f77_zsqrt(double re, double im, double *out) { f77m_zsqrt(re, im, out); }
+void f77_zsin(double re, double im, double *out) { f77m_zsin(re, im, out); }
+void f77_zcos(double re, double im, double *out) { f77m_zcos(re, im, out); }
 
 void f77_cpow_i(float *out, float re, float im, int n) {
     double rr = 1.0, ri = 0.0;

@@ -1661,7 +1661,25 @@ double f77i_dprod(float *a, float *b) { return (double)*a * (double)*b; }
 int    f77i_len(const char *s, int len) { (void)s; return len; }
 int    f77i_index(const char *a, const char *b, int la, int lb) { return f77_index(a, la, b, lb); }
 float  f77i_aimag(float *z)           { return z[1]; }
-float  f77i_cabs(float *z)            { return (float)sqrt((double)z[0] * z[0] + (double)z[1] * z[1]); }
+float  f77i_cabs(float *z)            { return f77_cabs(z[0], z[1]); }
+double f77i_dimag(double *z)          { return z[1]; }
+double f77i_cdabs(double *z)          { return f77_zabs(z[0], z[1]); }
+/* The COMPLEX-valued ones, result through out: a Fortran caller takes
+ * a COMPLEX function's value in FPR0 and FPR2, which C cannot return,
+ * so on MVS each is called by an assembler shim of that name
+ * (runtime/s370/f77cshim.asm) that loads them from out. */
+void   f77i_csqrt(float *z, float *out)   { f77_csqrt(out, z[0], z[1]); }
+void   f77i_cexp(float *z, float *out)    { f77_cexp(out, z[0], z[1]); }
+void   f77i_clog(float *z, float *out)    { f77_clog(out, z[0], z[1]); }
+void   f77i_csin(float *z, float *out)    { f77_csin(out, z[0], z[1]); }
+void   f77i_ccos(float *z, float *out)    { f77_ccos(out, z[0], z[1]); }
+void   f77i_conjg(float *z, float *out)   { out[0] = z[0]; out[1] = -z[1]; }
+void   f77i_cdsqrt(double *z, double *out) { f77_zsqrt(z[0], z[1], out); }
+void   f77i_cdexp(double *z, double *out) { f77_zexp(z[0], z[1], out); }
+void   f77i_cdlog(double *z, double *out) { f77_zlog(z[0], z[1], out); }
+void   f77i_cdsin(double *z, double *out) { f77_zsin(z[0], z[1], out); }
+void   f77i_cdcos(double *z, double *out) { f77_zcos(z[0], z[1], out); }
+void   f77i_dconjg(double *z, double *out) { out[0] = z[0]; out[1] = -z[1]; }
 
 /* --- CHARACTER primitives --------------------------------------------- */
 

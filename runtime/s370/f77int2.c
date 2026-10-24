@@ -10,12 +10,12 @@ static double fio_round(double v) { return v < 0.0 ? ceil(v - 0.5) : floor(v + 0
 #define trunc fio_trunc
 #define round fio_round
 
+/* A long value cut to short, its high word: what the compiled code
+ * makes of a REAL function's long result. */
+static float fio_cut(double v) { union { double d; float f[2]; } u; u.d = v; return u.f[0]; }
+
 static double fio_zmod(double re, double im) {
-    double a = fabs(re), b = fabs(im), t;
-    if (a < b) { t = a; a = b; b = t; }
-    if (a == 0.0) return 0.0;
-    t = b / a;
-    return a * sqrt(1.0 + t * t);
+    return f77m_zabs(re, im);
 }
 
 void f77_csin(float *out, float re, float im) {
@@ -37,13 +37,13 @@ int f77_index(const char *a, int la, const char *b, int lb);
 int    f77i_iabs(int *x)              { return *x < 0 ? -*x : *x; }
 float  f77i_abs(float *x)             { return *x < 0 ? -*x : *x; }
 double f77i_dabs(double *x)           { return *x < 0 ? -*x : *x; }
-float  f77i_sqrt(float *x)            { return (float)f77f_sqrt((double)*x); }
+float  f77i_sqrt(float *x)            { return fio_cut(f77f_sqrt((double)*x)); }
 double f77i_dsqrt(double *x)          { return f77f_dsqrt(*x); }
-float  f77i_exp(float *x)             { return (float)f77f_exp((double)*x); }
+float  f77i_exp(float *x)             { return fio_cut(f77f_exp((double)*x)); }
 double f77i_dexp(double *x)           { return f77f_dexp(*x); }
-float  f77i_alog(float *x)            { return (float)f77f_log((double)*x); }
+float  f77i_alog(float *x)            { return fio_cut(f77f_log((double)*x)); }
 double f77i_dlog(double *x)           { return f77f_dlog(*x); }
-float  f77i_alog10(float *x)          { return (float)f77f_log10((double)*x); }
+float  f77i_alog10(float *x)          { return fio_cut(f77f_log10((double)*x)); }
 double f77i_dlog10(double *x)         { return f77f_dlog10(*x); }
-float  f77i_sin(float *x)             { return (float)f77f_sin((double)*x); }
+float  f77i_sin(float *x)             { return fio_cut(f77f_sin((double)*x)); }
 double f77i_dsin(double *x)           { return f77f_dsin(*x); }

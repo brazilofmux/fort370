@@ -5,8 +5,8 @@
 * could not be these: cc370 returns an integer in R15.  Nothing here
 * calls anything; R14 is the return, R15 and R0/R1 scratch, as the
 * convention allows, and R2-R3, where more are needed, are saved in
-* the caller's save area.  The floating-point ones stay in C
-* (f77rt.c): both conventions give FPR0.
+* the caller's save area.  The REAL-valued ones stay in C (f77rt.c):
+* both conventions give FPR0; the COMPLEX-valued ones are f77cshim.asm.
 *
 I#IABS   CSECT
          USING *,15

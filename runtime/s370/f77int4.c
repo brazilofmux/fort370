@@ -10,19 +10,19 @@ static double fio_round(double v) { return v < 0.0 ? ceil(v - 0.5) : floor(v + 0
 #define trunc fio_trunc
 #define round fio_round
 
+/* A long value cut to short, its high word: what the compiled code
+ * makes of a REAL function's long result. */
+static float fio_cut(double v) { union { double d; float f[2]; } u; u.d = v; return u.f[0]; }
+
 static double fio_zmod(double re, double im) {
-    double a = fabs(re), b = fabs(im), t;
-    if (a < b) { t = a; a = b; b = t; }
-    if (a == 0.0) return 0.0;
-    t = b / a;
-    return a * sqrt(1.0 + t * t);
+    return f77m_zabs(re, im);
 }
 
-float  f77i_sinh(float *x)            { return (float)f77f_sinh((double)*x); }
+float  f77i_sinh(float *x)            { return fio_cut(f77f_sinh((double)*x)); }
 double f77i_dsinh(double *x)          { return f77f_dsinh(*x); }
-float  f77i_cosh(float *x)            { return (float)f77f_cosh((double)*x); }
+float  f77i_cosh(float *x)            { return fio_cut(f77f_cosh((double)*x)); }
 double f77i_dcosh(double *x)          { return f77f_dcosh(*x); }
-float  f77i_tanh(float *x)            { return (float)f77f_tanh((double)*x); }
+float  f77i_tanh(float *x)            { return fio_cut(f77f_tanh((double)*x)); }
 double f77i_dtanh(double *x)          { return f77f_dtanh(*x); }
 float  f77i_aint(float *x)            { return (float)trunc((double)*x); }
 double f77i_dint(double *x)           { return trunc(*x); }

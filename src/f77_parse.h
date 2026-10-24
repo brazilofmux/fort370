@@ -918,6 +918,7 @@ static int f77_can_inline(int u);
 static int f77_inline_unit_body(int u, int *addrs, int nargs);
 static int f77_find_unit(char *nm);
 static int f77_stmt_is_declaration(int cls);
+static int f77_has_iproc(char *nm);
 static void f77_emit_copyin(void);
 static void f77_emit_copyout(void);
 
@@ -2384,6 +2385,10 @@ static int f77_primary(void) {
             int ds;
             ds = f77_sym_find(nm);
             if (ds >= 0 && (f77_sarg[ds] || f77_sexternal[ds])) in = IN_NONE;
+            /* fort370: EXTERNAL SQRT with no SQRT in the source is the
+             * library's SQRT, the intrinsic (as FORTRAN H calls it) */
+            if (ds >= 0 && f77_sexternal[ds] && !f77_sarg[ds] && u < 0 && f77_has_iproc(nm))
+                in = f77_intrinsic(nm);
             /* fort370: an intrinsic's name is the intrinsic only where
              * it is referenced as a function; not followed by '(' it is
              * a local variable (INTEGER LEN/30000/), and an array of that
@@ -5949,8 +5954,7 @@ static int f77_actual_is_simple(void) {
  * evaluated into a temporary whose address is passed instead. */
 /* The runtime's by-reference version of a specific intrinsic, for
  * passing it as an actual argument (F77 15.9.3: a subset of Table 5). */
-static char *f77_intrinsic_proc(char *nm) {
-    static char *tab[] = {
+static char *f77_iproc_tab[] = {
         "IABS", "ABS", "DABS", "SQRT", "DSQRT", "EXP", "DEXP", "ALOG", "DLOG",
         "ALOG10", "DLOG10", "SIN", "DSIN", "COS", "DCOS", "TAN", "DTAN",
         "ASIN", "DASIN", "ACOS", "DACOS", "ATAN", "DATAN", "ATAN2", "DATAN2",
@@ -5958,11 +5962,21 @@ static char *f77_intrinsic_proc(char *nm) {
         "SINH", "DSINH", "COSH", "DCOSH", "TANH", "DTANH", "AINT", "DINT",
         "ANINT", "DNINT", "NINT", "IDNINT", "MOD", "AMOD", "DMOD", "SIGN",
         "ISIGN", "DSIGN", "DIM", "IDIM", "DDIM", "DPROD", "LEN", "INDEX",
-        "AIMAG", "CABS", 0 };
+        "AIMAG", "CABS", "CSQRT", "CEXP", "CLOG", "CSIN", "CCOS", "CONJG",
+        "CDSQRT", "CDEXP", "CDLOG", "CDSIN", "CDCOS", "CDABS", "DCONJG", "DIMAG", 0 };
+
+/* Has the runtime a by-reference copy of this specific intrinsic? */
+static int f77_has_iproc(char *nm) {
+    int i;
+    for (i = 0; f77_iproc_tab[i]; i++) if (strcmp(f77_iproc_tab[i], nm) == 0) return 1;
+    return 0;
+}
+
+static char *f77_intrinsic_proc(char *nm) {
     static char buf[F77_MAX_NAME + 8];
     int i;
-    for (i = 0; tab[i]; i++) {
-        if (strcmp(tab[i], nm) == 0) {
+    for (i = 0; f77_iproc_tab[i]; i++) {
+        if (strcmp(f77_iproc_tab[i], nm) == 0) {
             char *q;
             strcpy(buf, "f77i_");
             q = buf + 5;
@@ -6012,6 +6026,19 @@ static int f77_actual_addr(void) {
             sf = f77_sym_find(lex_name);
             if (sf < 0 || (!f77_sstored[sf] && f77_srank[sf] == 0 &&
                            !f77_sarg[sf] && !f77_scom[sf] && !f77_sparam[sf])) {
+                /* fort370: FORTRAN IV's way, EXTERNAL SQRT naming the
+                 * library's SQRT, where no subprogram of the source is
+                 * SQRT: the runtime's by-reference copy, as INTRINSIC
+                 * gives it (the library's SQRT itself is the compiled
+                 * code's, by value) */
+                if (sf >= 0 && f77_sexternal[sf] && f77_find_unit(lex_name) < 0 &&
+                    f77_has_iproc(lex_name)) {
+                    char *rn;
+                    rn = f77_intrinsic_proc(lex_name);
+                    f77_tok();
+                    f77_act_len = -1;
+                    return hi_emit(HI_FADDR, HL_ADDR_TY, -1, -1, 0, rn);
+                }
                 if ((sf >= 0 && f77_sexternal[sf]) || f77_find_unit(lex_name) >= 0) {
                     char *pn;
                     pn = strdup(lex_name);
