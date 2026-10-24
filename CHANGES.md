@@ -8,6 +8,48 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-24
+
+Tagged `v2026.10.24`: INCLUDE (issue #8); the COMPLEX and COMPLEX*16
+intrinsics as actual arguments, and FORTRAN IV's EXTERNAL naming a
+library function (issue #12); COMPLEX*16's functions within a unit or
+two (issue #20, its COMPLEX*16 part); and the bit functions at a
+shift of 32.  Built from `1515694`: FORT370.xmit SHA256
+`de72a9febc41adc6…`, 596,960 bytes; F77RT.xmit SHA256
+`9fdff80d524e26c7…`, 604,320 bytes; F77RT.upd SHA256
+`136ed2f335907424…`, 620,320 bytes.  All 192 FCVS programs, 118
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design.
+
+- INCLUDE 'name', INCLUDE (name) or INCLUDE name (MIL-STD-1753), alone
+  on its line, copies the text it names in its place: on MVS the
+  member NAME of the PDS on the compile step's SYSLIB, its directory
+  and extension dropped (INCLUDE 'common.inc' is member COMMON); on a
+  host the file beside the source.  An included text may include
+  another.  A message names the included text and its own line.
+  F77CLG has no SYSLIB: add //FORT.SYSLIB DD for it.
+- CSQRT, CEXP, CLOG, CSIN, CCOS and CONJG, and CDSQRT, CDEXP, CDLOG,
+  CDSIN, CDCOS, DCONJG, CDABS and DIMAG, named in INTRINSIC, can be
+  passed as arguments; none of the COMPLEX-valued ones could.  A
+  REAL function passed (SQRT, SIN, ...) gives the bits a direct call
+  gives: it could differ in the last one.
+- EXTERNAL SQRT (SIN, CSQRT, ...) with no SQRT in the source is the
+  library's SQRT, passed or called, as in FORTRAN H; EXTERNAL CSQRT
+  was an unresolved external, and EXTERNAL SQRT passed a function
+  that took its argument by value.
+- COMPLEX*16's functions, against the exact values at the 46
+  arguments of tests/s370/zmath.f FORTLIB takes, in units of the
+  result's magnitude: CDABS 0.5 (was 10.9; FORTLIB 2.1), CDSQRT 0.7
+  (6.0; 1.5), CDLOG 0.6 (2125 near the unit circle; 2125), CDEXP 1.7
+  (1.7; 25), CDCOS 1.8 (5.3; 10,281), CDSIN 2.2 (6.7; 4.6 million).
+- ISHFT by 32 either way, IBITS of length 0 and MVBITS of length 0,
+  where the compiler could see the count, were folded as if a shift of
+  32 were none: ISHFT(K, -32) was K.  At run time they were right.
+- bench/inline-check.py (issue #16) checks that every program prints
+  the same with the compiler's inlining and without it; on TK5 the 48
+  whose code inlining changes all do.
+
 ## 2026-10-23.2
 
 Tagged `v2026.10.23.2`: DEFINE FILE and FORTRAN IV's direct access
