@@ -653,6 +653,13 @@ static int  f77_urnar[F77_MAX_UNIT];   /* INTEGER*2 or LOGICAL*1 FUNCTION: f77_s
  * ordinary unit).  In a FUNCTION the entry names and the function
  * name all denote the one result, by aliasing. */
 static int  f77_uentry_parent[F77_MAX_UNIT];
+
+/* The unit whose text is being compiled: an ENTRY's is its parent's,
+ * and what phase 1 collected from the text (FORMATs, ASSIGNed labels,
+ * escaping names) is filed under the parent. */
+static int f77_text_unit(void) {
+    return f77_uentry_parent[f77_cur_unit] >= 0 ? f77_uentry_parent[f77_cur_unit] : f77_cur_unit;
+}
 /* The dummies of every unit of an ENTRY family, collected in phase 1:
  * the shared statements name them all, so when one unit of the family
  * is compiled the dummies of the OTHER units are created as phantoms
@@ -747,7 +754,7 @@ static void f77_realloc_sym(int s) {
     /* Scalar double or complex: give the hi word its own promotable slot. */
     if (f77_split_on < 0) f77_split_on = getenv("F77_NO_SPLIT") ? 0 : 1;
     if (f77_split_on && f77_srank[s] == 0 && f77_ispair(f77_sty[s]) &&
-        !f77_name_escapes(f77_cur_unit, f77_sname[s])) {
+        !f77_name_escapes(f77_text_unit(), f77_sname[s])) {
         int wty;
         wty = f77_pairw(f77_sty[s]);
         h_ty[f77_sval[s]] = wty;                    /* lo word only */
@@ -842,7 +849,7 @@ static int f77_find_format(int label) {
     int i;
     i = 0;
     while (i < f77_nformat) {
-        if (f77_flabel[i] == label && f77_funit[i] == f77_cur_unit)
+        if (f77_flabel[i] == label && f77_funit[i] == f77_text_unit())
             return f77_fstr[i];
         i = i + 1;
     }
@@ -3587,7 +3594,7 @@ static int f77_fmt_dyn_addr(int v) {
     int fa;
     acc = f77_iconst(0);
     for (i = 0; i < f77_nformat; i++) {
-        if (f77_funit[i] != f77_cur_unit) continue;
+        if (f77_funit[i] != f77_text_unit()) continue;
         fa = hi_emit(HI_SADDR, HL_ADDR_TY, -1, -1, f77_fstr[i], NULL);
         c = hi_emit(HI_SEQ, TY_INT, v, f77_iconst(f77_flabel[i]), 0, NULL);
         acc = f77_select(c, fa, acc);
@@ -8753,7 +8760,7 @@ static void f77_statement(void) {
                 f77_tok();
             } else {
                 for (i = 0; i < f77_nasg; i++) {
-                    if (f77_asg_unit[i] != f77_cur_unit) continue;
+                    if (f77_asg_unit[i] != f77_text_unit()) continue;
                     if (f77_find_format(f77_asg_lab[i]) >= 0) continue;
                     if (nl < 64) { labs[nl] = f77_asg_lab[i]; nl = nl + 1; }
                 }
