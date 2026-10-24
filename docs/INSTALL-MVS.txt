@@ -352,6 +352,10 @@ a unit is one in the last hexadecimal place of the result):
   at the last one printed, to any width; a half rounds away from zero.
   H's DOUBLE PRECISION output can be a few units off in the 16th digit
   and pads with zeros past the 17th.
+  List-directed output prints 9 digits for REAL and 18 for DOUBLE
+  PRECISION, correctly rounded, enough that READ gives back the same
+  bits for every value (17, the IEEE count, leave a quarter of HFP's
+  long values a unit off).  FORTRAN H has no list-directed I/O.
 
   Arithmetic is the machine's own, the same as H's to the bit.  So are
   SNGL, FLOAT, IFIX and the integer power X**I (repeated multiplication;

@@ -964,10 +964,10 @@ static void fio_list_out_real(double v, int dbl) {
     char buf[64];
     char cf[16];
     double a = v < 0 ? -v : v;
-    int sig = dbl ? 17 : 9;
+    int sig = dbl ? 18 : 9;
     int width = dbl ? 25 : 16;
-    int fblanks = dbl ? 5 : 4;
-    double lim = dbl ? 1e17 : 1e9;
+    int fblanks = 4;
+    double lim = dbl ? 1e18 : 1e9;
     fio_putc(' ');
     if (v == 0.0 || (a >= 0.1 && a < lim)) {
         int intd = 0;

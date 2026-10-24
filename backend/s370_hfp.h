@@ -206,7 +206,7 @@ have_bits:
     while (4 * (e - 1) > bits - 1) e = e - 1;
     while (bits - 1 >= 4 * e) e = e + 1;
     if (e + 64 > 127) { *hi = (neg ? 0x80000000u : 0) | 0x7FFFFFFFu; *lo = 0xFFFFFFFFu; return 1; }
-    if (e + 64 < 0) return 1;
+    if (e + 64 < -1) return 1;   /* below half the smallest number (e + 64 -1 is decided below) */
 
     /* fraction = floor(value / 16^e * 2^56) = floor(num * 2^(56-4e) / den) */
     shift = 56 - 4 * e;
@@ -254,6 +254,14 @@ have_bits:
                 if (e + 64 > 127) { *hi = (neg ? 0x80000000u : 0) | 0x7FFFFFFFu; *lo = nbits == 24 ? 0 : 0xFFFFFFFFu; return 1; }
             }
         }
+    }
+    if (e + 64 < 0) {
+        /* below the smallest number, 16^-65, which has no subnormals
+         * under it: from its half up, it is the nearest */
+        if (fhi < 0x00800000u) return 1;
+        *hi = (neg ? 0x80000000u : 0) | 0x00100000u;
+        *lo = 0;
+        return 0;
     }
     *hi = (neg ? 0x80000000u : 0) | ((unsigned int)(e + 64) << 24) | fhi;
     *lo = flo;

@@ -915,6 +915,17 @@ void f77_zcos(double re, double im, double *out) {
     out[1] = -sin(re) * sinh(im);
 }''', '''void f77_zsin(double re, double im, double *out) { if (!f77k_sin(re, im, out, 0, 0)) f77m_zsin(re, im, out); }
 void f77_zcos(double re, double im, double *out) { if (!f77k_sin(re, im, out, 1, 0)) f77m_zcos(re, im, out); }''')
+# list-directed DOUBLE PRECISION output: 18 digits, not gfortran's 17,
+# which are enough for every IEEE double but not for HFP's 56 bits (a
+# quarter of them read back a unit off); the field stays 25 columns,
+# the F form's trailing blanks 4 (fort370 issue 20)
+rep('''    int sig = dbl ? 17 : 9;
+    int width = dbl ? 25 : 16;
+    int fblanks = dbl ? 5 : 4;
+    double lim = dbl ? 1e17 : 1e9;''', '''    int sig = dbl ? 18 : 9;
+    int width = dbl ? 25 : 16;
+    int fblanks = 4;
+    double lim = dbl ? 1e18 : 1e9;''')
 # FORTLIB's checks of the COMPLEX and COMPLEX*16 functions' arguments
 # (f77mzc.c): an argument out of a function's domain has its IHC27nI or
 # IHC28nI and its fixup (fort370 issue 30); and REAL's modulus, CABS's
