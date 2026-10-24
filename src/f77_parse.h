@@ -656,7 +656,7 @@ static int  f77_uentry_parent[F77_MAX_UNIT];
 
 /* The unit whose text is being compiled: an ENTRY's is its parent's,
  * and what phase 1 collected from the text (FORMATs, ASSIGNed labels,
- * escaping names) is filed under the parent. */
+ * escaping names, DEFINE FILEs) is filed under the parent. */
 static int f77_text_unit(void) {
     return f77_uentry_parent[f77_cur_unit] >= 0 ? f77_uentry_parent[f77_cur_unit] : f77_cur_unit;
 }
@@ -844,6 +844,21 @@ static int f77_funit[F77_MAX_FORMAT];   /* owning program unit */
 static int f77_fstr[F77_MAX_FORMAT];    /* string-pool index */
 static int f77_nformat;
 static int f77_cur_unit;               /* set while compiling a unit */
+
+/* DEFINE FILE a(m,r,f,v), FORTRAN IV's direct access: every file of
+ * every unit, collected in phase 1 (f77_scan_units).  A DEFINE FILE
+ * takes effect wherever it stands -- FORTRAN H's does even where a GO
+ * TO goes round it -- so the files are defined as the unit is entered,
+ * where its declarations close (f77_emit_dfile). */
+#define F77_MAX_DFILE 64
+static int  f77_df_unit[F77_MAX_DFILE];    /* the program unit */
+static int  f77_df_line[F77_MAX_DFILE];
+static int  f77_df_a[F77_MAX_DFILE];       /* the I/O unit */
+static int  f77_df_m[F77_MAX_DFILE];       /* records */
+static int  f77_df_r[F77_MAX_DFILE];       /* record length: bytes, or words for U */
+static int  f77_df_f[F77_MAX_DFILE];       /* 0 E, 1 U, 2 L */
+static char f77_df_v[F77_MAX_DFILE][F77_MAX_NAME];   /* the associated variable */
+static int  f77_ndf;
 
 static int f77_find_format(int label) {
     int i;
@@ -3231,6 +3246,90 @@ static void f77_scan_from(int off) {
     lx_rts = 0;
     lx_rte = 0;
     f77_tok();
+}
+
+/* DEFINE FILE, phase 1: the statement's files into the table.  a, m
+ * and r are INTEGER constants, f one of E, U and L, v a name. */
+static int f77_is_dfile(void) {
+    return f77_starts("DEFINEFILE") && f77_toplevel('=', 0) < 0;
+}
+static void f77_dfile_scan(int unit) {
+    f77_scan_from(10);
+    for (;;) {
+        int i;
+        if (f77_ndf >= F77_MAX_DFILE) { f77_error("too many DEFINE FILE files"); return; }
+        i = f77_ndf;
+        if (lx_t != T_ICON) { f77_error("DEFINE FILE needs a unit number"); return; }
+        f77_df_a[i] = lex_ival;
+        f77_tok();
+        if (lx_t != T_LP) { f77_error("DEFINE FILE is a(m,r,f,v)"); return; }
+        f77_tok();
+        if (lx_t != T_ICON) { f77_error("DEFINE FILE needs the number of records"); return; }
+        f77_df_m[i] = lex_ival;
+        f77_tok();
+        if (lx_t != T_COMMA) { f77_error("DEFINE FILE is a(m,r,f,v)"); return; }
+        f77_tok();
+        if (lx_t != T_ICON) { f77_error("DEFINE FILE needs the record length"); return; }
+        f77_df_r[i] = lex_ival;
+        f77_tok();
+        if (lx_t != T_COMMA) { f77_error("DEFINE FILE is a(m,r,f,v)"); return; }
+        f77_tok();
+        if (lx_t != T_NAME || lex_name[1] != 0 ||
+            (lex_name[0] != 'E' && lex_name[0] != 'U' && lex_name[0] != 'L')) {
+            f77_error("a DEFINE FILE's format is E, U or L");
+            return;
+        }
+        f77_df_f[i] = lex_name[0] == 'E' ? 0 : lex_name[0] == 'U' ? 1 : 2;
+        f77_tok();
+        if (lx_t != T_COMMA) { f77_error("DEFINE FILE is a(m,r,f,v)"); return; }
+        f77_tok();
+        if (lx_t != T_NAME) { f77_error("a DEFINE FILE's associated variable is an INTEGER variable"); return; }
+        strcpy(f77_df_v[i], lex_name);
+        f77_tok();
+        if (lx_t != T_RP) { f77_error("DEFINE FILE is a(m,r,f,v)"); return; }
+        f77_tok();
+        if (f77_df_a[i] <= 0 || f77_df_a[i] > 99 || f77_df_a[i] == 5 || f77_df_a[i] == 6 ||
+            f77_df_m[i] <= 0 || f77_df_r[i] <= 0) {
+            f77_error("a DEFINE FILE's unit is 1 to 99, not 5 or 6, and its records and length are positive");
+            return;
+        }
+        f77_df_unit[i] = unit;
+        f77_df_line[i] = lx_stmt_line;
+        f77_esc_add(unit, f77_df_v[i], (int)strlen(f77_df_v[i]));
+        f77_ndf = f77_ndf + 1;
+        if (lx_t == T_EOF) return;
+        if (lx_t != T_COMMA) { f77_error("expected , between DEFINE FILE's files"); return; }
+        f77_tok();
+    }
+}
+
+/* The unit's DEFINE FILEs, as it is entered: f77_dfile(a, m, r, f, &v)
+ * for each.  The runtime keeps v's address and sets it after every
+ * direct-access statement on the unit, wherever that statement is. */
+static void f77_emit_dfile(void) {
+    int i;
+    for (i = 0; i < f77_ndf; i++) {
+        int s;
+        int args[5];
+        if (f77_df_unit[i] != f77_text_unit()) continue;
+        s = f77_sym(f77_df_v[i]);
+        if (f77_sty[s] != TY_INT || f77_slog[s] || f77_snar[s] || f77_srank[s] > 0 ||
+            f77_sparam[s] || f77_sexternal[s]) {
+            int line;
+            line = lx_stmt_line;
+            lx_stmt_line = f77_df_line[i];
+            f77_error("a DEFINE FILE's associated variable is an INTEGER variable");
+            lx_stmt_line = line;
+            continue;
+        }
+        f77_sstored[s] = 1;
+        args[0] = f77_iconst(f77_df_a[i]);
+        args[1] = f77_iconst(f77_df_m[i]);
+        args[2] = f77_iconst(f77_df_r[i]);
+        args[3] = f77_iconst(f77_df_f[i]);
+        args[4] = f77_sval[s];
+        f77_call_i("f77_dfile", 5, args);
+    }
 }
 
 static void f77_store_sym(int s, int v, int vty, int vhi) {
@@ -7509,6 +7608,8 @@ static int f77_io_end_label;
 static int f77_io_err_label;
 static int f77_io_iostat;      /* address of the IOSTAT variable, or -1 */
 static int f77_io_rec;         /* REC= value, or -1 */
+static int f77_io_da;          /* the record came as u'r: a DEFINE FILE's (DAREC=, f77_card.h) */
+static int f77_io_da_skip;     /* its block after the statement */
 
 static int f77_io_fmt_spec(void) {
     if (lx_t == T_STAR) { f77_tok(); return -1; }
@@ -7571,6 +7672,7 @@ static int f77_io_control(int is_read, int *unit_val, int *fmt_label) {
     f77_io_err_label = -1;
     f77_io_iostat = -1;
     f77_io_rec = -1;
+    f77_io_da = 0;
     f77_io_int = 0;
     if (lx_t != T_LP) { f77_error("I/O statement needs a control list"); return 0; }
     f77_tok();
@@ -7625,9 +7727,11 @@ static int f77_io_control(int is_read, int *unit_val, int *fmt_label) {
                 if (f77_shi[ss] >= 0) hi_emit(HI_ADDI, HL_ADDR_TY, f77_shi[ss], -1, 0, NULL);
                 f77_io_iostat = f77_sval[ss];
             }
-        } else if (strcmp(kw, "REC") == 0) {
+        } else if (strcmp(kw, "REC") == 0 || strcmp(kw, "DAREC") == 0) {
+            if (f77_io_rec >= 0) { f77_error("the control list names a record twice"); return 0; }
             f77_io_rec = f77_expr();
             f77_io_rec = f77_cvt(f77_io_rec, &ex_hi, ex_ty, TY_INT);
+            f77_io_da = kw[0] == 'D';
         } else {
             f77_error("unknown keyword in the control list");
             return 0;
@@ -7645,13 +7749,70 @@ static int f77_io_control(int is_read, int *unit_val, int *fmt_label) {
         f77_error("a CHARACTER unit is an internal file and needs a format");
         return 0;
     }
+    if (f77_io_da && (f77_io_int || *fmt_label == -1 || *fmt_label == -5)) {
+        f77_error("READ (u'r) and WRITE (u'r) take a FORMAT or none");
+        return 0;
+    }
     return 1;
 }
 
 /* Common tail of READ/WRITE begin: REC= is announced to the runtime
- * before the statement opens. */
-static void f77_io_announce(void) {
+ * before the statement opens.  A DEFINE FILE's record, u'r, is checked
+ * first, as FORTRAN H's DIOCS checks it: f77_darec reports a record out
+ * of range, or a READ of a data set never written, and the statement is
+ * skipped -- to f77_io_da_skip, after it.  kind: 0 READ, 1 WRITE. */
+static void f77_io_announce(int unit_val, int kind) {
+    if (f77_io_da) {
+        int args[3];
+        int r;
+        int c;
+        int b_go;
+        args[0] = unit_val;
+        args[1] = f77_io_rec;
+        args[2] = f77_iconst(kind);
+        r = f77_call_i("f77_darec", 3, args);
+        b_go = hir_new_block();
+        f77_io_da_skip = hir_new_block();
+        c = hi_emit(HI_SEQ, TY_INT, r, f77_iconst(0), 0, NULL);
+        hi_emit(HI_BRC, TY_VOID, c, f77_io_da_skip, b_go, NULL);
+        f77_cur_blk_live = 0;
+        f77_begin_blk(b_go);
+        return;
+    }
     if (f77_io_rec >= 0) f77_call_i("f77_set_rec", 1, &f77_io_rec);
+}
+
+/* After a u'r statement: the associated variable gets the next record
+ * (f77_dadone), and the skip joins. */
+static void f77_io_da_end(int unit_val) {
+    if (!f77_io_da) return;
+    f77_io_da = 0;
+    f77_call_i("f77_dadone", 1, &unit_val);
+    f77_goto_blk(f77_io_da_skip);
+    f77_begin_blk(f77_io_da_skip);
+}
+
+/* FIND (u'r): the associated variable is r. */
+static void f77_stmt_find(int skip) {
+    int args[3];
+    f77_scan_from(skip);
+    if (lx_t != T_LP) { f77_error("FIND is FIND (u'r)"); return; }
+    f77_tok();
+    args[0] = f77_io_unit_expr();
+    if (f77_io_int) { f77_error("FIND is FIND (u'r)"); return; }
+    if (lx_t != T_COMMA) { f77_error("FIND is FIND (u'r)"); return; }
+    f77_tok();
+    if (lx_t != T_NAME || strcmp(lex_name, "DAREC") != 0) { f77_error("FIND is FIND (u'r)"); return; }
+    f77_tok();
+    if (lx_t != T_ASSIGN) { f77_error("FIND is FIND (u'r)"); return; }
+    f77_tok();
+    args[1] = f77_expr();
+    args[1] = f77_cvt(args[1], &ex_hi, ex_ty, TY_INT);
+    if (lx_t != T_RP) { f77_error("expected ) after FIND's record"); return; }
+    f77_tok();
+    if (lx_t != T_EOF) { f77_error("FIND has no list"); return; }
+    args[2] = f77_iconst(2);
+    f77_call_i("f77_darec", 3, args);
 }
 
 /* After f77_rd_begin: branch on its code -- 1 end of file, 2 error --
@@ -7779,7 +7940,7 @@ static void f77_stmt_write(int skip) {
     int fmt_label;
     f77_scan_from(skip);
     if (!f77_io_control(0, &unit_val, &fmt_label)) return;
-    f77_io_announce();
+    f77_io_announce(unit_val, 1);
     if (fmt_label == -5) {
         if (lx_t != T_EOF) { f77_error("a NAMELIST WRITE has no list"); return; }
         f77_nml_io(unit_val, 0);
@@ -7794,22 +7955,27 @@ static void f77_stmt_write(int skip) {
         r = hi_emit(HI_CALL, TY_INT, -1, -1, 0, "f77_wu_end");
         h_cbase[r] = h_ncarg;
         f77_io_unf = 0;
+        f77_io_da_end(unit_val);
         return;
     }
     f77_wr_begin(unit_val, fmt_label);
     f77_wr_list();
     f77_wr_finish();
+    f77_io_da_end(unit_val);
 }
 
-/* PRINT fmt, list  --  always unit 6. */
-static void f77_stmt_print(int skip) {
+/* PRINT fmt, list  --  always unit 6; and FORTRAN IV's PUNCH fmt,
+ * list, unit 7, the card punch (FT07F001), each record as its FORMAT
+ * makes it. */
+static void f77_stmt_print(int skip, int unit) {
     int fmt_label;
     f77_scan_from(skip);
     fmt_label = f77_io_fmt_spec();
     if (lx_t == T_COMMA) f77_tok();
     f77_io_int = 0;
     f77_io_rec = -1;
-    f77_wr_begin(f77_iconst(6), fmt_label);
+    f77_io_da = 0;
+    f77_wr_begin(f77_iconst(unit), fmt_label);
     f77_wr_list();
     f77_wr_finish();
 }
@@ -7835,6 +8001,7 @@ static void f77_stmt_read(int skip) {
     f77_io_err_label = -1;
     f77_io_iostat = -1;
     f77_io_rec = -1;
+    f77_io_da = 0;
 
     if (lx_t == T_LP) {
         if (!f77_io_control(1, &unit_val, &fmt_label)) return;
@@ -7844,7 +8011,7 @@ static void f77_stmt_read(int skip) {
         fmt_label = f77_io_fmt_spec();
         if (lx_t == T_COMMA) f77_tok();
     }
-    f77_io_announce();
+    f77_io_announce(unit_val, 0);
 
     if (fmt_label == -5) {
         if (lx_t != T_EOF) { f77_error("a NAMELIST READ has no list"); return; }
@@ -7865,6 +8032,7 @@ static void f77_stmt_read(int skip) {
         f77_io_unf = 0;
         r = hi_emit(HI_CALL, TY_INT, -1, -1, 0, "f77_ru_end");
         h_cbase[r] = h_ncarg;
+        f77_io_da_end(unit_val);
         return;
     }
 
@@ -7902,6 +8070,7 @@ static void f77_stmt_read(int skip) {
     f77_io_rd = 0;
     r = hi_emit(HI_CALL, TY_INT, -1, -1, 0, "f77_rd_end");
     h_cbase[r] = h_ncarg;
+    f77_io_da_end(unit_val);
 }
 
 /* --- OPEN / CLOSE / REWIND -------------------------------------------- */
@@ -8312,6 +8481,7 @@ static int f77_stmt_is_declaration(int cls) {
     if (f77_starts("PARAMETER")) return 1;
     if (f77_starts("IMPLICIT")) return 1;
     if (f77_starts("FORMAT")) return 1;
+    if (f77_starts("DEFINEFILE")) return 1;
     if (f77_starts("PROGRAM")) return 1;
     if (f77_starts("SUBROUTINE")) return 1;
     if (f77_unit_header_ty() >= 0) return 1;
@@ -8344,7 +8514,7 @@ static void f77_statement(void) {
      * layout emits hidden-argument PARAMs and must stay in the entry
      * block, and it runs once, which a labelled first statement (a
      * loop target) would not guarantee. */
-    if (f77_decls_open && !f77_stmt_is_declaration(cls)) f77_emit_copyin();
+    if (f77_decls_open && !f77_stmt_is_declaration(cls)) { f77_emit_copyin(); f77_emit_dfile(); }
     if (f77_entry_state == 1 && !f77_decls_open) {
         /* The text before the ENTRY: reached only by a GO TO */
         f77_goto_blk(f77_entry_blk);
@@ -8499,7 +8669,10 @@ static void f77_statement(void) {
     }
 
     if ((n = f77_starts("WRITE")) != 0) { f77_stmt_write(n); goto done; }
-    if ((n = f77_starts("PRINT")) != 0) { f77_stmt_print(n); goto done; }
+    if ((n = f77_starts("PRINT")) != 0) { f77_stmt_print(n, 6); goto done; }
+    if ((n = f77_starts("PUNCH")) != 0) { f77_stmt_print(n, 7); goto done; }
+    if (f77_starts("FIND(")) { f77_stmt_find(4); goto done; }
+    if (f77_is_dfile()) goto done;      /* done as the unit is entered (f77_emit_dfile) */
     if ((n = f77_starts("READ")) != 0)  { f77_stmt_read(n);  goto done; }
     if ((n = f77_starts("OPEN")) != 0)  { f77_stmt_open(n);  goto done; }
     if ((n = f77_starts("CLOSE")) != 0) { f77_stmt_close(n); goto done; }

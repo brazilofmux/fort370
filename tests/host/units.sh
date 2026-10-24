@@ -17,7 +17,9 @@
 # outside its string, C(0:9), C(1:11) of a CHARACTER*10 C, or C(5:4)
 # (F77 5.7.1); a hexadecimal or octal constant of DATA with a digit
 # that is not, or a sign; a bit intrinsic with the wrong number of
-# arguments or one not INTEGER, MVBITS too.  tests/s370/mainlast.f has a main program after
+# arguments or one not INTEGER, MVBITS too; a DEFINE FILE with a format
+# letter not E, U or L, or an associated variable not INTEGER, and a
+# list-directed READ (u'r).  tests/s370/mainlast.f has a main program after
 # its subprograms, compiled to the assembler committed beside it.
 cd "$(dirname "$0")/../.." || exit 2
 F77=out/f77
@@ -95,6 +97,12 @@ printf "      I = IAND(3, 1.0)\n      END\n" > $T/bitreal.f
 expect bitreal "line 1: this intrinsic needs INTEGER arguments"
 printf "      CALL MVBITS(1, 0, 4, I)\n      END\n" > $T/mvbits4.f
 expect mvbits4 "line 1: MVBITS needs five arguments"
+printf "      DEFINE FILE 8(10,20,X,K)\n      END\n" > $T/dfform.f
+expect dfform "line 1: a DEFINE FILE's format is E, U or L"
+printf "      REAL K\n      DEFINE FILE 8(10,20,E,K)\n      K = 1.0\n      END\n" > $T/dfvar.f
+expect dfvar "line 2: a DEFINE FILE's associated variable is an INTEGER variable"
+printf "      DEFINE FILE 8(10,20,E,K)\n      READ (8'1,*) I\n      END\n" > $T/dalist.f
+expect dalist "line 2: READ (u'r) and WRITE (u'r) take a FORMAT or none"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST, an internal file with no format, a substring outside its string, a bad hexadecimal or octal constant and a bit intrinsic misused refused"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST, an internal file with no format, a substring outside its string, a bad hexadecimal or octal constant, a bit intrinsic misused and a DEFINE FILE misused refused"
 [ $bad = 0 ]

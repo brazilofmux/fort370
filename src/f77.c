@@ -269,6 +269,7 @@ static void f77_scan_units(void) {
     f77_nfamd = 0;
     { int z; z = 0; while (z < F77_MAX_UNIT) { f77_uentry_parent[z] = -1; z = z + 1; } }
     f77_nformat = 0;
+    f77_ndf = 0;
     f77_nasg = 0;
     f77_nesc = 0;
     { int z; z = 0; while (z < F77_MAX_UNIT) { f77_ustmts[z] = 0; f77_unosplice[z] = 0; z = z + 1; } }
@@ -324,6 +325,12 @@ static void f77_scan_units(void) {
             f77_nformat = f77_nformat + 1;
         }
         f77_esc_scan(started ? f77_nunit - 1 : 0);
+        /* DEFINE FILE: done as its unit is entered, so collected here;
+         * a unit with one is not inlined, which would lose that */
+        if (f77_is_dfile()) {
+            f77_dfile_scan(started ? f77_nunit - 1 : 0);
+            if (started && f77_nunit > 0) f77_unosplice[f77_nunit - 1] = 1;
+        }
         if (f77_starts("ASSIGN") && f77_nasg < F77_MAX_ASG) {
             f77_scan_from(6);
             if (lx_t == T_ICON) {

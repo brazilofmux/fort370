@@ -283,6 +283,26 @@ before it are skipped.  A CHARACTER item, which H has not, is written
 and read as 'text'.  An item may be a dummy argument; an assumed-size
 array's last dimension counts as 1.
 
+DEFINE FILE is FORTRAN IV's direct access, as H does it: DEFINE FILE
+a(m,r,f,v) gives unit a m records of r bytes (f E, formatted, or L,
+either) or r words (U, unformatted), read and written as READ (a'n,
+fmt) list and WRITE (a'n, fmt) list, without fmt when unformatted.
+v, an INTEGER variable, is the number of the record after the last
+one each statement reached, wherever in the program it is; FIND (a'n)
+sets it to n and transfers nothing.  A DEFINE FILE has
+effect in its whole unit (in a subprogram, from its first call), even
+one a GO TO goes round.  The DD FTnnF001 is a DASD data set with room
+for the m records; the first WRITE writes all of them, blanks, then
+its own, as H's does.  As in H, a formatted record longer than r is
+cut, with IHC212I and IHC231I; an input field past a record's end is
+blanks, with IHC212I and the record; an unformatted list longer than
+a record goes on into the next, the last filled with zeros; and a
+record number outside 1 to m (IHC232I), or a READ before the data set
+has been written (IHC236I), skips the statement, ERR= or no.  Each is
+FORTLIB's message, its traceback and STANDARD FIXUP TAKEN, counted in
+the summary of errors.  PUNCH f, list writes to unit 7, FT07F001, each
+record as its format makes it, with no carriage control.
+
 Floating point, measured against the exact values (2026-10-15, TK5;
 a unit is one in the last hexadecimal place of the result):
 

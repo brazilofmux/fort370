@@ -7,6 +7,9 @@
 
 void f77_fmt_lim(int n) __asm__("F77FMTLM");
 void f77_set_rec(int rec) __asm__("F77SETRC");
+void f77_dfile(int unit, int m, int r, int f, int *v) __asm__("F77DFILE");
+int f77_darec(int unit, int rec, int kind) __asm__("F77DAREC");
+void f77_dadone(int unit) __asm__("F77DADON");
 void f77_wr_begin(int unit, const char *fmt) __asm__("F77WRBEG");
 void f77_wu_begin(int unit) __asm__("F77WUBEG");
 void f77_wu(const void *p, int n) __asm__("F77WU");

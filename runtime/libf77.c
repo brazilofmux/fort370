@@ -77,6 +77,8 @@ static int   fio_uunf[FIO_MAXUNIT];      /* FORM='UNFORMATTED' */
 static int   fio_urecl[FIO_MAXUNIT];     /* RECL= in bytes */
 static int   fio_ubz[FIO_MAXUNIT];       /* BLANK='ZERO' */
 static int   fio_rec_next;               /* REC= of the statement about to begin, or 0 */
+static int   fio_udefm[FIO_MAXUNIT];     /* DEFINE FILE: its records, 0 = no DEFINE FILE */
+static int  *fio_udefv[FIO_MAXUNIT];     /* DEFINE FILE: the associated variable */
 static int   fio_uaeof[FIO_MAXUNIT];     /* positioned after the endfile record */
 static int   fio_recoverable;            /* ERR=/IOSTAT= present: report, do not exit */
 static int   fio_err;                    /* set when a recoverable error happened */
@@ -166,6 +168,31 @@ static void fio_puts(const char *s) {
 
 static int fio_unit;             /* unit of the statement in progress */
 
+/* An error FORTRAN H's library reports and recovers from (IHCnnnI);
+ * the statement goes on, or is skipped, as H's does. */
+static void fio_ihc(int n, const char *text) {
+    fprintf(stderr, "IHC%dI %s\n", n, text);
+}
+
+/* Character k of the input record; past its end, a blank.  A field
+ * that runs past the end of a DEFINE FILE's record is FORTRAN H's
+ * IHC212I, with the record, once a record. */
+static int fio_rover;            /* this record's end has been run past */
+static int fio_rch(int k) {
+    static char t[FIO_MAXLINE + 64];
+    if (k < fio_rlen) return fio_rec[k];
+    if (!fio_rover && !fio_ibuf && fio_unit > 0 && fio_unit < FIO_MAXUNIT && fio_udefm[fio_unit]) {
+        int n;
+        sprintf(t, "IBCOM - FORMATTED I/O, END OF RECORD ON UNIT %4d\n0", fio_unit);
+        n = (int)strlen(t);
+        memcpy(t + n, fio_rec, (size_t)fio_rlen);
+        t[n + fio_rlen] = 0;
+        fio_ihc(212, t);
+    }
+    fio_rover = 1;
+    return ' ';
+}
+
 static void fio_flush_line(void) {
     FILE *f = fio_out ? fio_out : stdout;
     fio_line[fio_len] = 0;
@@ -189,6 +216,15 @@ static void fio_flush_line(void) {
     if (fio_unit > 0 && fio_unit < FIO_MAXUNIT && fio_udirect[fio_unit]) {
         int recl = fio_urecl[fio_unit];
         int i;
+        if (fio_len > recl && fio_udefm[fio_unit]) {
+            /* FORTRAN H's: the record is cut, with two messages */
+            char t[80];
+            sprintf(t, "IBCOM - FORMATTED I/O, END OF RECORD ON UNIT %4d", fio_unit);
+            fio_ihc(212, t);
+            sprintf(t, "FIOCS - SEQUENTIAL I/O STATEMENTS USED FOR DIRECT ACCESS DATA SET %6d", fio_unit);
+            fio_ihc(231, t);
+            fio_len = recl;
+        }
         if (fio_len > recl) {
             fprintf(stderr, "f77: record longer than RECL (%d > %d)\n", fio_len, recl);
             exit(2);
@@ -245,6 +281,7 @@ static int fio_isdigit(int c) { return c >= '0' && c <= '9'; }
  * shorter than the fields read from it behaves as if blank-padded,
  * which fio_field_in provides by supplying blanks past fio_rlen. */
 static int fio_getrec(void) {
+    fio_rover = 0;
     if (fio_ibuf) {
         if (fio_irec >= fio_inrec) return 1;
         memcpy(fio_rec, fio_ibuf + fio_irec * fio_ilen, (size_t)fio_ilen);
@@ -885,6 +922,85 @@ static void fio_position(FILE *f, int unit) {
     fseek(f, (long)(rec - 1) * fio_urecl[unit], SEEK_SET);
 }
 
+/* --- DEFINE FILE ---------------------------------------------------------
+ *
+ * FORTRAN IV's direct access, as FORTRAN H does it.  DEFINE FILE
+ * a(m,r,f,v): unit a holds m records of r bytes (f E, formatted, and L,
+ * either) or r words (U, unformatted), reached as READ (a'n), WRITE
+ * (a'n) and FIND (a'n); after each, v is the number of the record after
+ * the last one reached (FIND: the one it names).  An unformatted list
+ * longer than a record goes on into the next.  As H's DIOCS: a record
+ * number outside 1..m is reported (IHC232I) and the statement skipped,
+ * as is a READ before the data set has been written (IHC236I); the
+ * first WRITE writes all m records, blanks, and then the one it names. */
+
+/* the records the unit's file holds */
+static int fio_dcount(int unit) {
+    FILE *f = fio_resolve(unit, 1);
+    fseek(f, 0L, SEEK_END);
+    return (int)(ftell(f) / fio_urecl[unit]);
+}
+/* the first WRITE: every record, blank */
+static void fio_dformat(int unit) {
+    FILE *f = fio_resolve(unit, 1);
+    long n = (long)fio_udefm[unit] * fio_urecl[unit];
+    fseek(f, 0L, SEEK_SET);
+    while (n-- > 0) fputc(' ', f);
+    fflush(f);
+}
+/* the record after the last one the statement reached */
+static int fio_dnext(int unit) {
+    return (int)(ftell(fio_resolve(unit, 1)) / fio_urecl[unit]) + 1;
+}
+
+int f77_open(int, const char *, int, const char *, int, const char *, int,
+             const char *, int, const char *, int, int, int);
+
+/* f: 0 E, 1 U, 2 L.  A subprogram's DEFINE FILE is done at each call:
+ * done again, only v changes. */
+void f77_dfile(int unit, int m, int r, int f, int *v) {
+    fio_init_units();
+    fio_udefv[unit] = v;
+    if (fio_udefm[unit]) return;
+    f77_open(unit, 0, 0, 0, 0, "DIRECT", 6, 0, 0, 0, 0, f == 1 ? 4 * r : r, 0);
+    fio_udefm[unit] = m;
+}
+
+/* Before READ (a'n), kind 0, WRITE (a'n), 1, and FIND (a'n), 2: 1 when
+ * the statement goes on, 0 when it is skipped. */
+int f77_darec(int unit, int rec, int kind) {
+    char t[80];
+    fio_init_units();
+    if (unit <= 0 || unit >= FIO_MAXUNIT || !fio_udefm[unit]) {
+        fprintf(stderr, "f77: unit %d has no DEFINE FILE\n", unit);
+        exit(2);
+    }
+    if (rec < 1 || rec > fio_udefm[unit]) {
+        sprintf(t, "DIOCS - RECORD NUMBER %5d OUT OF RANGE ON UNIT %3d", rec, unit);
+        fio_ihc(232, t);
+        return 0;
+    }
+    if (kind == 2) {
+        if (fio_udefv[unit]) *fio_udefv[unit] = rec;
+        return 1;
+    }
+    if (fio_dcount(unit) == 0) {
+        if (kind == 0) {
+            sprintf(t, "DIOCS - READ REQUEST FOR AN UNCREATED DATA SET ON UNIT %3d", unit);
+            fio_ihc(236, t);
+            return 0;
+        }
+        fio_dformat(unit);
+    }
+    fio_rec_next = rec;
+    return 1;
+}
+
+/* After the statement: the associated variable. */
+void f77_dadone(int unit) {
+    if (fio_udefv[unit]) *fio_udefv[unit] = fio_dnext(unit);
+}
+
 void f77_wr_begin(int unit, const char *fmt) {
     fio_init_units();
     fio_ibuf = 0;
@@ -921,12 +1037,13 @@ void f77_wu_end(void) {
     FILE *f = fio_out ? fio_out : stdout;
     if (fio_unit > 0 && fio_unit < FIO_MAXUNIT && fio_udirect[fio_unit]) {
         int recl = fio_urecl[fio_unit];
-        if (fio_ulen > recl) {
+        if (fio_ulen > recl && !fio_udefm[fio_unit]) {
             fprintf(stderr, "f77: unformatted record longer than RECL\n");
             exit(2);
         }
         fwrite(fio_urec, 1, (size_t)fio_ulen, f);
-        while (fio_ulen < recl) { fputc(0, f); fio_ulen++; }
+        /* a DEFINE FILE's list longer than a record goes on into the next */
+        while (fio_ulen < recl || fio_ulen % recl) { fputc(0, f); fio_ulen++; }
         return;
     }
     {
@@ -989,6 +1106,13 @@ int f77_ru_begin(int unit, int flags) {
 }
 void f77_ru(void *p, int n) {
     if (n <= 0) return;
+    /* a DEFINE FILE's list longer than a record goes on into the next */
+    while (fio_upos + n > fio_ulen && fio_udefm[fio_unit] &&
+           fio_ulen + fio_urecl[fio_unit] <= FIO_MAXUREC) {
+        size_t k = fread(fio_urec + fio_ulen, 1, (size_t)fio_urecl[fio_unit], fio_in);
+        if (k == 0) break;
+        fio_ulen += (int)k;
+    }
     if (fio_upos + n > fio_ulen) {
         fprintf(stderr, "f77: unformatted READ past the end of the record\n");
         exit(2);
@@ -1126,7 +1250,7 @@ static void fio_hex_in(void *item, int n) {
     int i, j, c, x, neg = 0;
     for (j = 0; j < n; j++) v[j] = 0;
     for (i = 0; i < w; i++) {
-        c = fio_rpos + i < fio_rlen ? fio_rec[fio_rpos + i] : ' ';
+        c = fio_rch(fio_rpos + i);
         if (c == ' ') x = 0;
         else if (c == '-' || c == '+') { neg = neg || c == '-'; continue; }
         else if (c >= '0' && c <= '9') x = c - '0';
@@ -1663,7 +1787,7 @@ static void fio_field_in(char *buf, int w) {
     int n = 0;
     int seen = 0;
     for (i = 0; i < w; i++) {
-        c = (fio_rpos + i < fio_rlen) ? fio_rec[fio_rpos + i] : ' ';
+        c = fio_rch(fio_rpos + i);
         if (c == ' ' || c == '\t') {
             /* BZ: a blank after the first nonblank is a zero */
             if (fio_bz && seen && n < FIO_MAXLINE - 1) buf[n++] = '0';
@@ -2094,12 +2218,12 @@ void f77_rd_s(char *p, int len) {
     if (w >= len) {
         int skip = w - len;
         for (i = 0; i < len; i++) {
-            int c = (fio_rpos + skip + i < fio_rlen) ? fio_rec[fio_rpos + skip + i] : ' ';
+            int c = fio_rch(fio_rpos + skip + i);
             p[i] = (char)c;
         }
     } else {
         for (i = 0; i < len; i++) {
-            int c = (i < w && fio_rpos + i < fio_rlen) ? fio_rec[fio_rpos + i] : ' ';
+            int c = i < w ? fio_rch(fio_rpos + i) : ' ';
             p[i] = (char)c;
         }
     }

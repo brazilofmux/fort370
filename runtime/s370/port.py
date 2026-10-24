@@ -578,16 +578,20 @@ void f77_wu_end(void) {
     int u = fio_unit;
     if (fio_udirect[u]) {
         int recl = fio_urecl[u];
-        if (fio_ulen > recl) {
+        int off;
+        if (fio_ulen > recl && !fio_udefm[u]) {
             fprintf(stderr, "f77: unformatted record longer than RECL\\n");
             exit(2);
         }
-        while (fio_ulen < recl) fio_urec[fio_ulen++] = 0;
-        if (f77d_write(u, fio_ddof(u), recl, fio_ucur[u], fio_urec, 0) != 0) {
-            fprintf(stderr, "f77: unit %d: record %d was not written\\n", u, fio_ucur[u]);
-            exit(2);
+        /* a DEFINE FILE's list longer than a record goes on into the next */
+        while ((fio_ulen < recl || fio_ulen % recl) && fio_ulen < FIO_MAXUREC) fio_urec[fio_ulen++] = 0;
+        for (off = 0; off + recl <= fio_ulen; off += recl) {
+            if (f77d_write(u, fio_ddof(u), recl, fio_ucur[u], fio_urec + off, 0) != 0) {
+                fprintf(stderr, "f77: unit %d: record %d was not written\\n", u, fio_ucur[u]);
+                exit(2);
+            }
+            fio_ucur[u]++;
         }
-        fio_ucur[u]++;
         return;
     }
     if (f77s_write(u, fio_ddof(u), fio_urec, fio_ulen) != 0) exit(2);
@@ -628,6 +632,13 @@ int f77_ru_begin(int unit, int flags) {
 }
 void f77_ru(void *p, int n) {
     if (n <= 0) return;
+    /* a DEFINE FILE's list longer than a record goes on into the next */
+    while (fio_upos + n > fio_ulen && fio_udefm[fio_unit] &&
+           fio_ulen + fio_urecl[fio_unit] <= FIO_MAXUREC &&
+           f77d_read(fio_unit, fio_ddof(fio_unit), fio_urecl[fio_unit], fio_ucur[fio_unit], fio_urec + fio_ulen) == 0) {
+        fio_ulen += fio_urecl[fio_unit];
+        fio_ucur[fio_unit]++;
+    }
     if (fio_upos + n > fio_ulen) {
         fprintf(stderr, "f77: unformatted READ past the end of the record\\n");
         exit(2);
@@ -638,6 +649,45 @@ void f77_ru(void *p, int n) {
 void f77_ru_end(void) { }
 
 ''' + s[u_end:]
+# DEFINE FILE: its records are f77rec.c's as any direct access unit's,
+# and its errors FORTLIB's error monitor's (f77err.c, through f77rec.c)
+rep('''static void fio_ihc(int n, const char *text) {
+    fprintf(stderr, "IHC%dI %s\\n", n, text);
+}''', '''static void fio_ihc(int n, const char *text) {
+    if (f77r_ihc) { f77r_ihc(n, text); return; }
+    fprintf(stderr, "IHC%dI %s\\n", n, text);
+}''')
+rep('''static int fio_dcount(int unit) {
+    FILE *f = fio_resolve(unit, 1);
+    fseek(f, 0L, SEEK_END);
+    return (int)(ftell(f) / fio_urecl[unit]);
+}''', '''static int fio_dcount(int unit) {
+    return f77d_count(unit, fio_ddof(unit), fio_urecl[unit]);
+}''')
+rep('''static void fio_dformat(int unit) {
+    FILE *f = fio_resolve(unit, 1);
+    long n = (long)fio_udefm[unit] * fio_urecl[unit];
+    fseek(f, 0L, SEEK_SET);
+    while (n-- > 0) fputc(' ', f);
+    fflush(f);
+}''', '''static void fio_dformat(int unit) {
+    int recl = fio_urecl[unit];
+    fio_urec_need();
+    if (recl > FIO_MAXUREC) {
+        fprintf(stderr, "f77: DEFINE FILE %d: records longer than %d bytes\\n", unit, FIO_MAXUREC);
+        exit(2);
+    }
+    memset(fio_urec, ' ', (size_t)recl);
+    if (f77d_write(unit, fio_ddof(unit), recl, fio_udefm[unit], fio_urec, ' ') != 0) {
+        fprintf(stderr, "f77: DEFINE FILE %d: the data set could not be written\\n", unit);
+        exit(2);
+    }
+}''')
+rep('''static int fio_dnext(int unit) {
+    return (int)(ftell(fio_resolve(unit, 1)) / fio_urecl[unit]) + 1;
+}''', '''static int fio_dnext(int unit) {
+    return fio_ucur[unit];
+}''')
 rep('''void f77_backspace(int unit) {
     FILE *f;
     long pos;
@@ -790,6 +840,7 @@ if left:
 # them (exit, OPEN, CLOSE, REWIND) asks first.
 rep('#include "f77rec.h"\n', '#define F77REC_WEAK\n#include "f77rec.h"\n')
 rep('void f77_set_rec(int rec) { fio_rec_next = rec; }', 'void f77_set_rec_rt(int rec) { fio_rec_next = rec; }')
+rep('void f77_dfile(int unit, int m, int r, int f, int *v) {', 'void f77_dfile_rt(int unit, int m, int r, int f, int *v) {')
 rep('void f77_wu_begin(int unit) {', 'void f77_wu_begin_rt(int unit) {')
 rep('int f77_ru_begin(int unit, int flags) {', 'int f77_ru_begin_rt(int unit, int flags) {')
 rep('''    f77r_closeall();

@@ -106,6 +106,20 @@ static int f77e_inner(const char *nm) {
     return (nm[0] == 'M' && nm[1] == '@') || strncmp(nm, "F77E", 4) == 0 || strcmp(nm, "F77PINT") == 0;
 }
 
+/* A routine of the runtime's own, not the program's (an I/O error's
+ * traceback, inner 2, begins at the last of them, the one the program
+ * called, as FORTLIB's begins at IBCOM). */
+static int f77e_rt(const char *nm) {
+    return (strncmp(nm, "F77", 3) == 0 && strcmp(nm, "F77MAIN") != 0) || nm[0] == '@' ||
+           nm[0] == '#' || (nm[0] == 'M' && nm[1] == '@');
+}
+
+/* The name of the routine that called the one whose save area is up. */
+static int f77e_caller(unsigned *up, char *nm) {
+    if (!f77e_okp(up[1])) return 0;
+    return f77e_name(((unsigned *)up[1])[4] & 0x00FFFFFFu, nm);
+}
+
 static void f77e_trace(unsigned sa, int inner) {
     FILE *f = f77e_file();
     unsigned main_ep = 0;
@@ -121,6 +135,11 @@ static void f77e_trace(unsigned sa, int inner) {
         up = (unsigned *)own[1];
         ep = up[4] & 0x00FFFFFFu;
         if (!f77e_name(ep, nm)) break;
+        if (inner == 2) {
+            char cn[9];
+            if (f77e_rt(nm) && f77e_caller(up, cn) && f77e_rt(cn)) { sa = own[1]; continue; }
+            inner = 0;
+        }
         if (!(inner && f77e_inner(nm))) {
             inner = 0;
             lib = f77e_stack && (char *)sa >= f77e_stack && (char *)sa < f77e_stack + __stklen;
@@ -148,6 +167,17 @@ void f77e_say(int n, const char *text) {
     if (!how) return;
     fprintf(f77e_file(), "0IHC%dI %s\n", n, text);
     f77e_trace((unsigned)f77_r13(), 1);
+    f77e_end(how);
+}
+
+/* An I/O error's: its traceback from the entry point the program
+ * called (f77rec.c, DEFINE FILE's). */
+void f77e_sayio(int n, const char *text) __asm__("F77ESYIO");
+void f77e_sayio(int n, const char *text) {
+    int how = f77e_note(n);
+    if (!how) return;
+    fprintf(f77e_file(), "0IHC%dI %s\n", n, text);
+    f77e_trace((unsigned)f77_r13(), 2);
     f77e_end(how);
 }
 

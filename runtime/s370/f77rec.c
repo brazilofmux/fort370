@@ -249,6 +249,13 @@ int f77d_read(int unit, const char *dd, int recl, int rec, unsigned char *buf) {
     return 0;
 }
 
+/* The records the data set holds, -1 when it cannot be reached. */
+int f77d_count(int unit, const char *dd, int recl) {
+    DUNIT *d;
+    d = dget(unit, dd, recl);
+    return d ? d->nrec : -1;
+}
+
 void f77d_close(int unit) {
     if (unit < 0 || unit >= RMAXU) return;
     dshut(&dunit[unit]);
@@ -480,5 +487,12 @@ void f77r_closeall(void) {
 /* ---- the front doors (f77rec.h) ---------------------------------- */
 
 void f77_set_rec(int rec) { f77_set_rec_rt(rec); }
+void f77_dfile(int unit, int m, int r, int f, int *v) { f77_dfile_rt(unit, m, r, f, v); }
+
+/* An error of DEFINE FILE's, reported by FORTLIB's error monitor
+ * (f77err.c), reached from here so that only a program with direct
+ * access carries it for the purpose. */
+void f77e_sayio(int n, const char *text) __asm__("F77ESYIO");
+void f77r_ihc(int n, const char *text) { f77e_sayio(n, text); }
 void f77_wu_begin(int unit) { f77_wu_begin_rt(unit); }
 int  f77_ru_begin(int unit, int flags) { return f77_ru_begin_rt(unit, flags); }

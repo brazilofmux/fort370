@@ -327,6 +327,27 @@ static int lx_pending_hollerith_count(void) {
     return v;
 }
 
+/* Is an apostrophe here FORTRAN IV's direct-access record separator,
+ * READ (u'r), WRITE (u'r) or FIND (u'r) -- the statement so far that
+ * keyword, a parenthesis and a unit, alone or after a logical IF's
+ * condition?  Then it is no character constant; the caller writes it
+ * as the control-list keyword DAREC= (f77_io_control). */
+static int lx_da_apostrophe(void) {
+    static char *kw[3] = { "READ(", "WRITE(", "FIND(" };
+    int i;
+    int k;
+    int n;
+    i = lx_stmt_len;
+    while (i > 0 && (lx_isalpha(lx_stmt[i - 1]) || (lx_stmt[i - 1] >= '0' && lx_stmt[i - 1] <= '9'))) i = i - 1;
+    if (i == lx_stmt_len) return 0;
+    for (k = 0; k < 3; k++) {
+        n = (int)strlen(kw[k]);
+        if (i >= n && memcmp(lx_stmt + i - n, kw[k], (size_t)n) == 0 &&
+            (i == n || lx_stmt[i - n - 1] == ')')) return 1;
+    }
+    return 0;
+}
+
 /* Assemble the next statement.  Returns 1 on success, 0 at end of file. */
 static int f77_next_stmt(void) {
     int p;
@@ -398,6 +419,13 @@ static int f77_next_stmt(void) {
                 continue;
             }
             if (c == '!') break;                  /* trailing comment */
+            if (c == '\'' && lx_da_apostrophe()) {
+                char *t;
+                for (t = ",DAREC="; *t; t++) lx_put(*t);
+                p = p + 1;
+                col = col + 1;
+                continue;
+            }
             if (c == '\'') { inq = 1; lx_put(c); p = p + 1; col = col + 1; continue; }
             if (lx_upper(c) == 'H') {
                 hcount = lx_pending_hollerith_count();
