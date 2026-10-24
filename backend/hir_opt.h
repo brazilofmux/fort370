@@ -180,9 +180,20 @@ static int ho_const_fold(void) {
                 else if (k == HI_AND) result = a & b;
                 else if (k == HI_OR)  result = a | b;
                 else if (k == HI_XOR) result = a ^ b;
+#ifdef F77_TARGET_S370
+                /* fort370: as S/370 shifts, by the count's low six bits:
+                 * 32 to 63 shift every bit out (SRA leaves the sign).
+                 * Taken mod 32, a shift of 32 folded to none, and
+                 * ISHFT(K, N) with N = 32 known was K, where the same
+                 * shift at run time gives 0 (MIL-STD-1753 2.6.1.2.1). */
+                else if (k == HI_SLL) result = (b & 63) >= 32 ? 0 : (int)((unsigned int)a << (b & 63));
+                else if (k == HI_SRA) result = (b & 63) >= 32 ? (a < 0 ? -1 : 0) : a >> (b & 63);
+                else if (k == HI_SRL) result = (b & 63) >= 32 ? 0 : (int)((unsigned int)a >> (b & 63));
+#else
                 else if (k == HI_SLL) result = a << (b & 31);
                 else if (k == HI_SRA) result = a >> (b & 31);
                 else if (k == HI_SRL) result = (int)((unsigned int)a >> (b & 31));
+#endif
                 else if (k == HI_SEQ) {
                     if (a == b) result = 1; else result = 0;
                 }
