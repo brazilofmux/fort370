@@ -3178,6 +3178,21 @@ static void s370_loops(void) {
         }
         i0 = s370_phi_arg_from(p, pre);
         if (i0 < 0) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 12\n", 2); } i = i + 1; continue; }
+        /* BXLE's add ignores overflow: an index whose last value is
+         * within a step of 2**31 wraps and stays <= L, and the loop
+         * never ends (H's does the same).  With the bounds known, such
+         * a loop keeps its trip count; with them unknown, it is H's. */
+        {
+            int iv0;
+            int nv0;
+            s370_const_eval(step, &c, 0);
+            if (s370_const_eval(i0, &iv0, 0) && s370_const_eval(n0, &nv0, 0) &&
+                (double)iv0 + (double)nv0 * (double)c > 2147483647.0) {   /* exact here; cc370's long long is not to be trusted */
+                if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 14\n", 2); }
+                i = i + 1;
+                continue;
+            }
+        }
         if (h_ninst + 6 >= HIR_MAX_INST) { if (getenv("F77_LOOP_DEBUG")) { fdputs("  reject 13\n", 2); } i = i + 1; continue; }
 
         /* L = (i0 - s) + N*s, in the preheader's hoist list */
