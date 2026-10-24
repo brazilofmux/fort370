@@ -171,11 +171,16 @@ static int ho_const_fold(void) {
                 else if (k == HI_MUL) result = a * b;
                 else if (k == HI_MULH) result = (int)(((long long)a * (long long)b) >> 32);
                 else if (k == HI_MULHU) result = (int)(((unsigned long long)(unsigned)a * (unsigned long long)(unsigned)b) >> 32);
+                /* -2**31 / -1 overflows: in C, a trap on S/370 (the
+                 * compiler's own S0C9 on MVS) and on x86; folded as
+                 * FORTRAN H folds it, to -2**31, remainder 0 */
                 else if (k == HI_DIV) {
-                    if (b != 0) result = a / b; else can_fold = 0;
+                    if (b == -1) result = (int)(0u - (unsigned int)a);
+                    else if (b != 0) result = a / b; else can_fold = 0;
                 }
                 else if (k == HI_REM) {
-                    if (b != 0) result = a % b; else can_fold = 0;
+                    if (b == -1) result = 0;
+                    else if (b != 0) result = a % b; else can_fold = 0;
                 }
                 else if (k == HI_AND) result = a & b;
                 else if (k == HI_OR)  result = a | b;

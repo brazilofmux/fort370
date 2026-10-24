@@ -3966,7 +3966,8 @@ static void f77_cterm(void) {
             f77_cx_d = dv * f77_cx_d;
         } else if (f77_cx_ty == TY_INT) {
             if (f77_cx_i == 0) { f77_error("division by zero in constant expression"); f77_cx_i = 1; }
-            f77_cx_i = iv / f77_cx_i;
+            /* -2**31 / -1 would trap in C (hir_opt.h folds it alike) */
+            f77_cx_i = f77_cx_i == -1 ? (int)(0u - (unsigned int)iv) : iv / f77_cx_i;
         } else {
             if (f77_cx_d == 0.0) { f77_error("division by zero in constant expression"); f77_cx_d = 1.0; }
             f77_cx_d = dv / f77_cx_d;
