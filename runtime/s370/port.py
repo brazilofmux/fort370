@@ -899,7 +899,7 @@ rep('''static double fio_zmod(double re, double im) {
 rep('''void f77_zlog(double re, double im, double *out) {
     out[0] = log(fio_zmod(re, im));
     out[1] = atan2(im, re);
-}''', '''void f77_zlog(double re, double im, double *out) { f77m_zlog(re, im, out); }''')
+}''', '''void f77_zlog(double re, double im, double *out) { if (!f77k_log(re, im, out, 0)) f77m_zlog(re, im, out); }''')
 rep('''void f77_zsqrt(double re, double im, double *out) {
     double m = fio_zmod(re, im);
     double r = sqrt((m + fabs(re)) / 2.0);
@@ -913,8 +913,94 @@ rep('''void f77_zsin(double re, double im, double *out) {
 void f77_zcos(double re, double im, double *out) {
     out[0] = cos(re) * cosh(im);
     out[1] = -sin(re) * sinh(im);
-}''', '''void f77_zsin(double re, double im, double *out) { f77m_zsin(re, im, out); }
-void f77_zcos(double re, double im, double *out) { f77m_zcos(re, im, out); }''')
+}''', '''void f77_zsin(double re, double im, double *out) { if (!f77k_sin(re, im, out, 0, 0)) f77m_zsin(re, im, out); }
+void f77_zcos(double re, double im, double *out) { if (!f77k_sin(re, im, out, 1, 0)) f77m_zcos(re, im, out); }''')
+# FORTLIB's checks of the COMPLEX and COMPLEX*16 functions' arguments
+# (f77mzc.c): an argument out of a function's domain has its IHC27nI or
+# IHC28nI and its fixup (fort370 issue 30); and REAL's modulus, CABS's
+# and CSQRT's and CLOG's, is f77mz.c's, whose squares cannot overflow
+# where long ones of a part past 1E38 would (S/370's REAL and DOUBLE
+# PRECISION share their exponent)
+rep('''float f77_cabs(float re, float im) { return (float)sqrt((double)re * re + (double)im * im); }''',
+    '''float f77_cabs(float re, float im) { return (float)f77m_zabs(re, im); }''')
+rep('''void f77_clog(float *out, float re, float im) {
+    out[0] = (float)log(sqrt((double)re * re + (double)im * im));
+    out[1] = (float)atan2((double)im, (double)re);
+}
+void f77_cexp(float *out, float re, float im) {
+    double e = exp((double)re);
+    out[0] = (float)(e * cos((double)im));
+    out[1] = (float)(e * sin((double)im));
+}''', '''void f77_clog(float *out, float re, float im) {
+    double k[2];
+    if (f77k_log(re, im, k, 1)) { out[0] = (float)k[0]; out[1] = (float)k[1]; return; }
+    out[0] = (float)log(f77m_zabs(re, im));
+    out[1] = (float)atan2((double)im, (double)re);
+}
+void f77_cexp(float *out, float re, float im) {
+    double k[2];
+    double e;
+    if (f77k_exp(re, im, k, 1)) { out[0] = (float)k[0]; out[1] = (float)k[1]; return; }
+    e = exp((double)re);
+    out[0] = (float)(e * cos((double)im));
+    out[1] = (float)(e * sin((double)im));
+}''')
+rep('''void f77_csqrt(float *out, float re, float im) {
+    double m = sqrt((double)re * re + (double)im * im);
+    double r = sqrt((m + fabs((double)re)) / 2.0);''', '''void f77_csqrt(float *out, float re, float im) {
+    double m = f77m_zabs(re, im);
+    double r = sqrt(m > 1.0e75 ? m * 0.5 + fabs((double)re) * 0.5 : (m + fabs((double)re)) / 2.0);''')
+rep('''void f77_csin(float *out, float re, float im) {
+    out[0] = (float)(sin((double)re) * cosh((double)im));
+    out[1] = (float)(cos((double)re) * sinh((double)im));
+}
+void f77_ccos(float *out, float re, float im) {
+    out[0] = (float)(cos((double)re) * cosh((double)im));
+    out[1] = (float)(-sin((double)re) * sinh((double)im));
+}''', '''void f77_csin(float *out, float re, float im) {
+    double k[2];
+    if (f77k_sin(re, im, k, 0, 1)) { out[0] = (float)k[0]; out[1] = (float)k[1]; return; }
+    out[0] = (float)(sin((double)re) * cosh((double)im));
+    out[1] = (float)(cos((double)re) * sinh((double)im));
+}
+void f77_ccos(float *out, float re, float im) {
+    double k[2];
+    if (f77k_sin(re, im, k, 1, 1)) { out[0] = (float)k[0]; out[1] = (float)k[1]; return; }
+    out[0] = (float)(cos((double)re) * cosh((double)im));
+    out[1] = (float)(-sin((double)re) * sinh((double)im));
+}''')
+rep('''void f77_cpow_i(float *out, float re, float im, int n) {
+    double rr = 1.0, ri = 0.0;
+    double br = re, bi = im;
+    int neg = n < 0;
+    unsigned k = (unsigned)(neg ? -n : n);
+''', '''void f77_cpow_i(float *out, float re, float im, int n) {
+    double kz[2];
+    double rr = 1.0, ri = 0.0;
+    double br = re, bi = im;
+    int neg = n < 0;
+    unsigned k = (unsigned)(neg ? -n : n);
+    if (f77k_pow(re, im, n, kz, 1)) { out[0] = 0.0f; out[1] = 0.0f; return; }
+''')
+rep('''void f77_zpow_i(double re, double im, int n, double *out) {
+    double rr = 1.0, ri = 0.0;
+    double br = re, bi = im;
+    int neg = n < 0;
+    unsigned k = (unsigned)(neg ? -n : n);
+''', '''void f77_zpow_i(double re, double im, int n, double *out) {
+    double rr = 1.0, ri = 0.0;
+    double br = re, bi = im;
+    int neg = n < 0;
+    unsigned k = (unsigned)(neg ? -n : n);
+    if (f77k_pow(re, im, n, out, 0)) return;
+''')
+rep('''void f77_zexp(double re, double im, double *out) {
+    double e = exp(re);
+    out[0] = e * cos(im);''', '''void f77_zexp(double re, double im, double *out) {
+    double e;
+    if (f77k_exp(re, im, out, 0)) return;
+    e = exp(re);
+    out[0] = e * cos(im);''')
 # HFP's largest number, REAL or DOUBLE PRECISION, is (1-16**-6)*16**63
 rep('#define F77_RHUGE 3.40e38\n#define F77_DHUGE 1.79e308',
     '#define F77_RHUGE 7.2e75\n#define F77_DHUGE 7.2e75')

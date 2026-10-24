@@ -389,8 +389,8 @@ a unit is one in the last hexadecimal place of the result):
   CDABS 0.5 (FORTLIB 2.1), CDSQRT 0.7 (1.5), CDLOG 0.6 (2125, near the
   unit circle, where log|z| is small), CDEXP 1.7 (25), CDCOS 1.8
   (10,281) and CDSIN 2.2 (4.6 million).  Each is summed in extended
-  precision and rounded once.  FORTLIB refuses arguments past its
-  limits (IHC282I-IHC285I); this runtime does not check them yet.
+  precision and rounded once.  Arguments past FORTLIB's limits get its
+  messages and fixups, as below.
 
   SIN, COS and TAN reduce an argument exactly, by the bits of 2/pi, up
   to FORTLIB's limits, pi*2**18 for REAL and pi*2**50 for DOUBLE
@@ -408,7 +408,20 @@ message and its standard fixup: SQRT(-4.0) is 2.0 with IHC251I,
 ALOG(0.0) the largest negative number and ALOG(-1.0) 0.0, both with
 IHC253I, ARSIN(1.5) 0.0, SIN(1.0E10) 0.7071068, TAN at a singularity
 the largest number, (-2.0)**0.5 1.4142135 and 0.0**0.0 and 0**0 zero,
-each with its message, as H's are -- run on TK5 side by side.  Five
+each with its message, as H's are -- run on TK5 side by side.  So do
+the COMPLEX and COMPLEX*16 functions': CEXP((200.0,1.0)) is the
+largest number times (COS(1.0),SIN(1.0)) with IHC271I, and CEXP of an
+imaginary part past pi*2**18 zero with IHC272I; CLOG((0.0,0.0)) the
+largest negative number with IHC273I; CSIN and CCOS of a real part past
+pi*2**18 zero with IHC274I, and of an imaginary part past 174.673 half
+the largest number times the sine or cosine of the real part, with
+IHC275I; (0.0,0.0)**0 and **-1 zero with IHC246I; and the same for
+COMPLEX*16, IHC281I-IHC285I and IHC247I.  The limits are FORTLIB's as
+it tests them, a little off the ones its messages give: EXP's 174.673
+is 174.6730957 (X'42AEAC50'), where the result would overflow, and
+DEXP's 174.6730804; SINH's 175.366 is 175.3662262; SIN's and TAN's
+pi*2**18 823549.625, but CSIN's and CEXP's 823296.0; DSIN's pi*2**50
+3537118706008064.0.  Five
 messages of each number are printed, each followed by a traceback, the
 routines back to the main program with the registers each was called
 with, and STANDARD FIXUP TAKEN; the tenth error of a number ends the program after IHC900I with
@@ -422,7 +435,11 @@ ERRSET, which changes the counts, is not there.  An underflow inside
 EXP (EXP(-200.0)) or ** is zero without a word, where FORTLIB's EXP
 reports its own IHC208I.  A division whose quotient is never used is
 not compiled at all, so it cannot be an error; H compiles it, and says
-IHC209I.  An object compiled by an earlier fort370 calls the REAL
+IHC209I.  A fixup that takes a sine or cosine, CEXP's and CSIN's, takes
+this runtime's, a unit or two from FORTLIB's in COMPLEX and a few units
+in COMPLEX*16.  CABS and CDABS of a value past the largest number are
+the largest number without a word, where FORTLIB's CABS overflows and
+says IHC207I.  An object compiled by an earlier fort370 calls the REAL
 functions' names for DOUBLE PRECISION too (DSQRT was SQRT): its values
 are the same, and an error in one is reported in the REAL function's
 words.

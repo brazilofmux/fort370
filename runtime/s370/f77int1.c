@@ -22,7 +22,7 @@ static double fio_zmod(double re, double im) {
  *
  * A COMPLEX is two floats; the compiler passes the parts as two words
  * and takes results back through an 8-byte frame temporary (`out`). */
-float f77_cabs(float re, float im) { return (float)sqrt((double)re * re + (double)im * im); }
+float f77_cabs(float re, float im) { return (float)f77m_zabs(re, im); }
 
 /* a / b: the textbook (ar br + ai bi, ai br - ar bi) / (br^2 + bi^2),
  * in double, where a product of two floats is exact -- so only the
@@ -64,6 +64,7 @@ void f77_zpow_i(double re, double im, int n, double *out) {
     double br = re, bi = im;
     int neg = n < 0;
     unsigned k = (unsigned)(neg ? -n : n);
+    if (f77k_pow(re, im, n, out, 0)) return;
     while (k) {
         if (k & 1) { double t = rr * br - ri * bi; ri = rr * bi + ri * br; rr = t; }
         k >>= 1;
@@ -72,9 +73,11 @@ void f77_zpow_i(double re, double im, int n, double *out) {
     if (neg) { double q[2]; f77_zdiv(1.0, 0.0, rr, ri, q); rr = q[0]; ri = q[1]; }
     out[0] = rr; out[1] = ri;
 }
-void f77_zlog(double re, double im, double *out) { f77m_zlog(re, im, out); }
+void f77_zlog(double re, double im, double *out) { if (!f77k_log(re, im, out, 0)) f77m_zlog(re, im, out); }
 void f77_zexp(double re, double im, double *out) {
-    double e = exp(re);
+    double e;
+    if (f77k_exp(re, im, out, 0)) return;
+    e = exp(re);
     out[0] = e * cos(im);
     out[1] = e * sin(im);
 }
@@ -85,14 +88,16 @@ void f77_zpow_c(double ar, double ai, double br, double bi, double *out) {
     f77_zexp(br * l[0] - bi * l[1], br * l[1] + bi * l[0], out);
 }
 void f77_zsqrt(double re, double im, double *out) { f77m_zsqrt(re, im, out); }
-void f77_zsin(double re, double im, double *out) { f77m_zsin(re, im, out); }
-void f77_zcos(double re, double im, double *out) { f77m_zcos(re, im, out); }
+void f77_zsin(double re, double im, double *out) { if (!f77k_sin(re, im, out, 0, 0)) f77m_zsin(re, im, out); }
+void f77_zcos(double re, double im, double *out) { if (!f77k_sin(re, im, out, 1, 0)) f77m_zcos(re, im, out); }
 
 void f77_cpow_i(float *out, float re, float im, int n) {
+    double kz[2];
     double rr = 1.0, ri = 0.0;
     double br = re, bi = im;
     int neg = n < 0;
     unsigned k = (unsigned)(neg ? -n : n);
+    if (f77k_pow(re, im, n, kz, 1)) { out[0] = 0.0f; out[1] = 0.0f; return; }
     while (k) {
         if (k & 1) { double t = rr * br - ri * bi; ri = rr * bi + ri * br; rr = t; }
         k >>= 1;
@@ -103,11 +108,16 @@ void f77_cpow_i(float *out, float re, float im, int n) {
 }
 
 void f77_clog(float *out, float re, float im) {
-    out[0] = (float)log(sqrt((double)re * re + (double)im * im));
+    double k[2];
+    if (f77k_log(re, im, k, 1)) { out[0] = (float)k[0]; out[1] = (float)k[1]; return; }
+    out[0] = (float)log(f77m_zabs(re, im));
     out[1] = (float)atan2((double)im, (double)re);
 }
 void f77_cexp(float *out, float re, float im) {
-    double e = exp((double)re);
+    double k[2];
+    double e;
+    if (f77k_exp(re, im, k, 1)) { out[0] = (float)k[0]; out[1] = (float)k[1]; return; }
+    e = exp((double)re);
     out[0] = (float)(e * cos((double)im));
     out[1] = (float)(e * sin((double)im));
 }
@@ -121,8 +131,8 @@ void f77_cpow_c(float *out, float ar, float ai, float br, float bi) {
     f77_cexp(out, (float)wr, (float)wi);
 }
 void f77_csqrt(float *out, float re, float im) {
-    double m = sqrt((double)re * re + (double)im * im);
-    double r = sqrt((m + fabs((double)re)) / 2.0);
+    double m = f77m_zabs(re, im);
+    double r = sqrt(m > 1.0e75 ? m * 0.5 + fabs((double)re) * 0.5 : (m + fabs((double)re)) / 2.0);
     if (re >= 0.0f) { out[0] = (float)r; out[1] = (float)(r == 0.0 ? 0.0 : im / (2.0 * r)); }
     else { out[0] = (float)(r == 0.0 ? 0.0 : fabs((double)im) / (2.0 * r)); out[1] = (float)(im < 0.0f ? -r : r); }
 }

@@ -19,10 +19,14 @@ static double fio_zmod(double re, double im) {
 }
 
 void f77_csin(float *out, float re, float im) {
+    double k[2];
+    if (f77k_sin(re, im, k, 0, 1)) { out[0] = (float)k[0]; out[1] = (float)k[1]; return; }
     out[0] = (float)(sin((double)re) * cosh((double)im));
     out[1] = (float)(cos((double)re) * sinh((double)im));
 }
 void f77_ccos(float *out, float re, float im) {
+    double k[2];
+    if (f77k_sin(re, im, k, 1, 1)) { out[0] = (float)k[0]; out[1] = (float)k[1]; return; }
     out[0] = (float)(cos((double)re) * cosh((double)im));
     out[1] = (float)(-sin((double)re) * sinh((double)im));
 }

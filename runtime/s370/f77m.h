@@ -52,6 +52,12 @@ double f77c_acos(double, int r) __asm__("M@CACOS");
 double f77c_sinh(double, int r) __asm__("M@CSINH");
 double f77c_cosh(double, int r) __asm__("M@CCOSH");
 double f77c_pow(double, double, int r) __asm__("M@CPOW");
+/* the COMPLEX (r 1) and COMPLEX*16 ones' (f77mzc.c): 1, the fixup in
+ * out, for an argument out of the function's domain */
+int f77k_exp(double, double, double *out, int r) __asm__("M@KEXP");
+int f77k_log(double, double, double *out, int r) __asm__("M@KLOG");
+int f77k_sin(double, double, double *out, int c, int r) __asm__("M@KSIN");
+int f77k_pow(double, double, int, double *out, int r) __asm__("M@KPOW");
 
 double f77f_sqrt(double) __asm__("SQRT");
 double f77f_exp(double) __asm__("EXP");
