@@ -8,6 +8,57 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-24.1
+
+Tagged `v2026.10.24.1`: the COMPLEX and COMPLEX*16 functions check
+their arguments as FORTLIB does (issue #30); F77CLG run several times
+in one job (issue #31); and the rest of the survey of the numbers
+(issue #20): list-directed and internal conversions, and integer
+overflow.  Built from `04eed1b`: FORT370.xmit SHA256
+`9db4fbe6558eafd0…`, 596,960 bytes; F77RT.xmit SHA256
+`e509f2aef5386ec3…`, 615,440 bytes; F77RT.upd SHA256
+`68cc98fa26555325…`, 631,360 bytes.  All 192 FCVS programs, 121
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design.
+
+- CEXP, CLOG, CSIN, CCOS and their COMPLEX*16 forms, and a zero base
+  to an INTEGER power not positive, give FORTLIB's messages
+  (IHC246I-247I, IHC271I-275I, IHC281I-285I) and its fixups, tested in
+  its order and at its limits as it tests them, a little off the ones
+  its messages give (CSIN's pi*2**18 is 823296.0).  They said nothing
+  and returned whatever the arithmetic gave.
+- The REAL and DOUBLE PRECISION functions' limits are FORTLIB's as it
+  tests them too: EXP(174.673) had a message H does not give, and DSIN
+  took arguments up to 1.7E8 below pi*2**50 that H refuses.  DSIN's
+  fixup is FORTLIB's SQRT(2)/2, 11 units above the nearest.
+- EXP was the largest number from 174.6, SINH and COSH from 174.0, and
+  ** the same: EXP(174.65) was 2% high, SINH(174.5) 2.4 times too
+  large, and CSIN((1.0,174.673)) twice its value.  They are exact to
+  where they overflow.
+- CABS, CSQRT and CLOG of a COMPLEX part past 1E38 overflowed on the
+  way: CSQRT((-1.0E75,1.0E75)) was wrong in both parts.
+- F77CLG: one job may run it for several programs.  A program's
+  nonzero return code (STOP 1, a runtime error) skipped every later
+  program in the job, and a failed compile left its assembler text for
+  the next program's ASM step.  Each step now tests and reads its own
+  invocation's.  The FCVS JCL zip is regenerated for it.
+- List-directed DOUBLE PRECISION output prints 18 digits, not 17, so
+  that READ gives back the same bits: 17 left a quarter of HFP's long
+  values a unit off.  The field is still 25 columns.
+- A DOUBLE PRECISION number below 1E-77 written with 17 digits read,
+  and compiled as a constant, as zero; and a number just under the
+  smallest, 16**-65, as zero, where the smallest is the nearest.
+- -2147483648 / -1 in a constant expression: FORT370 ended S0C9
+  compiling it on MVS.  It folds to -2147483648, as H's does.
+- DO I = 2147483640, 2147483647 never ended: the loop's BXLE wrapped
+  past the limit.  With its bounds known, it runs its 8 trips; with
+  them unknown, it is H's, which loops the same way.
+- The survey found the rest as it should be: list-directed and
+  internal output correctly rounded, and integer overflow the
+  machine's, as H's (INTEGER*2 apart: H keeps a value in its register
+  past the store, 32767+1 being 32768 there; here it is -32768).
+
 ## 2026-10-24
 
 Tagged `v2026.10.24`: INCLUDE (issue #8); the COMPLEX and COMPLEX*16
