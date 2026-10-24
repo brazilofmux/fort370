@@ -23,7 +23,7 @@
 #ifndef S370_HFP_H
 #define S370_HFP_H
 
-#define HFP_BIGW 40   /* 32-bit limbs: enough for 10^300 (~1000 bits) */
+#define HFP_BIGW 48   /* 32-bit limbs: 300 digits (~1000 bits) shifted by up to 316 bits for the smallest numbers */
 
 typedef struct { unsigned int w[HFP_BIGW]; int n; } HfpBig;
 
@@ -164,9 +164,11 @@ static int hfp_from_text_n(const char *s, unsigned int *hi, unsigned int *lo, in
     if (*s != 0) return -1;
     *hi = 0; *lo = 0;
     if (hfp_big_iszero(&num)) return 0;   /* +0 and -0 are both zero */
-    if (e10 > 75 || e10 < -90) {
-        /* beyond any HFP number: overflow or underflow.  The bound is
-         * loose on purpose; the exact range test comes below. */
+    if (e10 > 75 || e10 + ndig < -80) {
+        /* beyond any HFP number: overflow (num >= 1) or underflow (the
+         * value is below 10^(e10 + ndig)).  The bounds are loose on
+         * purpose; the exact range test comes below.  (e10 alone was
+         * the underflow test: 17 digits at 1E-77, e10 -94, were zero.) */
         if (e10 > 0) { *hi = (neg ? 0x80000000u : 0) | 0x7FFFFFFFu; *lo = 0xFFFFFFFFu; return 1; }
         return 1;
     }
