@@ -21,6 +21,10 @@
 //*  is DDNAME=SYSIN: a program's input is //GO.SYSIN DD *, and
 //*  without one unit 5 is at its end at once.
 //*
+//*  Each step tests and reads only its own invocation's steps, so
+//*  one job may run F77CLG once a program, and a program that fails
+//*  to compile, or ends with a nonzero code, stops only itself.
+//*
 //*  The assembly's listing is DUMMY: IFOX00 checks what FORT370
 //*  wrote, and a clean compile assembles cleanly.  If ASM ends with
 //*  RC 8 anyway, which is a compiler bug worth reporting, add
@@ -33,24 +37,24 @@
 //SYSPRINT DD SYSOUT=*
 //SYSTERM  DD SYSOUT=*
 //SYSIN    DD DSN=HERC01.FORT370.SRC(&MEM),DISP=SHR
-//SYSPUNCH DD DSN=&&ASM,DISP=(NEW,PASS),UNIT=SYSDA,
+//SYSPUNCH DD DISP=(NEW,PASS),UNIT=SYSDA,
 //            SPACE=(CYL,(2,2)),
 //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
 //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 //ASM      EXEC PGM=IFOX00,PARM='OBJ,NODECK',REGION=2048K,
-//            COND=(0,NE)
+//            COND=(0,NE,FORT)
 //SYSLIB   DD DSN=SYS1.MACLIB,DISP=SHR
-//SYSGO    DD DSN=&&OBJ,DISP=(NEW,PASS),UNIT=SYSDA,
+//SYSGO    DD DISP=(NEW,PASS),UNIT=SYSDA,
 //            SPACE=(CYL,(1,1)),
 //            DCB=(RECFM=FB,LRECL=80,BLKSIZE=3120)
 //SYSUT1   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 //SYSUT2   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 //SYSUT3   DD UNIT=SYSDA,SPACE=(CYL,(5,5))
 //SYSPRINT DD DUMMY
-//SYSIN    DD DSN=&&ASM,DISP=(OLD,DELETE)
+//SYSIN    DD DSN=*.FORT.SYSPUNCH,DISP=(OLD,DELETE)
 //LKED     EXEC PGM=IEWL,PARM='MAP,LET,LIST',REGION=2048K,
 //            COND=((0,NE,FORT),(8,LE,ASM))
-//SYSLIN   DD DSN=&&OBJ,DISP=(OLD,DELETE)
+//SYSLIN   DD DSN=*.ASM.SYSGO,DISP=(OLD,DELETE)
 //SYSLIB   DD DSN=HERC01.FORT370.F77RT,DISP=SHR
 //SYSLMOD  DD DSN=&&LOAD(GO),DISP=(NEW,PASS),UNIT=SYSDA,
 //            SPACE=(TRK,(30,10,5))

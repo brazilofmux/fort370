@@ -193,6 +193,16 @@ FORTHCLG, its GO step's FT05F001 is DDNAME=SYSIN, so a program's input
 for unit 5 is a //GO.SYSIN DD * after the EXEC; without one, unit 5 is
 at its end at once.
 
+  One job may run F77CLG once for each of several programs.  Each step
+  tests only the return codes of its own invocation (COND=(0,NE,FORT)),
+  and the assembler text and object are unnamed temporary data sets,
+  reached by referback, so a program that fails to compile or ends
+  with a nonzero code stops only itself.  A procedure of your own that
+  is run several times in one job wants the same: COND=(0,NE) with no
+  step name tests every step before it in the job, and a temporary
+  name such as &&ASM is the job's, not the step's, so a later step's
+  DISP=OLD finds the first one still passed, an earlier program's.
+
   The assembly step's SYSPRINT is DUMMY: what FORT370 writes assembles
   cleanly, and a listing of it is thousands of lines.  If the ASM step
   ends with return code 8 anyway, it is a compiler bug -- please report
