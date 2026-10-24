@@ -8,6 +8,36 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-23.2
+
+Tagged `v2026.10.23.2`: DEFINE FILE and FORTRAN IV's direct access
+(issue #5), PUNCH (issue #6), and a subprogram with an ENTRY point
+finding its FORMATs.  Built from `e9e2735`: FORT370.xmit SHA256
+`4dae192eda67238f…`, 597,120 bytes; F77RT.xmit SHA256
+`993957afa8ce9c67…`, 581,040 bytes; F77RT.upd SHA256
+`feccc0ad6e902770…`, 595,120 bytes.  All 192 FCVS programs, 114
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design.
+
+- DEFINE FILE a(m,r,f,v), with READ (a'n), WRITE (a'n) and FIND (a'n),
+  as FORTRAN H has them: E, U and L files; v the record after the last
+  one each statement reached (FIND: the one it names); a DEFINE FILE in
+  effect in its whole unit, even one a GO TO goes round.  The first
+  WRITE writes all m records, blanks.  A record number out of range
+  (IHC232I) and a READ before the data set is written (IHC236I) skip
+  the statement; a formatted record too long is cut (IHC212I,
+  IHC231I), an input field past its end is blanks (IHC212I); an
+  unformatted list longer than a record goes on into the next.  The
+  messages are FORTLIB's, traceback and summary of errors included.
+- PUNCH f, list writes unit 7, FT07F001.
+- A subroutine or function with an ENTRY point: every READ or WRITE
+  with a FORMAT label in it was refused when the ENTRY was compiled, "no
+  FORMAT statement with that label", and an assigned GO TO lost its
+  labels, because the ENTRY looked its parent's tables up under its own
+  unit.  A DOUBLE PRECISION local a READ stores into could also lose the
+  value read.
+
 ## 2026-10-23.1
 
 Tagged `v2026.10.23.1`: MIL-STD-1753's bit functions and hexadecimal
