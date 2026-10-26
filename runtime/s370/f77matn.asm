@@ -1,22 +1,23 @@
 *
-* f77matn -- DATAN, DASIN and DACOS in assembler (issue #3):
-* f77math.c's f77m_atan, m_asincos, m_atan2_terms, m_atan_terms,
-* m_ddiv, m_pi_less, m_pio2r and m_pir as cc370 compiles them, the
-* same floating-point instructions in the same order, so the same
-* bits, without the C calls and the Sums' arrays.  A Sum here is its
-* running total, an extended number in storage, each entry added by
-* AXR as it is formed, as M@XSUM adds its entries in order from zero;
-* the roundings are M@XSUM's (XRND).  sqrt(1 - x^2) is DSQRT's, the
-* assembler one, which gives f77m_sqrt's bits.
+* f77matn -- DATAN, DATAN2, DASIN and DACOS in assembler (issue #3):
+* f77math.c's f77m_atan, f77m_atan2, m_asincos, m_atan2_terms,
+* m_atan_terms, m_ddiv, m_pi_less, m_pio2r and m_pir as cc370
+* compiles them, the same floating-point instructions in the same
+* order, so the same bits, without the C calls and the Sums' arrays.
+* A Sum here is its running total, an extended number in storage,
+* each entry added by AXR as it is formed, as M@XSUM adds its entries
+* in order from zero; the roundings are M@XSUM's (XRND).  sqrt(1 -
+* x^2) is DSQRT's, the assembler one, which gives f77m_sqrt's bits.
 *
 * DASIN and DACOS of an argument past 1 go to the C entries M@DASINC
-* and M@DACOSC (f77c_asin, f77c_acos: FORTLIB's message).  DATAN has
-* no check, as f77mld.c's had none.
+* and M@DACOSC (f77c_asin, f77c_acos: FORTLIB's message), DATAN2 of
+* two zeros to M@DATN2C.  DATAN has no check, as f77mld.c's had none.
 *
 * From C or Fortran: double DATAN(double), DASIN(double),
-* DACOS(double), cc370's convention: R1 to the argument, the result in
-* FPR0, R2-R13 kept.  The work areas are in the CSECT, as in f77xsum,
-* and R13 a frame on the C stack, as a C function's.
+* DACOS(double), DATAN2(double, double), cc370's convention: R1 to the
+* arguments, the result in FPR0, R2-R13 kept.  The work areas are in
+* the CSECT, as in f77xsum, and R13 a frame on the C stack, as a C
+* function's.
 *
 * Registers: R12 the base; R2 the Sum an operation works on, R3 the
 * long a product takes; links R10 (XADDP, XADDM, XRND), R7 (DDIV),
@@ -54,6 +55,62 @@ ARET     L     13,4(,13)
          L     14,12(,13)
          LM    2,12,28(13)
          BR    14
+*
+* DATAN2(y, x) (f77c_atan2, f77m_atan2): both zero is FORTLIB's
+* message, in C (M@DATN2C); x zero is pi/2 rounded and y's sign; else
+* atan2(|y|, |x|), pi less it for x < 0, and y's sign
+*
+         ENTRY DATAN2
+DATAN2   STM   14,12,12(13)
+         USING DATAN2,15
+         L     12,=A(F77MATN)
+         DROP  15
+         BAL   10,FRAME
+         LD    0,0(,1)
+         STD   0,TX                  y
+         MVC   TAX(8),8(1)
+         LD    2,TAX                 x
+         LTDR  2,2
+         BNZ   A2B
+         LTDR  0,0
+         BZ    A2C
+         BAL   11,PIO2R
+         B     A2SIGN
+A2C      L     15,=V(M@DATN2C)
+         L     13,4(,13)
+         L     14,12(,13)
+         LM    0,12,20(13)
+         BR    15
+A2B      LA    2,SACC
+         BAL   10,XZERO
+         LD    0,TX
+         LPDR  0,0
+         STD   0,TAY
+         LD    2,TAX
+         LPDR  2,2
+         STD   2,TAX
+         BAL   11,ATAN2T
+         LD    0,8(,1)
+         LTDR  0,0
+         BNL   A2R
+         LD    4,SACC                pi less the sum (m_pi_less)
+         LD    6,SACC+8
+         LCDR  4,4
+         LCDR  6,6
+         STD   4,SACC
+         STD   6,SACC+8
+         LA    2,SACC
+         LD    0,KPI
+         BAL   10,XADDP
+         LD    0,KPIL
+         BAL   10,XADDP
+A2R      LA    2,SACC
+         BAL   10,XRND
+A2SIGN   LD    2,TX
+         LTDR  2,2
+         BNL   ARET
+         LCDR  0,0
+         B     ARET
 *
 * DASIN and DACOS (m_asincos): R4 0 for DASIN, 1 for DACOS
 *

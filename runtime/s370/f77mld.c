@@ -21,7 +21,8 @@ double f77f_dcos_c(double x) { return f77c_cos(x, 0); }
 /* DTAN is f77mtan.asm; 2^20 and past, and the singularities, come here */
 double f77f_dtan_c(double x) __asm__("M@DTANC");
 double f77f_dtan_c(double x) { return f77c_tan(x, 0); }
-double f77f_datan2(double x, double y) { return f77c_atan2(x, y, 0); }
+double f77f_datan2_c(double y, double x) __asm__("M@DATN2C");
+double f77f_datan2_c(double y, double x) { return f77c_atan2(y, x, 0); }
 /* DATAN, DASIN and DACOS are f77matn.asm; arguments past 1 come here */
 double f77f_dasin_c(double x) __asm__("M@DASINC");
 double f77f_dasin_c(double x) { return f77c_asin(x, 0); }
