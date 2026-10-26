@@ -453,11 +453,15 @@ a unit is one in the last hexadecimal place of the result):
   is.  DEXP, DLOG, DLOG10, DATAN, DATAN2, DASIN, DACOS, DSINH, DCOSH,
   DTANH, DTAN and D**D are within 0.7 of a unit, and correctly rounded
   for all but about one argument in a hundred; FORTLIB's are within 1
-  or 2 (DLOG10 6, DATAN2 5, D**D 400; DTAN off by thousands even at
-  |x| < 20).  DSIN and DCOS are within 2 units for any argument;
-  FORTLIB's are off by thousands at |x| < 20 as well.  FORTLIB's
-  routines, hand-written assembler, take a fifth to a tenth of the
-  time of these.
+  or 3 (DLOG10 6, DATAN2 5, D**D 27, and off in its last digit five
+  times in six; DTAN 175 units in (-1.55, 1.55) and tens of thousands
+  past it).  DSIN and DCOS are within half a unit at every argument
+  tested (from release 2026-10-26; they were within 2.4); FORTLIB's
+  are off by tens of thousands at |x| < 50.  These are in assembler
+  now, the same operations as the C they came from, and take 2 to 13
+  times FORTLIB's time, which is hand-written for 14 digits and no
+  more (bench/results-math-2026-10-26.txt has both, and the accuracy
+  of each against mpmath).
 
   COMPLEX functions (CSQRT, CEXP, CLOG, CSIN, CCOS, CABS) are within a
   unit of the result's magnitude; FORTLIB's, 14.  So is complex
@@ -466,8 +470,8 @@ a unit is one in the last hexadecimal place of the result):
   COMPLEX*16 functions, at the 46 arguments of tests/s370/zmath.f that
   FORTLIB takes (2026-10-24, TK5), in units of the result's magnitude:
   CDABS 0.5 (FORTLIB 2.1), CDSQRT 0.7 (1.5), CDLOG 0.6 (2125, near the
-  unit circle, where log|z| is small), CDEXP 1.7 (25), CDCOS 1.8
-  (10,281) and CDSIN 2.2 (4.6 million).  Each is summed in extended
+  unit circle, where log|z| is small), CDEXP 1.5 (25), CDCOS 1.9
+  (10,281) and CDSIN 1.4 (4.6 million).  Each is summed in extended
   precision and rounded once.  Arguments past FORTLIB's limits get its
   messages and fixups, as below.
 

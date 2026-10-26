@@ -82,3 +82,22 @@ DSINH, DCOSH and DTANH in assembler (runtime/s370/f77mexp.asm): 0.83
 s to 0.53, 0.74 to 0.48, 0.92 to 0.46 (FORTLIB 0.04, 0.09, 0.07); the
 same bits (tests/s370/hypx.f).  DATAN2, in assembler since f5552a3,
 0.45 (FORTLIB 0.10).
+
+All of them in assembler, the end of the day (the same bits as the C,
+DSIN and DCOS's rounded once); FCVS on TK5 3346 passed, 2 failed by
+design:
+
+          fort370      H
+DSQRT        0.13   0.06
+DEXP         0.25   0.06
+DLOG         0.27   0.07
+DSIN         0.20   0.06
+DCOS         0.20   0.06
+DTAN         0.35   0.06
+DATAN        0.39   0.08
+DASIN        0.69   0.10
+DPOW         0.62   0.15
+DATAN2       0.43   0.10
+DSINH        0.52   0.04
+DCOSH        0.47   0.09
+DTANH        0.45   0.07

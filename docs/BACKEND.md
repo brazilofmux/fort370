@@ -263,7 +263,15 @@ program needs is fort370's own, and it is the SLOW-32 one
   HFP's truncation and wobble cost half a unit instead of one at each
   step; the long results are within 0.7 of a unit, most correctly
   rounded. `tests/s370/math.sh` checks 85 values against mpmath. A
-  REAL result is the long one's first word, truncated.
+  REAL result is the long one's first word, truncated. The DOUBLE
+  PRECISION entry points are in assembler (`f77msq.asm`,
+  `f77mtan.asm`, `f77matn.asm`, `f77mexp.asm`): the C's floating-point
+  instructions in the C's order, as cc370 compiles them, each sum a
+  running total added by `AXR` as its entries are formed, so the same
+  bits two to three times faster; `tests/s370/*x.f` hash 100,000
+  results a function against the C's. Each runs on a frame of the C
+  stack, where the program-interrupt exit takes an underflow for the
+  runtime's. What gives FORTLIB's messages goes to the C still.
 - Records are `f77rec.c`'s, hand-written on libc370's access-method
   layer (`osb*`, `osd*`), because a libc370 stream is QSAM and QSAM
   cannot reposition (`fseek` abended S400 and S300; an output open
