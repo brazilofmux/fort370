@@ -8,6 +8,45 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-25
+
+Tagged `v2026.10.25`: FORTRAN H's return codes (issue #33), its
+options from PARM (issue #35) and its listing, with XREF, MAP and LIST
+(issue #34); the package on a tape for Hercules (issue #36); and a
+unit with initial values in a type statement kept out of line (issue
+#32).  Built from `ffafb95`: FORT370.xmit SHA256 `2193f6f6b6292ceb…`,
+631,120 bytes; F77RT.xmit SHA256 `3ff63e1acd8a689a…`, 615,440 bytes;
+F77RT.upd SHA256 `3938d42fbd52fdce…`, 631,360 bytes; FORT370.aws
+SHA256 `7617d2eb96753276…`, 1,248,481 bytes.  All 192 FCVS programs,
+122 tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K.  The
+FCVS's assembler is 2026-10-24.1's, byte for byte, so its runs (3346
+passed, 2 failed by design) stand.
+
+- FORT370 ends with the worst severity it reported, as IBM's compilers
+  do: 0 clean, 4 warnings, 8 errors, 12 a unit too large for a table,
+  16 no compile at all.  It ended with 1 for any error.  A source with
+  no END statement is now a warning.  F77CLG goes on after a 4, as
+  FORTHCLG does, and stops at an 8.
+- FORTRAN H's options, with H's names and defaults, come from PARM (on
+  a host, -p): SOURCE/NOSOURCE, LINECNT, XREF, MAP and LIST act; the
+  rest are taken and shown.  An option H does not have is a warning.
+- The listing, on SYSPRINT (on a host, -l FILE), is laid out as H's:
+  a heading per page, the options, the source with H's ISNs, each
+  message under its ISN with its severity, and the statistics.  XREF
+  gives each name and label with the ISNs that use them, in H's order;
+  MAP each name's type, storage and bounds; LIST the unit's generated
+  assembler.  The messages still go to SYSTERM too.  F77CLG's SYSPRINT
+  has the DCB the listing needs.  The FCVS JCL zip is regenerated for
+  it.
+- FORT370.aws: both libraries, IEBCOPY unloaded, and F77CLG, on a
+  standard-label tape, volume FORT70.  Mounted on Hercules, one
+  IEBCOPY job restores them, with no file transfer (INSTALL-MVS.txt,
+  section 0).
+- INTEGER L/1/ in a subprogram small enough to put in line: L began
+  at 0, not 1, in its caller.  A type statement's initial values now
+  keep its unit out of line, as DATA does (MV410's PRINTTREE).
+
 ## 2026-10-24.1
 
 Tagged `v2026.10.24.1`: the COMPLEX and COMPLEX*16 functions check
