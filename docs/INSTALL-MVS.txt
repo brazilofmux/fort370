@@ -147,6 +147,25 @@ Or, without RECEIVE, IEBUPDTE makes the same library of F77RT.upd:
   goes on after a 4 and stops at an 8, COND=(4,LT,FORT), as FORTHCLG
   does.  (Through release 2026-10-24.1, every error ended with 1.)
 
+  The listing goes to SYSPRINT, as FORTRAN H's does, and looks like
+  H's: each program unit begins a page, with the options in effect;
+  then its source, each statement numbered as H numbers it (ISN 2 is
+  the first; comments and continuation lines are not numbered); its
+  messages, each citing its statement's ISN and its severity; and its
+  statistics.  The step ends with its own.  Give SYSPRINT a DCB of
+  RECFM=FBA,LRECL=133 (F77CLG's does): without it the carriage control
+  prints as text.  Without a SYSPRINT DD there is no listing, and the
+  messages are still on SYSTERM.
+
+  The options are FORTRAN H's, in PARM, and so are their defaults:
+  NAME=MAIN, OPT=00, LINECNT=50, SIZE=0000K, SOURCE, EBCDIC, NOLIST,
+  NODECK, LOAD, NOMAP, NOEDIT, NOID, NOXREF.  NOSOURCE leaves the
+  source out of the listing (not the messages), and LINECNT sets the
+  lines on a page; the rest are taken and shown in the listing, but do
+  nothing yet.  An option H does not have is a warning.  With F77CLG,
+  //RUN EXEC F77CLG,PARM.FORT='NOSOURCE'.  (A PARM of two data set
+  names, dd:SRC dd:ASM, still names the source and the output.)
+
 
 4.  Link and run a program
 --------------------------

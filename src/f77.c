@@ -15,6 +15,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#include <time.h>
 #ifndef __MVS__
 #include <unistd.h>
 #include <fcntl.h>
@@ -88,6 +89,10 @@ static char *f77_getenv(const char *name) {
 
 static void f77_error(char *msg);
 static void f77_limit(char *msg);
+static void f77_lst_card(int p, int kind);            /* f77_list.h */
+static void f77_warn(int line, char *msg);
+static int f77_quiet;
+static void f77_lst_note(int line, int sev, char *text);
 static int f77_nerr;      /* errors so far; a unit with any is not given to the back end */
 /* fort370: the return code, the worst severity reported, as IBM's
  * compilers give it (#33): 4 a warning, 8 an error, 12 a table of the
@@ -115,11 +120,13 @@ typedef char f77_alloca_room[HL_MAX_ALLOCA >= HIR_MAX_INST ? 1 : -1];   /* see f
 #include "hir_burg_s370.h"
 #include "hir_regalloc_s370.h"
 #include "f77_parse.h"
+#include "f77_list.h"
 #include "hir_codegen_s370.h"
 #else
 #include "hir_burg.h"
 #include "hir_regalloc.h"
 #include "f77_parse.h"
+#include "f77_list.h"
 #include "hir_codegen.h"
 #endif
 
@@ -187,7 +194,7 @@ static void f77_put_where(int x) {
     fdputs(": ", 2);
 }
 
-static void f77_error(char *msg) {
+static void f77_error_sev(char *msg, int sev) {
     if (f77_quiet) { f77_quiet = f77_quiet + 1; return; }
     f77_put_where(lx_stmt_line);
     fdputs(msg, 2);
@@ -196,25 +203,24 @@ static void f77_error(char *msg) {
     fdputs(lx_stmt, 2);
     fdputc('\n', 2);
     f77_nerr = f77_nerr + 1;
-    f77_note_rc(F77_RC_ERROR);
+    f77_note_rc(sev);
+    f77_lst_note(lx_stmt_line, sev, msg);
 }
+static void f77_error(char *msg) { f77_error_sev(msg, F77_RC_ERROR); }
 
 /* An error that is the compiler's: one of its tables is full */
-static void f77_limit(char *msg) {
-    int q;
-    q = f77_quiet;
-    f77_error(msg);
-    if (!q) f77_note_rc(F77_RC_LIMIT);
-}
+static void f77_limit(char *msg) { f77_error_sev(msg, F77_RC_LIMIT); }
 
 /* A warning: said, and the compile goes on */
 static void f77_warn(int line, char *msg) {
     if (f77_quiet) return;
-    f77_put_where(line);
+    if (line > 0) f77_put_where(line);
+    else fdputs("f77: ", 2);
     fdputs("warning: ", 2);
     fdputs(msg, 2);
     fdputc('\n', 2);
     f77_note_rc(F77_RC_WARN);
+    f77_lst_note(line, F77_RC_WARN, msg);
 }
 
 /* fort370: two subprograms (or ENTRY points) of one name -- the CALL
@@ -227,6 +233,7 @@ static void f77_report_at(int line, char *msg) {
     fdputc('\n', 2);
     f77_nerr = f77_nerr + 1;
     f77_note_rc(F77_RC_ERROR);
+    f77_lst_note(line, F77_RC_ERROR, msg);
 }
 static void f77_check_unit_names(void) {
     int i;
@@ -603,7 +610,13 @@ static void f77_scan_units(void) {
 }
 
 /* Phase 2: the backend asks for one unit's HIR. */
+static void hl_func_body(Node *fn);
 static void hl_func(Node *fn) {
+    f77_lst_unit_begin(fn->unit);
+    hl_func_body(fn);
+    f77_lst_unit_end(lx_line);
+}
+static void hl_func_body(Node *fn) {
     int b_entry;
     int u;
 
@@ -867,6 +880,9 @@ static FILE *f77_reopen_file(void) {
 
 int main(int argc, char **argv) {
 #ifdef F77_TARGET_S370
+    FILE *flst;
+#endif
+#ifdef F77_TARGET_S370
     /* stdio, which every host and libc370 have.  On MVS the source is
      * the SYSIN DD and the assembler goes to SYSPUNCH, as cobc370's do,
      * both as records (text); on a host both are files, as bytes.  The
@@ -878,6 +894,7 @@ int main(int argc, char **argv) {
     char *outname;
     int keepall;
     keepall = 0;
+    flst = 0;
 #ifdef __MVS__
     /* SYSIN is libc370's stdin, already open: reading it there rather
      * than opening dd:SYSIN a second time lets it be DD * (a second open
@@ -885,14 +902,37 @@ int main(int argc, char **argv) {
      * once, so the scan copies it to the work data set SYSUT1 for the
      * second reading; without a SYSUT1 the whole source is kept in
      * storage instead. */
-    inname = argc > 1 ? argv[1] : "dd:SYSIN";
-    outname = argc > 2 ? argv[2] : "dd:SYSPUNCH";
-    fin = argc > 1 ? fopen(inname, "r") : stdin;
+    /* PARM is the options (#35), H's; the listing is SYSPRINT, libc370's
+     * stdout.  (A PARM of data set names, dd:..., is the source and the
+     * output, as before.) */
+    if (argc > 1 && (strncmp(argv[1], "dd:", 3) == 0 || strncmp(argv[1], "DD:", 3) == 0)) {
+        inname = argv[1];
+        outname = argc > 2 ? argv[2] : "dd:SYSPUNCH";
+        fin = fopen(inname, "r");
+    } else {
+        int a;
+        for (a = 1; a < argc; a++) f77_options(argv[a]);
+        inname = "dd:SYSIN";
+        outname = "dd:SYSPUNCH";
+        fin = stdin;
+    }
+    flst = stdout;
     lx_spool = fopen("dd:SYSUT1", "w");
     if (!lx_spool) keepall = 1;
 #else
+    /* -p OPTIONS, H's, and -l FILE, a listing, before the two names */
+    while (argc > 2 && argv[1][0] == '-' && (argv[1][1] == 'p' || argv[1][1] == 'l') && argv[1][2] == 0) {
+        if (argv[1][1] == 'p') f77_options(argv[2]);
+        else {
+            flst = fopen(argv[2], "w");
+            if (!flst) { fdputs("f77: cannot open the listing ", 2); fdputs(argv[2], 2); fdputc('\n', 2); return F77_RC_TERM; }
+        }
+        argv[2] = argv[0];
+        argv = argv + 2;
+        argc = argc - 2;
+    }
     if (argc < 3) {
-        fdputs("usage: f77 source.f output.asm\n", 2);
+        fdputs("usage: f77 [-p options] [-l listing] source.f output.asm\n", 2);
         return F77_RC_TERM;
     }
     inname = argv[1];
@@ -911,6 +951,7 @@ int main(int argc, char **argv) {
     lx_reopen = keepall ? 0 : f77_reopen_file;
     lx_keep = keepall ? 0 : 0x7FFFFFFF;
     lx_start(fin);
+    f77_lst_open(flst);
 #else
     static char src[1 << 18];   /* the source file, whole */
     int n;
@@ -1032,7 +1073,9 @@ int main(int argc, char **argv) {
 #else
         unlink(argv[2]);
 #endif
+        f77_lst_close();
         return f77_rc;
     }
+    f77_lst_close();
     return f77_rc;              /* 0, or 4 with warnings */
 }

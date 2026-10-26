@@ -166,6 +166,11 @@ static void lx_inc_error(char *msg, char *nm) {
     fdputc('\n', 2);
     f77_nerr = f77_nerr + 1;
     f77_note_rc(F77_RC_ERROR);
+    {
+        char t[120];
+        sprintf(t, "%.60s%.50s", msg, nm);
+        f77_lst_note(lx_ixline + 1, F77_RC_ERROR, t);
+    }
 }
 
 /* Is the line an INCLUDE?  Its name into nm, 1 when it is. */
@@ -625,7 +630,9 @@ static int f77_next_stmt(void) {
     int inq;
     int hcount;
     int first;
+    int listed;       /* fort370: the statement's line is in the listing (f77_lst_card) */
 
+    listed = 0;
     lx_stmt_len = 0;
     lx_stmt_label = -1;
     lx_after_blank = 0;
@@ -637,6 +644,7 @@ static int f77_next_stmt(void) {
         /* Skip comment and blank lines. */
         while (lx_has(lx_pos) &&
                (lx_is_comment(lx_pos) || lx_is_blank_line(lx_pos))) {
+            f77_lst_card(lx_pos, 0);
             lx_pos = lx_next_line(lx_pos);
         }
         if (!lx_has(lx_pos)) break;
@@ -736,6 +744,21 @@ static int f77_next_stmt(void) {
                                 f77_error("Hollerith constant runs off the line");
                                 break;
                             }
+                            {
+                                /* fort370: the line left, and the comments
+                                 * passed, into the listing */
+                                int r;
+                                f77_lst_card(lx_pos, listed ? 2 : 1);
+                                listed = 1;
+                                r = lx_pos;
+                                while (lx_has(r) && lx_src[r] != '\n') r = r + 1;
+                                if (lx_has(r)) r = r + 1;
+                                while (r < q) {
+                                    f77_lst_card(r, 0);
+                                    while (lx_has(r) && lx_src[r] != '\n') r = r + 1;
+                                    if (lx_has(r)) r = r + 1;
+                                }
+                            }
                             lx_pos = q;
                             col = 7;
                             continue;
@@ -760,6 +783,8 @@ static int f77_next_stmt(void) {
          * trailing blanks trimmed reads as the deck on MVS does */
         if (inq) while (col <= 72) { lx_put(' '); col = col + 1; }
 
+        f77_lst_card(lx_pos, listed ? 2 : 1);
+        listed = 1;
         lx_pos = lx_next_line(lx_pos);
         first = 0;
 
@@ -770,6 +795,7 @@ static int f77_next_stmt(void) {
             int qlabel;
             q = lx_pos;
             while (lx_has(q) && (lx_is_comment(q) || lx_is_blank_line(q))) {
+                f77_lst_card(q, 0);
                 q = lx_next_line(q);
                 lx_pos = q;
             }
