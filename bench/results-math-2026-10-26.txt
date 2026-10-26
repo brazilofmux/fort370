@@ -78,3 +78,7 @@ zmath's arguments 2.17 units to 1.43, CDEXP's 1.69 to 1.45, CDCOS's
 1.84 to 1.89 (its own products).
 In assembler (runtime/s370/f77mtan.asm, beside DTAN): DSIN 0.19, DCOS
 0.20.  The same bits as the C (tests/s370/sinx.f).
+DSINH, DCOSH and DTANH in assembler (runtime/s370/f77mexp.asm): 0.83
+s to 0.53, 0.74 to 0.48, 0.92 to 0.46 (FORTLIB 0.04, 0.09, 0.07); the
+same bits (tests/s370/hypx.f).  DATAN2, in assembler since f5552a3,
+0.45 (FORTLIB 0.10).

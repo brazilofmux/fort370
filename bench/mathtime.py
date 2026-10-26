@@ -37,6 +37,10 @@ FUNCS = [
     ('DATAN',  'DATAN(X)',     '-1.0D0', '1.0D-5'),
     ('DASIN',  'DARSIN(X)',    '-0.9D0', '0.9D-5'),
     ('DPOW',   'X ** 1.37D0',  '0.5D0',  '1.0D-5'),
+    ('DATAN2', 'DATAN2(X, 0.7D0)', '-1.0D0', '1.0D-5'),
+    ('DSINH',  'DSINH(X)',     '-1.0D0', '1.0D-5'),
+    ('DCOSH',  'DCOSH(X)',     '-1.0D0', '1.0D-5'),
+    ('DTANH',  'DTANH(X)',     '-1.0D0', '1.0D-5'),
 ]
 
 

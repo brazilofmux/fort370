@@ -28,8 +28,10 @@ double f77f_dasin_c(double x) __asm__("M@DASINC");
 double f77f_dasin_c(double x) { return f77c_asin(x, 0); }
 double f77f_dacos_c(double x) __asm__("M@DACOSC");
 double f77f_dacos_c(double x) { return f77c_acos(x, 0); }
-double f77f_dsinh(double x) { return f77c_sinh(x, 0); }
-double f77f_dcosh(double x) { return f77c_cosh(x, 0); }
-double f77f_dtanh(double x) { return f77m_tanh(x); }
+/* DSINH, DCOSH and DTANH are f77mexp.asm; past 175.366 comes here */
+double f77f_dsinh_c(double x) __asm__("M@DSINHC");
+double f77f_dsinh_c(double x) { return f77c_sinh(x, 0); }
+double f77f_dcosh_c(double x) __asm__("M@DCOSHC");
+double f77f_dcosh_c(double x) { return f77c_cosh(x, 0); }
 double f77f_dpow_c(double x, double y) __asm__("M@DPOWC");
 double f77f_dpow_c(double x, double y) { return f77c_pow(x, y, 0); }

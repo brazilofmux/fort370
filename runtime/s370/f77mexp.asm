@@ -1,7 +1,8 @@
 *
-* f77mexp -- DEXP, DLOG, DLOG10 and DPOW (X**Y) in assembler (issue
-* #3): f77mchk.c's checks and f77math.c's f77m_exp, f77m_log,
-* f77m_log10, f77m_pow, m_exp_terms (sc 0), m_log_terms, m_frexp,
+* f77mexp -- DEXP, DLOG, DLOG10, DPOW (X**Y), DSINH, DCOSH and DTANH
+* in assembler (issue #3): f77mchk.c's checks and f77math.c's
+* f77m_exp, f77m_log, f77m_log10, f77m_pow, f77m_sinh, f77m_cosh,
+* f77m_tanh, m_hyp, m_exp_terms, m_log_terms, m_frexp, m_ddiv,
 * sum_frame and m_hex as cc370 compiles them, the same floating-point
 * instructions in the same order, so the same bits, without the C
 * calls and the Sums' arrays.  A Sum is its running total, an
@@ -10,7 +11,8 @@
 * by MXD, 2^s by MXD (a plain entry) or MXR (a product), as M@XSUM
 * takes them; the roundings are M@XSUM's (XRND).  The exponential's
 * k is known before its entries are formed, so sum_frame's 2^(k mod 4)
-* is in each as it is added, and its 16^q applied after (MHEX).
+* is in each as it is added, and its 16^q applied after (MHEX); m_hyp
+* frames the same entries two ways, so they go to two totals.
 *
 * DPOW's check (f77c_pow) takes log x as f77m_log does, and f77m_pow
 * then takes it again: the same sum rounded the same way, so here it
@@ -18,19 +20,20 @@
 * digit at a time, as f77math.c now does (it called itself forever).
 *
 * What gives a message goes to the C entries: DEXP past 174.673
-* (M@DEXPC), DLOG and DLOG10 of zero or less (M@DLOGC, M@DLG10C), and
+* (M@DEXPC), DLOG and DLOG10 of zero or less (M@DLOGC, M@DLG10C),
 * X**Y with X zero or negative or the power past the exponential's
-* range (M@DPOWC).
+* range (M@DPOWC), DSINH and DCOSH past 175.366 (M@DSINHC, M@DCOSHC).
 *
 * From C or Fortran: double DEXP(double), DLOG(double), DLOG10(double),
-* DPOW(double, double), cc370's convention: R1 to the arguments, the
-* result in FPR0, R2-R13 kept.  The work areas are in the CSECT, as in
-* f77xsum, and R13 a frame on the C stack, as a C function's.
+* DPOW(double, double), DSINH, DCOSH and DTANH(double), cc370's
+* convention: R1 to the arguments, the result in FPR0, R2-R13 kept.
+* The work areas are in the CSECT, as in f77xsum, and R13 a frame on
+* the C stack, as a C function's.
 *
 * Registers: R12 the base; R2 the Sum an operation works on, R3 the
 * long a product takes, R4 the power of two of an entry (XADDS,
 * XADDMS); links R10 (XADDP, XADDM, XADDS, XADDMS, XRND, MHEX, FREXP),
-* R11 (EXPT, LOGT); R8-R9 XRND's.
+* R11 (EXPF, EXPK, EXPADD, LOGT), R7 (DDIV, HYP); R8-R9 XRND's.
 *
 F77MEXP  CSECT
          USING F77MEXP,12            R12 the CSECT's, at each entry
@@ -57,9 +60,10 @@ E1       SDR   2,2
          LDR   0,2
          B     RET
 E2       STD   2,TXL                 xl = 0
-         BAL   11,EXPT
+         BAL   11,EXPF
          LA    2,SACC
          BAL   10,XRND
+         L     4,TQF
          BAL   10,MHEX
 RET      L     13,4(,13)
          L     14,12(,13)
@@ -231,13 +235,308 @@ PW9      SDR   2,2
          B     RET
 PW10     STD   0,TX
          MVC   TXL(8),TRES
-         BAL   11,EXPT
+         BAL   11,EXPF
          LA    2,SACC
          BAL   10,XRND
+         L     4,TQF
          BAL   10,MHEX
          B     RET
 PWC      L     15,=V(M@DPOWC)
          B     TOC
+*
+* DSINH and DCOSH (f77c_sinh, f77c_cosh, f77m_sinh, f77m_cosh): past
+* 175.366 FORTLIB's message, in C (M@DSINHC, M@DCOSHC); DSINH below
+* 1/8 its series, else (exp a - 1/exp a)/2 with x's sign; DCOSH (exp a
+* + 1/exp a)/2
+*
+         ENTRY DSINH
+DSINH    STM   14,12,12(13)
+         USING DSINH,15
+         L     12,=A(F77MEXP)
+         DROP  15
+         BAL   10,FRAME
+         LD    0,0(,1)
+         STD   0,TX0
+         CD    0,=D'-1.753662261962890625E+2'
+         BNH   SHC
+         CD    0,=D'1.753662261962890625E+2'
+         BNL   SHC
+         LPDR  0,0
+         STD   0,TA
+         CD    0,=D'1.76E+2'
+         BNH   SH1
+         LD    0,KHUGE
+         B     SH9
+SH1      CD    0,=D'1.25E-1'
+         BNL   SH2
+         LD    0,TX0                 x + x^3 p, the series to x^13
+         MD    0,TX0
+         STD   0,TX2
+         LDR   2,0
+         MD    2,=D'1.6059043836821614633333E-10'
+         AD    2,=D'2.5052108385441718569505E-8'
+         MDR   2,0
+         AD    2,=D'2.7557319223985890393368E-6'
+         MDR   2,0
+         AD    2,=D'1.9841269841269841252632E-4'
+         MDR   2,0
+         AD    2,=D'8.3333333333333332176851E-3'
+         MDR   2,0
+         AD    2,=D'1.66666666666666671292596E-1'
+         STD   2,TP2
+         LA    2,SACC
+         BAL   10,XZERO
+         LD    0,TX0
+         BAL   10,XADDP
+         LD    0,TX2
+         MD    0,TX0
+         MD    0,TP2
+         BAL   10,XADDP
+         BAL   10,XRND
+         B     RET
+SH2      MVC   TSGN(8),=D'-1.0E+0'
+         SR    4,4                   a corrected division below .8814
+         LD    0,TA
+         CD    0,=D'8.81400000000000002908784E-1'
+         BNL   SH3
+         LA    4,1
+SH3      ST    4,TEX
+         BAL   7,HYP
+SH9      LD    2,TX0
+         LTDR  2,2
+         BNL   RET
+         LCDR  0,0
+         B     RET
+SHC      L     15,=V(M@DSINHC)
+         B     TOC
+         ENTRY DCOSH
+DCOSH    STM   14,12,12(13)
+         USING DCOSH,15
+         L     12,=A(F77MEXP)
+         DROP  15
+         BAL   10,FRAME
+         LD    0,0(,1)
+         CD    0,=D'-1.753662261962890625E+2'
+         BNH   CHC
+         CD    0,=D'1.753662261962890625E+2'
+         BNL   CHC
+         LPDR  0,0
+         STD   0,TA
+         CD    0,=D'1.76E+2'
+         BNH   CH1
+         LD    0,KHUGE
+         B     RET
+CH1      MVC   TSGN(8),=D'1.0E+0'
+         MVC   TEX,=F'0'
+         BAL   7,HYP
+         B     RET
+CHC      L     15,=V(M@DCOSHC)
+         B     TOC
+*
+* DTANH (f77m_tanh, which has no check): past 22, 1; below 1/4096
+* x - x^3/3 + 2x^5/15; else u = exp(2a) - 1 framed, u/(u + 2) by a
+* corrected division, from 1.75 on 1 - 2/(u + 2); x's sign
+*
+         ENTRY DTANH
+DTANH    STM   14,12,12(13)
+         USING DTANH,15
+         L     12,=A(F77MEXP)
+         DROP  15
+         BAL   10,FRAME
+         LD    0,0(,1)
+         STD   0,TX0
+         LPDR  0,0
+         STD   0,TA
+         CD    0,=D'2.2E+1'
+         BNH   TH1
+         LD    0,=D'-1.0E+0'
+         LD    4,TX0
+         LTDR  4,4
+         BL    RET
+         LD    0,=D'1.0E+0'
+         B     RET
+TH1      CD    0,=D'2.44140625E-4'
+         BNL   TH2
+         LD    2,TX0                 the series
+         MDR   2,2
+         LD    0,TX0
+         MDR   0,2
+         MD    2,=D'1.33333333333333331482962E-1'
+         AD    2,=D'-3.33333333333333328707404E-1'
+         MDR   0,2
+         STD   0,TP2
+         LA    2,SACC
+         BAL   10,XZERO
+         LD    0,TX0
+         BAL   10,XADDP
+         LD    0,TP2
+         BAL   10,XADDP
+         BAL   10,XRND
+         B     RET
+TH2      MVC   TX(8),TA              exp(2a), framed
+         MVC   TXL(8),=D'0.0'
+         MVC   TSC,=F'1'
+         BAL   11,EXPK
+         LA    2,SACC
+         BAL   10,XZERO
+         L     5,TKE
+         BAL   11,EXPADD
+         MVC   TQU,TQF
+         L     4,TQU
+         SLL   4,2
+         LCR   4,4
+         ST    4,TSU                 -4q
+         LD    0,TA
+         CD    0,=D'1.75E+0'
+         BL    TH4
+         LA    2,SACC                1.75 on: + 1, dh + dl
+         L     4,TSU
+         LD    0,=D'1.0E+0'
+         BAL   10,XADDS
+         BAL   10,XRND
+         L     4,TQU
+         BAL   10,MHEX
+         STD   0,TDH
+         LD    0,TRES
+         L     4,TQU
+         BAL   10,MHEX
+         STD   0,TDL
+         LD    2,=D'2.0E+0'          q = 2/dh; 1 - q + q q dl 2^-1
+         DD    2,TDH
+         STD   2,TQ2
+         LA    2,ECC
+         BAL   10,XZERO
+         LD    0,=D'1.0E+0'
+         BAL   10,XADDP
+         LD    0,TQ2
+         LCDR  0,0
+         BAL   10,XADDP
+         LD    0,TQ2
+         MD    0,TQ2
+         MD    0,TDL
+         L     4,=F'-1'
+         BAL   10,XADDS
+         BAL   10,XRND
+         B     TH9
+TH4      LA    2,SACC                below: u - 1, and u + 1 in two
+         L     4,TSU
+         LD    0,=D'-1.0E+0'
+         BAL   10,XADDS
+         MVC   ECC(16),SACC
+         LA    2,ECC
+         L     4,TSU
+         LD    0,=D'2.0E+0'
+         BAL   10,XADDS
+         BAL   10,XRND
+         L     4,TQU
+         BAL   10,MHEX
+         STD   0,TB
+         LD    0,TRES
+         L     4,TQU
+         BAL   10,MHEX
+         STD   0,TBL
+         LA    2,SACC                (u - 1)/(u + 1), corrected
+         MVC   TDQ,TQU
+         BAL   7,DDIV
+         LA    2,ECC
+         BAL   10,XZERO
+         LD    0,DQH
+         BAL   10,XADDP
+         LD    0,DQL
+         BAL   10,XADDP
+         BAL   10,XRND
+TH9      LD    2,TX0
+         LTDR  2,2
+         BNL   RET
+         LCDR  0,0
+         B     RET
+*
+* HYP: (exp a + sg / exp a) / 2 (m_hyp): TA a, TSGN sg, TEX 1 for
+* 1/exp a by a corrected division.  exp a's entries in two frames, k
+* (exp a: eh + el) and k - 1 (its half: the sum); past 16^49 the half
+* alone; else sg/exp a added to the half in its frame, 2^(-1 - 4q),
+* and the half rounded.  The result in FPR0.  Return by R7, kept in
+* THLINK across DDIV.
+*
+HYP      ST    7,THLINK
+         MVC   TX(8),TA
+         MVC   TXL(8),=D'0.0'
+         MVC   TSC,=F'0'
+         BAL   11,EXPK
+         LA    2,SACC                exp a in k's frame
+         BAL   10,XZERO
+         L     5,TKE
+         BAL   11,EXPADD
+         MVC   TQE,TQF
+         LA    2,TACC2               its half in k - 1's
+         BAL   10,XZERO
+         L     5,TKE
+         BCTR  5,0
+         BAL   11,EXPADD
+         MVC   TQT,TQF
+         LA    2,SACC                eh, el
+         BAL   10,XRND
+         L     4,TQE
+         BAL   10,MHEX
+         STD   0,TEH
+         LD    0,TRES
+         L     4,TQE
+         BAL   10,MHEX
+         STD   0,TEL
+         L     4,TQT
+         CH    4,=H'49'
+         BNH   HY1
+         LA    2,TACC2
+         BAL   10,XRND
+         L     4,TQT
+         BAL   10,MHEX
+         B     HYRET
+HY1      SLL   4,2                   1/exp a's 2^s: -1 - 4q
+         X     4,=F'-1'
+         ST    4,TSN
+         CLC   TEX,=F'0'
+         BE    HY3
+         LA    2,ECC                 1 / (eh + el), corrected
+         BAL   10,XZERO
+         LD    0,=D'1.0E+0'
+         BAL   10,XADDP
+         MVC   TB(8),TEH
+         MVC   TBL(8),TEL
+         MVC   TDQ,=F'0'
+         BAL   7,DDIV
+         LA    2,TACC2
+         L     4,TSN
+         LD    0,TSGN
+         MD    0,DQH
+         BAL   10,XADDS
+         L     4,TSN
+         LD    0,TSGN
+         MD    0,DQL
+         BAL   10,XADDS
+         B     HY4
+HY3      LD    0,=D'1.0E+0'          qh = 1/eh, and -sg qh qh el
+         DD    0,TEH
+         STD   0,DQH
+         LA    2,TACC2
+         L     4,TSN
+         LD    0,TSGN
+         MD    0,DQH
+         BAL   10,XADDS
+         LD    0,TSGN
+         LCDR  2,0
+         LD    0,DQH
+         MD    0,DQH
+         MD    0,TEL
+         MDR   2,0
+         LDR   0,2
+         L     4,TSN
+         BAL   10,XADDS
+HY4      LA    2,TACC2
+         BAL   10,XRND
+         L     4,TQT
+         BAL   10,MHEX
+HYRET    L     7,THLINK
+         BR    7
 *
 * FRAME: R13 a frame on the C stack, as a C function's: the program-
 * interrupt exit takes an underflow there for the runtime's, zero
@@ -251,16 +550,31 @@ FRAME    L     15,76(,13)
          ST    15,76(,13)
          BR    10
 *
-* EXPT: exp(TX + TXL) into SACC from zero, framed (m_exp_terms with
-* sc 0, then sum_frame): k the nearest whole number to x/ln 2; h = x
-* - k ln2_hi, exact; rl = xl - k ln2_lo; r = h + rl; the entries 1, h,
-* rl (1 + r), h h 2^-1 and r^3 p, each by 2^(k mod 4), and TQ =
-* (k - k mod 4)/4 for MHEX.  Return by R11.
+* EXPF: exp(TX + TXL) into SACC from zero in k's frame (m_exp_terms
+* with sc 0, sum_frame): EXPK and EXPADD.  Return by R11.
 *
-EXPT     LD    4,TX
+EXPF     ST    11,TFLINK
+         MVC   TSC,=F'0'
+         BAL   11,EXPK
+         LA    2,SACC
+         BAL   10,XZERO
+         L     5,TKE
+         BAL   11,EXPADD
+         L     11,TFLINK
+         BR    11
+*
+* EXPK: m_exp_terms' values for exp(TX + TXL), TSC its sc (0, or 1
+* for exp(2x)): k the nearest whole number to x/ln 2 (2x/ln 2) in TKE;
+* h = x - k ln2_hi (ln2_hi/2), exact; rl = xl - k ln2_lo; r = h + rl
+* (2h + rl); the series' p.  Return by R11.
+*
+EXPK     LD    4,TX
          LDR   2,4                   k = (int)(x/ln 2 +- 1/2)
          MD    2,KRLN2
-         LTDR  2,2
+         CLC   TSC,=F'0'
+         BE    EK0
+         ADR   2,2
+EK0      LTDR  2,2
          BNL   EX1
          SD    2,=D'5.0E-1'
          B     EX2
@@ -269,9 +583,14 @@ EX2      LDR   0,2
          AD    0,=XL8'4F08000000000000'
          STD   0,TT
          L     5,TT+4                k
+         ST    5,TKE
          BAL   10,KDBL
-         MD    0,KLN2HI
-         SDR   4,0                   h
+         CLC   TSC,=F'0'
+         BE    EK1
+         MD    0,KLN2HH
+         B     EK2
+EK1      MD    0,KLN2HI
+EK2      SDR   4,0                   h
          STD   4,TH
          BAL   10,KDBL
          MD    0,KLN2LO
@@ -279,7 +598,10 @@ EX2      LDR   0,2
          SDR   2,0                   rl
          STD   2,TRL
          LDR   6,4                   r
-         ADR   6,2
+         CLC   TSC,=F'0'
+         BE    EK3
+         ADR   6,4
+EK3      ADR   6,2
          STD   6,TRR
          LDR   2,6                   p
          MD    2,=D'1.6059043836821614633333E-10'
@@ -303,38 +625,78 @@ EX2      LDR   0,2
          MDR   2,6
          AD    2,=D'1.66666666666666671292596E-1'
          STD   2,TP
-         LR    4,5                   sum_frame: r = k & 3, q =
-*                                    (k - r)/4
+         BR    11
+*
+* EXPADD: EXPK's entries added to the Sum R2 names in the frame R5
+* (sum_frame): f mod 4 into each entry's power of two, TQF = (f - f
+* mod 4)/4 the sum's 16^q.  The entries 1, h 2^sc, rl (1 + r), h h
+* 2^(2sc - 1) and r^3 p.  Return by R11.
+*
+EXPADD   LR    4,5
          N     4,=F'3'
+         ST    4,TRF
          LR    6,5
          SR    6,4
          SRA   6,2
-         ST    6,TQ
-         ST    4,TS                  each entry's 2^s: r, and r - 1
-         LA    2,SACC
-         BAL   10,XZERO
+         ST    6,TQF
+         L     4,TRF
          LD    0,=D'1.0E+0'
          BAL   10,XADDS
+         L     4,TRF
+         A     4,TSC
          LD    0,TH
          BAL   10,XADDS
+         L     4,TRF
          LD    0,TRR                 rl (r + 1)
          AD    0,=D'1.0E+0'
          STD   0,TT
          LD    0,TRL
          MD    0,TT
          BAL   10,XADDS
-         L     4,TS                  h h, 2^(r - 1)
+         L     4,TSC                 h h 2^(2sc - 1)
+         AR    4,4
          BCTR  4,0
+         A     4,TRF
          LD    0,TH
          LA    3,TH
          BAL   10,XADDMS
-         L     4,TS
-         LD    0,TRR                 r^3 p (r from storage: XADD has
-         MD    0,TRR                 FPR4:6)
+         L     4,TRF
+         LD    0,TRR                 r^3 p
+         MD    0,TRR
          MD    0,TRR
          MD    0,TP
          BAL   10,XADDS
          BR    11
+*
+* DDIV: (the Sum R2 names, in its frame TDQ) / (TB + TBL) as DQH +
+* DQL (m_ddiv): the quotient of its rounding, then the remainder's,
+* the products in the frame.  Return by R7.
+*
+DDIV     BAL   10,XRND
+         L     4,TDQ
+         BAL   10,MHEX
+         DD    0,TB
+         STD   0,DQH
+         L     4,TDQ
+         SLL   4,2
+         LCR   4,4
+         ST    4,TDS                 -4q
+         LD    0,DQH
+         LCDR  0,0
+         LA    3,TB
+         BAL   10,XADDMS
+         L     4,TDS
+         LD    0,DQH
+         LCDR  0,0
+         LA    3,TBL
+         BAL   10,XADDMS
+         BAL   10,XRND
+         L     4,TDQ
+         BAL   10,MHEX
+         DD    0,TB
+         STD   0,DQL
+         BR    7
+*
 * KDBL: R5 as a double in FPR0, as cc370 converts.  Return by R10.
 KDBL     MVC   TT(4),=XL4'4E000000'
          ST    5,TT+4
@@ -484,11 +846,10 @@ FR4      S     6,=F'3'
          MD    0,=D'8.0E+0'
          BR    10
 *
-* MHEX: FPR0 times 16^TQ, exactly, or the largest magnitude, or zero
+* MHEX: FPR0 times 16^R4, exactly, or the largest magnitude, or zero
 * (m_hex).  Return by R10.
 *
-MHEX     L     4,TQ
-         LTR   4,4
+MHEX     LTR   4,4
          BZR   10
          LTDR  0,0
          BZR   10
@@ -547,15 +908,15 @@ XADD     LD    4,0(,2)
          STD   4,0(,2)
          STD   6,8(,2)
          BR    10
-* XMKCON: TCON = 2^s, s in R4, as M@XSUM makes it (R8, R9 used;
-* return by R9; TCON's second word stays zero)
+* XMKCON: TCON = 2^s, s in R4, as M@XSUM makes it (R6, R8, R9 used,
+* not R7, DDIV's link; return by R9; TCON's second word stays zero)
 XMKCON   LR    8,4
          SRA   8,2                   q = floor(s/4)
-         LR    7,4
-         N     7,=F'3'               r = s - 4q
+         LR    6,4
+         N     6,=F'3'               r = s - 4q
          ST    9,TLINK
          LA    9,X'10'
-         SLL   9,0(7)                the fraction's first byte, 2^r/16
+         SLL   9,0(6)                the fraction's first byte, 2^r/16
          SLL   9,16
          A     8,=F'65'              the characteristic, 16^(q+1)
          SLL   8,24
@@ -604,7 +965,9 @@ RZERO    SDR   0,0
 *
          LTORG
          DS    0D
-SACC     DS    2D                    the Sum
+SACC     DS    2D                    the Sums
+TACC2    DS    2D
+ECC      DS    2D
 TACC     DS    2D                    XRND's
 TX       DS    D                     the argument, or exp's x
 TXL      DS    D                     and its second part
@@ -613,7 +976,7 @@ TLH      DS    D                     log x in two parts
 TLL      DS    D
 TR       DS    D                     DLOG10's log and its residue
 TRS      DS    D
-TH       DS    D                     EXPT's h, rl, r
+TH       DS    D                     EXPK's h, rl, r
 TRL      DS    D
 TRR      DS    D
 TP       DS    D                     a series' value
@@ -622,20 +985,47 @@ TFH      DS    D
 TFL      DS    D
 TF       DS    D
 TT       DS    D                     conversions
+TX0      DS    D                     the hyperbolics' argument
+TA       DS    D                     and |x|
+TX2      DS    D
+TP2      DS    D
+TSGN     DS    D                     HYP's sign of 1/exp a
+TEH      DS    D                     exp a in two parts
+TEL      DS    D
+TB       DS    D                     DDIV's divisor in two parts
+TBL      DS    D
+DQH      DS    D                     its quotient in two parts
+DQL      DS    D
+TDH      DS    D
+TDL      DS    D
+TQ2      DS    D
 TOUT     DS    D
 TRES     DS    D
 TCON     DC    F'0',F'0'             2^s
 TRCON    DC    F'0',F'0'             half a unit
 TE       DS    F                     m_frexp's e
 TK       DS    F                     LOGT's k
-TQ       DS    F                     EXPT's 16^q
-TS       DS    F                     and 2^s
 TLINK    DS    F
+TSC      DS    F                     EXPK's sc
+TKE      DS    F                     its k
+TRF      DS    F                     EXPADD's 2^(f mod 4)
+TQF      DS    F                     and 16^q
+TFLINK   DS    F
+THLINK   DS    F
+TDQ      DS    F                     DDIV's frame, and its -4q
+TDS      DS    F
+TQE      DS    F                     HYP's frames: exp a's
+TQT      DS    F                     and its half's
+TSN      DS    F                     1/exp a's 2^s there
+TEX      DS    F                     HYP: the corrected division
+TQU      DS    F                     DTANH's frame, and its -4q
+TSU      DS    F
          DS    0D
 KHUGE    DC    X'7FFFFFFFFFFFFFFF'
 KRLN2    DC    X'41171547652B82FE'   1/ln 2
 KLN2HI   DC    X'40B17217F7D00000'   ln 2: its first 36 bits
 KLN2LO   DC    X'371CF79ABC9E3B39'   and the rest
+KLN2HH   DC    X'4058B90BFBE80000'   ln2_hi/2
 KRLN10   DC    X'406F2DEC549B9438'   1/ln 10
 KRLN10L  DC    X'32CA9AADD557D69A'   and the rest
 * -log(k/64), k = 64..128, in two parts (f77math.c's)
