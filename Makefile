@@ -80,7 +80,7 @@ out/crt/f77spie.o: runtime/s370/f77spie.asm Makefile
 
 # The compiler as an MVS load module, out/mvs/FORT370 and its XMIT:
 # the same C, built with cc370 for libc370 (docs/INSTALL-MVS.txt).
-mvs: out/mvs/FORT370.xmit out/mvs/F77RT.upd
+mvs: out/mvs/FORT370.xmit out/mvs/F77RT.upd out/mvs/FORT370.aws
 
 # The clock is pinned (as370 and ld370 stamp the date and time into the
 # deck and the module), so two builds of the same source are the same
@@ -93,6 +93,11 @@ out/mvs/FORT370.xmit: $(SRC) runtime/s370/millicode.c runtime/s370/f77std.h Make
 	$(MVSCLOCK) cc370 -O1 -w -DF77_TARGET_S370 -I backend -c -o out/mvs/f77.o src/f77.c
 	$(MVSCLOCK) cc370 -O1 -c -o out/mvs/millicode.o runtime/s370/millicode.c
 	cd out/mvs && $(MVSCLOCK) cc370 -o FORT370 f77.o millicode.o -Wl,--sparse-text -flinker-output=xmit
+
+# The package on a standard-label tape for Hercules: both libraries
+# IEBCOPY unloaded, and F77CLG (bench/mktape.py, issue 36)
+out/mvs/FORT370.aws: out/mvs/FORT370.xmit out/mvs/F77RT.upd jcl/F77CLG.jcl bench/mktape.py Makefile
+	python3 bench/mktape.py out/mvs/FORT370.aws
 
 # The runtime library for MVS: F77RT.upd (IEBUPDTE input) and F77RT.xmit
 # (TSO TRANSMIT), the same PDS (bench/mkrtlib.py, bench/xmitpds.py)

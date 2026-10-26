@@ -12,6 +12,9 @@ The MVS package is the compiler and its runtime:
                  FORT370.xmit is
   F77RT.upd      the same library as IEBUPDTE input, for a system
                  without RECEIVE; either one will do
+  FORT370.aws    both libraries, IEBCOPY unloaded, and F77CLG, on a
+                 standard-label tape for Hercules: one IEBCOPY job
+                 restores them (section 0), no file transfer
 
 Nothing here needs a C compiler on MVS.  Both were cross-built on a
 host with mvslovers' cc370 and libc370, and these are the results.
@@ -35,6 +38,41 @@ rather than against this file.
                 compile, assemble, link from F77RT and go on the
                 guest (bench/clg-test.py, and the FCVS through
                 F77CLG)
+
+
+0.  Or from tape, on Hercules
+-----------------------------
+
+FORT370.aws is the whole package on a standard-label tape, volume
+FORT70: the compiler's load library and the runtime library, IEBCOPY
+unloaded, and F77CLG.  Mount it on a tape drive (from the Hercules
+console, devinit 480 FORT370.aws, with the file where Hercules looks)
+and run one job; then go on at section 3.  Sections 1 and 2, the XMIT
+files, are the same libraries the other way.
+
+    //RESTORE  EXEC PGM=IEBCOPY
+    //SYSPRINT DD SYSOUT=*
+    //TAPE1    DD DSN=FORT370.LOAD,UNIT=TAPE,VOL=SER=FORT70,
+    //            LABEL=(1,SL),DISP=OLD
+    //TAPE2    DD DSN=FORT370.F77RT,UNIT=TAPE,VOL=SER=FORT70,
+    //            LABEL=(2,SL),DISP=OLD
+    //LOADLIB  DD DSN=your.FORT370.LOAD,DISP=(NEW,CATLG),
+    //            UNIT=SYSDA,SPACE=(CYL,(3,1,10))
+    //F77RT    DD DSN=your.FORT370.F77RT,DISP=(NEW,CATLG),
+    //            UNIT=SYSDA,SPACE=(CYL,(2,1,100))
+    //SYSUT3   DD UNIT=SYSDA,SPACE=(CYL,(1,1))
+    //SYSIN    DD *
+     COPY INDD=TAPE1,OUTDD=LOADLIB
+     COPY INDD=TAPE2,OUTDD=F77RT
+    /*
+
+  The libraries take their DCBs from the tape.  F77RT is 198 members
+  and 223 aliases, all loaded: IEB154I for each.  The third file,
+  F77CLG.JCL (FB 80, LABEL=(3,SL)), is the procedure: IEBGENER it into
+  a PROCLIB member, or copy it into a job.  For a new release into the
+  libraries you have, give LOADLIB and F77RT DISP=OLD (no SPACE) and
+  replace their members: COPY INDD=((TAPE1,R)),OUTDD=LOADLIB, and the
+  same for TAPE2.
 
 
 1.  Get the two files onto the guest
