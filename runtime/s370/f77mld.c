@@ -6,9 +6,13 @@
 /* DSQRT is f77msq.asm; its negative arguments come here for the message */
 double f77f_dsqrt_neg(double x) __asm__("M@DSQRN");
 double f77f_dsqrt_neg(double x) { return f77c_sqrt(x, 0); }
-double f77f_dexp(double x) { return f77c_exp(x, 0); }
-double f77f_dlog(double x) { return f77c_log(x, 0); }
-double f77f_dlog10(double x) { return f77c_log10(x, 0); }
+/* DEXP, DLOG, DLOG10 and DPOW are f77mexp.asm; what gives a message comes here */
+double f77f_dexp_c(double x) __asm__("M@DEXPC");
+double f77f_dexp_c(double x) { return f77c_exp(x, 0); }
+double f77f_dlog_c(double x) __asm__("M@DLOGC");
+double f77f_dlog_c(double x) { return f77c_log(x, 0); }
+double f77f_dlog10_c(double x) __asm__("M@DLG10C");
+double f77f_dlog10_c(double x) { return f77c_log10(x, 0); }
 double f77f_dsin(double x) { return f77c_sin(x, 0); }
 double f77f_dcos(double x) { return f77c_cos(x, 0); }
 /* DTAN is f77mtan.asm; 2^20 and past, and the singularities, come here */
@@ -23,4 +27,5 @@ double f77f_dacos_c(double x) { return f77c_acos(x, 0); }
 double f77f_dsinh(double x) { return f77c_sinh(x, 0); }
 double f77f_dcosh(double x) { return f77c_cosh(x, 0); }
 double f77f_dtanh(double x) { return f77m_tanh(x); }
-double f77f_dpow(double x, double y) { return f77c_pow(x, y, 0); }
+double f77f_dpow_c(double x, double y) __asm__("M@DPOWC");
+double f77f_dpow_c(double x, double y) { return f77c_pow(x, y, 0); }

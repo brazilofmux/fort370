@@ -46,12 +46,20 @@ static double m_frexp(double x, int *e) {
     u.w[0] = (u.w[0] & 0x80FFFFFFu) | (64u << 24);   /* m16 in [1/16, 1) */
     *e = 4 * e16;
     top = (u.w[0] >> 20) & 0xFu;                     /* the leading hex digit, 1..15 when normalized */
+    /* unnormalized: a hex digit at a time, as whole numbers.  This was
+     * a call again with u.d * 1.0, which cc370 folds to u.d: it called
+     * itself until the stack ran out. */
+    while (top == 0) {
+        u.w[0] = (u.w[0] & 0xFF000000u) | ((u.w[0] << 4) & 0x00FFFFFFu) | (u.w[1] >> 28);
+        u.w[1] = u.w[1] << 4;
+        *e = *e - 4;
+        top = (u.w[0] >> 20) & 0xFu;
+    }
     if (top >= 8) return u.d;
     if (top >= 4) { *e = *e - 1; return u.d * 2.0; }
     if (top >= 2) { *e = *e - 2; return u.d * 4.0; }
-    if (top >= 1) { *e = *e - 3; return u.d * 8.0; }
-    /* unnormalized: normalize by arithmetic (exact), then try again */
-    return m_frexp(u.d * 1.0, e);
+    *e = *e - 3;
+    return u.d * 8.0;
 }
 
 /* x * 2^e, exactly: the exponent of sixteen takes e/4, the remainder
