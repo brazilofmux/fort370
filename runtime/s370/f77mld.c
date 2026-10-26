@@ -11,7 +11,9 @@ double f77f_dlog(double x) { return f77c_log(x, 0); }
 double f77f_dlog10(double x) { return f77c_log10(x, 0); }
 double f77f_dsin(double x) { return f77c_sin(x, 0); }
 double f77f_dcos(double x) { return f77c_cos(x, 0); }
-double f77f_dtan(double x) { return f77c_tan(x, 0); }
+/* DTAN is f77mtan.asm; 2^20 and past, and the singularities, come here */
+double f77f_dtan_c(double x) __asm__("M@DTANC");
+double f77f_dtan_c(double x) { return f77c_tan(x, 0); }
 double f77f_datan(double x) { return f77m_atan(x); }
 double f77f_datan2(double x, double y) { return f77c_atan2(x, y, 0); }
 double f77f_dasin(double x) { return f77c_asin(x, 0); }

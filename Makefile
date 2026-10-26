@@ -56,7 +56,7 @@ test: out/f77
 	@CC="$(CC)" sh tests/host/stream.sh
 
 RT := f77rt f77misc $(shell cat runtime/s370/f77int.lst) f77dtoa f77main f77err f77math f77mz f77mzc f77mchk f77mlr f77mld f77rec millicode
-runtime: $(RT:%=out/crt/%.o) out/crt/f77ishim.o out/crt/f77cshim.o out/crt/f77xsum.o out/crt/f77msq.o out/crt/f77spie.o
+runtime: $(RT:%=out/crt/%.o) out/crt/f77ishim.o out/crt/f77cshim.o out/crt/f77xsum.o out/crt/f77msq.o out/crt/f77mtan.o out/crt/f77spie.o
 
 out/crt/%.o: runtime/s370/%.c runtime/s370/f77rt.h runtime/s370/f77rec.h runtime/s370/f77std.h runtime/s370/f77msum.h runtime/s370/f77m.h runtime/s370/f77dtoa.h backend/s370_hfp.h Makefile
 	@mkdir -p out/crt
@@ -75,6 +75,10 @@ out/crt/f77xsum.o: runtime/s370/f77xsum.asm Makefile
 	$(MVSCLOCK) as370 -o $@ $<
 
 out/crt/f77msq.o: runtime/s370/f77msq.asm Makefile
+	@mkdir -p out/crt
+	$(MVSCLOCK) as370 -o $@ $<
+
+out/crt/f77mtan.o: runtime/s370/f77mtan.asm Makefile
 	@mkdir -p out/crt
 	$(MVSCLOCK) as370 -o $@ $<
 

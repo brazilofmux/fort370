@@ -16,3 +16,31 @@ DPOW         1.47   0.16
 
 DSQRT in assembler (runtime/s370/f77msq.asm): 0.12.  The same bits as
 the C one at 200,000 arguments (tests/s370/sqrtx.f).
+DTAN in assembler (runtime/s370/f77mtan.asm): 0.39.  The same bits
+(tests/s370/tanx.f).
+
+Accuracy, the same day: each function at 1,000 arguments (DTAN at
+4,000 more, out to 100), fort370's and FORTLIB's bits printed by the
+same program (Z editing) under F77CLG and FORTHCLG OPT=2, against
+mpmath at 200 bits; the error in units of the result's last hex
+digit.  X**1.37D0 against each compiler's own 1.37D0 (fort370 rounds
+it to ...851EC, H truncates it to ...851EB).
+
+          fort370: median  worst  <=1    FORTLIB: median    worst  <=1
+DSQRT    x 0-13       0.24   0.50  100%          0.26     0.50  100%
+DEXP     x -170-170   0.24   0.62  100%          0.36     1.20   98%
+DLOG     x 0-14       0.25   0.50  100%          0.52     3.13   82%
+DSIN     x -50-50     0.83   2.06   64%         27.44 35928.08    9%
+DCOS     x -50-50     0.82   2.15   64%         27.54 43662.60    9%
+DTAN     x -1.55-1.55 0.26   0.50  100%          1.39   175.09   38%
+DATAN    x -20-20     0.25   0.50  100%          0.49     2.44   94%
+DASIN    x -1-1       0.26   0.50  100%          0.47     1.52   96%
+DPOW     x 0-14       0.26   0.60  100%          2.87    27.07   17%
+DTAN     x 0-100      0.50 worst                51.82 median, 39103 worst
+
+FORTLIB's speed is assembler in registers, one argument reduction in
+long precision and a short polynomial or rational function, nothing
+carried past 14 hex digits: within a unit or two where the reduction
+is exact or small (DSQRT, DEXP, DATAN, DASIN), but the trigonometric
+functions lose a digit for every power of 16 in x, and X**Y is off
+in its last digit five times in six.
