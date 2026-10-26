@@ -968,7 +968,7 @@ static void lv_prepare(void) {
         if (lv_pool_out) free(lv_pool_out);
         lv_pool_in = (unsigned int *)malloc((size_t)need * 4);
         lv_pool_out = (unsigned int *)malloc((size_t)need * 4);
-        if (!lv_pool_in || !lv_pool_out) { fdputs("f77: out of memory for liveness sets\n", 2); exit(1); }
+        if (!lv_pool_in || !lv_pool_out) { fdputs("f77: out of memory for liveness sets\n", 2); exit(F77_RC_TERM); }
         lv_pool_cap = need;
     }
     lv_in = lv_pool_in;
@@ -978,7 +978,7 @@ static void lv_prepare(void) {
         if (lv_live) free(lv_live);
         lv_live_cap = lv_w + 256;
         lv_live = malloc(lv_live_cap * 4);
-        if (!lv_live) { fdputs("f77: out of memory for liveness sets\n", 2); exit(1); }
+        if (!lv_live) { fdputs("f77: out of memory for liveness sets\n", 2); exit(F77_RC_TERM); }
     }
     b = 0;
     while (b < bb_nblk) {
@@ -1172,7 +1172,7 @@ static void gc_build(void) {
     int *act;                        /* fort370: the heap, for this call */
 
     act = (int *)malloc(sizeof(int) * GC_MAX_NODE);
-    if (!act) { fdputs("f77: out of storage\n", 2); exit(1); }
+    if (!act) { fdputs("f77: out of storage\n", 2); exit(F77_RC_TERM); }
     gc_nnode = 0;
     gc_nedge = 0;
     gc_nmove = 0;
@@ -1797,7 +1797,7 @@ static void ra_mark_call_crossing(void) {
     int i, j, inst, k, p, nact;
     int *act;                        /* fort370: the heap, for this call (32K) */
     act = (int *)malloc(sizeof(int) * HIR_MAX_INST);
-    if (!act) { fdputs("f77: out of storage\n", 2); exit(1); }
+    if (!act) { fdputs("f77: out of storage\n", 2); exit(F77_RC_TERM); }
     i = 0;
     while (i < h_ninst) { ra_crosses_call[i] = 0; i = i + 1; }
     nact = 0;
@@ -1833,7 +1833,7 @@ static void ra_mark_call_crossing(void) {
 static void hir_regalloc_body(void);
 static void hir_regalloc(void) {
     gc_adj = (gc_word *)calloc((size_t)GC_MAX_EDGE, sizeof(gc_word));
-    if (!gc_adj) { fdputs("f77: out of storage for register allocation\n", 2); exit(1); }
+    if (!gc_adj) { fdputs("f77: out of storage for register allocation\n", 2); exit(F77_RC_TERM); }
     hir_regalloc_body();
     free(gc_adj);
     gc_adj = 0;

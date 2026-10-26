@@ -539,7 +539,7 @@ static int f77_sym(char *nm) {
     }
     i = f77_sym_at(nm, f77_scope_base);
     if (i >= 0) return i;
-    if (f77_nsym >= F77_MAX_SYM) { f77_error("too many symbols"); return 0; }
+    if (f77_nsym >= F77_MAX_SYM) { f77_limit("too many symbols"); return 0; }
     if (f77_imp_none && !f77_decls_open) {
         /* A name first seen in executable code has no declaration. */
         static char msg[F77_MAX_NAME + 40];
@@ -595,7 +595,7 @@ static int f77_sym(char *nm) {
 static void f77_realloc_sym(int s);
 static int f77_sym_temp(int ty) {
     int s;
-    if (f77_nsym >= F77_MAX_SYM) { f77_error("too many symbols"); return 0; }
+    if (f77_nsym >= F77_MAX_SYM) { f77_limit("too many symbols"); return 0; }
     s = f77_nsym;
     strcpy(f77_sname[s], "%T");
     f77_sym_hash(s);
@@ -683,7 +683,7 @@ static int  f77_nunit;
  * then rewrite loads through it into the address itself. */
 static int f77_sym_param(char *nm, int index) {
     int s;
-    if (f77_nsym >= F77_MAX_SYM) { f77_error("too many symbols"); return 0; }
+    if (f77_nsym >= F77_MAX_SYM) { f77_limit("too many symbols"); return 0; }
     s = f77_nsym;
     strcpy(f77_sname[s], nm);
     f77_sym_hash(s);
@@ -795,7 +795,7 @@ static int f77_label_blk(int n) {
         if (f77_lnum[i] == n) return f77_lblk[i];
         i = i + 1;
     }
-    if (f77_nlabel >= F77_MAX_LABEL) { f77_error("too many labels"); return 0; }
+    if (f77_nlabel >= F77_MAX_LABEL) { f77_limit("too many labels"); return 0; }
     f77_lnum[f77_nlabel] = n;
     f77_lblk[f77_nlabel] = hir_new_block();
     f77_ldef[f77_nlabel] = 0;
@@ -3118,7 +3118,7 @@ static int f77_expr(void) {
     int a;
     int b;
     if (f77_expr_depth >= F77_MAX_EXPR_DEPTH) {
-        f77_error("expression nested too deeply");
+        f77_limit("expression nested too deeply");
         while (lx_t != T_EOF) f77_tok();          /* abandon the statement */
         ex_ty = TY_INT;
         return f77_iconst(0);
@@ -3262,7 +3262,7 @@ static void f77_dfile_scan(int unit) {
     f77_scan_from(10);
     for (;;) {
         int i;
-        if (f77_ndf >= F77_MAX_DFILE) { f77_error("too many DEFINE FILE files"); return; }
+        if (f77_ndf >= F77_MAX_DFILE) { f77_limit("too many DEFINE FILE files"); return; }
         i = f77_ndf;
         if (lx_t != T_ICON) { f77_error("DEFINE FILE needs a unit number"); return; }
         f77_df_a[i] = lex_ival;
@@ -3474,7 +3474,7 @@ static int f77_stf_define(void) {
         }
     }
     if (!f77_decls_open && f77_inline_depth == 0) return 0;
-    if (f77_stf_n >= F77_MAX_STF) { f77_error("too many statement functions"); return 1; }
+    if (f77_stf_n >= F77_MAX_STF) { f77_limit("too many statement functions"); return 1; }
 
     f77_scan_from(i + 1);
     n = 0;
@@ -3490,7 +3490,7 @@ static int f77_stf_define(void) {
         f77_tok();
     }
     if (lx_t != T_RP) { f77_error("bad statement function dummy list"); return 1; }
-    if (n > F77_MAX_STF_ARGS) { f77_error("too many statement function dummies"); return 1; }
+    if (n > F77_MAX_STF_ARGS) { f77_limit("too many statement function dummies"); return 1; }
 
     len = lx_stmt_len - (eq + 1);
     if (f77_stf_pool_n + len + 1 > F77_STF_POOL) { f77_error("statement function pool overflow"); return 1; }
@@ -3573,7 +3573,7 @@ static int f77_stf_expand(int si) {
         f77_error("wrong number of statement function arguments");
         return f77_iconst(0);
     }
-    if (f77_stfb_n + n > F77_MAX_STFB) { f77_error("statement functions nested too deep"); return f77_iconst(0); }
+    if (f77_stfb_n + n > F77_MAX_STFB) { f77_limit("statement functions nested too deep"); return f77_iconst(0); }
 
     /* Checkpoint the statement and scanner, swap the definition in. */
     save_stmt = (char *)malloc(F77_MAX_STMT);
@@ -4068,7 +4068,7 @@ static void f77_parse_dims(int s) {
     int hisym;
     rank = 0;
     if (f77_slo[s] == f77_dlo[0]) {  /* fort370: its own row of bounds */
-        if (f77_narr >= F77_MAX_ARR) { f77_error("too many arrays"); return; }
+        if (f77_narr >= F77_MAX_ARR) { f77_limit("too many arrays"); return; }
         f77_dim_row(s, f77_narr);
         f77_narr = f77_narr + 1;
     }
@@ -4269,7 +4269,7 @@ static char *f77_gpool_name(char *a, char *b, char *c, char *d) {
     int need;
     need = (int)(strlen(a) + strlen(b) + strlen(c) + strlen(d)) + 1;
     if (f77_gpool_n + need > F77_GPOOL_MAX) {
-        f77_error("too many static names");
+        f77_limit("too many static names");
         return f77_gpool;   /* garbage but safe */
     }
     p = f77_gpool + f77_gpool_n;
@@ -4287,7 +4287,7 @@ static char *f77_gpool_name(char *a, char *b, char *c, char *d) {
 static int f77_g_add(char *name, int size) {
     int i;
     i = ps_nglobals;
-    if (i >= P_MAX_GLOBALS) { f77_error("too many globals"); return 0; }
+    if (i >= P_MAX_GLOBALS) { f77_limit("too many globals"); return 0; }
     ps_gname[i] = name;
     ps_gtype[i] = TY_INT;
     ps_gsize[i] = size;
@@ -4316,7 +4316,7 @@ static int f77_cblk_find(char *nm) {
         if (strcmp(f77_cblk_name[i], mangled) == 0) return i;
         i = i + 1;
     }
-    if (f77_ncblk >= F77_MAX_CBLK) { f77_error("too many COMMON blocks"); return 0; }
+    if (f77_ncblk >= F77_MAX_CBLK) { f77_limit("too many COMMON blocks"); return 0; }
     strcpy(f77_cblk_name[f77_ncblk], mangled);
     f77_cblk_gidx[f77_ncblk] = f77_g_add(f77_cblk_name[f77_ncblk], 0);
     f77_ncblk = f77_ncblk + 1;
@@ -4369,7 +4369,7 @@ static void f77_stmt_common(int skip) {
             f77_realloc_sym(s);
         }
         f77_scom[s] = 1;
-        if (f77_cm_n >= F77_MAX_CMEM) { f77_error("too many COMMON members"); return; }
+        if (f77_cm_n >= F77_MAX_CMEM) { f77_limit("too many COMMON members"); return; }
         f77_cm_sym[f77_cm_n] = s;
         f77_cm_blk[f77_cm_n] = blk;
         f77_cm_n = f77_cm_n + 1;
@@ -4394,7 +4394,7 @@ static void f77_stmt_save(int skip) {
             if (lx_t != T_SLASH) { f77_error("expected / after SAVE block name"); return; }
             f77_tok();
         } else if (lx_t == T_NAME) {
-            if (f77_sv_n >= F77_MAX_CMEM) { f77_error("too many SAVE names"); return; }
+            if (f77_sv_n >= F77_MAX_CMEM) { f77_limit("too many SAVE names"); return; }
             f77_sv_sym[f77_sv_n] = f77_sym(lex_name);
             f77_sv_n = f77_sv_n + 1;
             f77_tok();
@@ -4834,7 +4834,7 @@ static int f77_data_target(int stop) {
         }
         f77_scan_from(ctl_off);
         if (lx_t != T_NAME) { f77_error("implied-DO in DATA needs a variable"); return 0; }
-        if (f77_cxb_n >= F77_MAX_CXB) { f77_error("implied-DO in DATA nested too deep"); return 0; }
+        if (f77_cxb_n >= F77_MAX_CXB) { f77_limit("implied-DO in DATA nested too deep"); return 0; }
         bi = f77_cxb_n;
         strcpy(f77_cxb_name[bi], lex_name);
         f77_tok();
@@ -4867,7 +4867,7 @@ static int f77_data_target(int stop) {
     if (f77_sarg[s]) { f77_error("a dummy argument cannot appear in DATA"); return 0; }
     if (f77_sparam[s]) { f77_error("a PARAMETER cannot appear in DATA"); return 0; }
     f77_tok();
-    if (f77_dt_n >= F77_MAX_DTGT) { f77_error("too many DATA items"); return 0; }
+    if (f77_dt_n >= F77_MAX_DTGT) { f77_limit("too many DATA items"); return 0; }
     f77_dt_sym[f77_dt_n] = s;
     f77_dt_sublen[f77_dt_n] = 0;
     if (lx_t == T_LP && f77_srank[s] > 0) {
@@ -4954,7 +4954,7 @@ static int f77_data_values(void) {
         while (rep > 0) {
             while (ti < f77_dt_n && te >= f77_dt_count[ti]) { ti = ti + 1; te = 0; }
             if (ti >= f77_dt_n) { f77_error("more DATA values than variables"); return 0; }
-            if (f77_di_n >= F77_MAX_DINIT) { f77_error("too many DATA initializers"); return 0; }
+            if (f77_di_n >= F77_MAX_DINIT) { f77_limit("too many DATA initializers"); return 0; }
             f77_di_sym[f77_di_n] = f77_dt_sym[ti];
             f77_di_elem[f77_di_n] = f77_dt_sublen[ti] ? f77_dt_start[ti] : f77_dt_start[ti] + te;
             f77_di_ty[f77_di_n] = f77_cx_ty;
@@ -5105,7 +5105,7 @@ static void f77_stmt_equivalence(int skip) {
             ob = f77_eq_offset(sb);
             if (f77_sarg[sa] || f77_sarg[sb]) { f77_error("a dummy argument cannot be in EQUIVALENCE"); return; }
             if (f77_sparam[sa] || f77_sparam[sb]) { f77_error("a PARAMETER cannot be in EQUIVALENCE"); return; }
-            if (f77_eq_n >= F77_MAX_EQ) { f77_error("too many EQUIVALENCE pairs"); return; }
+            if (f77_eq_n >= F77_MAX_EQ) { f77_limit("too many EQUIVALENCE pairs"); return; }
             f77_eq_sa[f77_eq_n] = sa; f77_eq_oa[f77_eq_n] = oa;
             f77_eq_sb[f77_eq_n] = sb; f77_eq_ob[f77_eq_n] = ob;
             f77_eq_n = f77_eq_n + 1;
@@ -5519,7 +5519,7 @@ static void f77_open_do(void) {
 
     f77_begin_blk(b_body);
 
-    if (ctl_n >= F77_MAX_CTL) { f77_error("control nesting too deep"); return; }
+    if (ctl_n >= F77_MAX_CTL) { f77_limit("control nesting too deep"); return; }
     ctl_kind[ctl_n] = F77_CTL_DO;
     ctl_label[ctl_n] = lab;
     ctl_var[ctl_n] = s;
@@ -5625,7 +5625,7 @@ static void f77_open_dowhile(void) {
     hi_emit(HI_BRC, TY_VOID, c, b_body, b_exit, NULL);
     f77_cur_blk_live = 0;
     f77_begin_blk(b_body);
-    if (ctl_n >= F77_MAX_CTL) { f77_error("control nesting too deep"); return; }
+    if (ctl_n >= F77_MAX_CTL) { f77_limit("control nesting too deep"); return; }
     ctl_kind[ctl_n] = F77_CTL_DO;
     ctl_label[ctl_n] = lab;
     ctl_var[ctl_n] = -1;
@@ -6237,7 +6237,7 @@ static int f77_can_inline(int u) {
  * have achieved via a PARAM, minus the call. */
 static int f77_bind_actual(char *nm, int addr) {
     int s;
-    if (f77_nsym >= F77_MAX_SYM) { f77_error("too many symbols"); return 0; }
+    if (f77_nsym >= F77_MAX_SYM) { f77_limit("too many symbols"); return 0; }
     s = f77_nsym;
     strcpy(f77_sname[s], nm);
     f77_sym_hash(s);
@@ -7935,7 +7935,7 @@ static void f77_stmt_namelist(int skip) {
         f77_tok();
         if (lx_t != T_NAME) { f77_error("NAMELIST needs a group name between slashes"); return; }
         if (f77_nml_find(lex_name) >= 0) { f77_error("a NAMELIST group of that name is already defined"); return; }
-        if (f77_nnml >= F77_MAX_NML) { f77_error("too many NAMELIST groups in one unit"); return; }
+        if (f77_nnml >= F77_MAX_NML) { f77_limit("too many NAMELIST groups in one unit"); return; }
         g = f77_nnml;
         f77_nnml = f77_nnml + 1;
         strncpy(f77_nml_gname[g], lex_name, 31);
@@ -7949,7 +7949,7 @@ static void f77_stmt_namelist(int skip) {
             int s;
             s = f77_sym(lex_name);
             if (f77_sexternal[s] || f77_sparam[s]) { f77_error("a NAMELIST item is a variable or an array"); return; }
-            if (f77_nnmlitem >= F77_MAX_NMLITEM) { f77_error("too many NAMELIST items in one unit"); return; }
+            if (f77_nnmlitem >= F77_MAX_NMLITEM) { f77_limit("too many NAMELIST items in one unit"); return; }
             f77_sstored[s] = 1;
             f77_nml_isym[f77_nnmlitem] = s;
             f77_nnmlitem = f77_nnmlitem + 1;
@@ -8677,7 +8677,7 @@ static void f77_statement(void) {
         hi_emit(HI_BRC, TY_VOID, c, b_then, b_else, NULL);
         f77_cur_blk_live = 0;
         f77_begin_blk(b_then);
-        if (ctl_n >= F77_MAX_CTL) { f77_error("control nesting too deep"); goto done; }
+        if (ctl_n >= F77_MAX_CTL) { f77_limit("control nesting too deep"); goto done; }
         ctl_kind[ctl_n] = F77_CTL_IF;
         ctl_else[ctl_n] = b_else;
         ctl_exit[ctl_n] = b_end;
@@ -8907,7 +8907,7 @@ static void f77_statement(void) {
             f77_tok();
             for (;;) {
                 if (lx_t != T_ICON) { f77_error("computed GOTO needs statement labels"); goto done; }
-                if (nt >= 64) { f77_error("too many labels in computed GOTO"); goto done; }
+                if (nt >= 64) { f77_limit("too many labels in computed GOTO"); goto done; }
                 targets[nt] = f77_label_blk(lex_ival);
                 nt = nt + 1;
                 f77_tok();

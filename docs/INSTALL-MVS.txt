@@ -137,8 +137,15 @@ Or, without RECEIVE, IEBUPDTE makes the same library of F77RT.upd:
   -- without OBJ it assembles cleanly and produces nothing.
 
   Errors go to SYSTERM with the line number and the statement (in an
-  included text, the member's name and its own line), and the step
-  ends with return code 1; SYSPUNCH is then incomplete.
+  included text, the member's name and its own line).  The step's
+  return code is the worst severity reported, as IBM's compilers give
+  it: 0 a clean compile; 4 warnings only (a source that ends without
+  an END statement, which FORTRAN H stops at with 16), and the
+  assembler is complete; 8 errors, and SYSPUNCH is then incomplete;
+  12 a unit too large for one of the compiler's tables; 16 no compile
+  at all (no storage, the source or SYSPUNCH not to be had).  F77CLG
+  goes on after a 4 and stops at an 8, COND=(4,LT,FORT), as FORTHCLG
+  does.  (Through release 2026-10-24.1, every error ended with 1.)
 
 
 4.  Link and run a program
@@ -194,7 +201,7 @@ for unit 5 is a //GO.SYSIN DD * after the EXEC; without one, unit 5 is
 at its end at once.
 
   One job may run F77CLG once for each of several programs.  Each step
-  tests only the return codes of its own invocation (COND=(0,NE,FORT)),
+  tests only the return codes of its own invocation (COND=(4,LT,FORT)),
   and the assembler text and object are unnamed temporary data sets,
   reached by referback, so a program that fails to compile or ends
   with a nonzero code stops only itself.  A procedure of your own that

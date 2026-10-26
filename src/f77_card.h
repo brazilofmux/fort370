@@ -165,6 +165,7 @@ static void lx_inc_error(char *msg, char *nm) {
     fdputs(nm, 2);
     fdputc('\n', 2);
     f77_nerr = f77_nerr + 1;
+    f77_note_rc(F77_RC_ERROR);
 }
 
 /* Is the line an INCLUDE?  Its name into nm, 1 when it is. */
@@ -368,6 +369,7 @@ static void lx_window(int need) {
 #else
                 f77_error("out of storage for the source");
 #endif
+                f77_note_rc(F77_RC_TERM);
                 lx_eof = 1;
                 break;
             }

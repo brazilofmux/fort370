@@ -133,6 +133,12 @@ static char *hl_cur_fn_dbg;
 char *getenv(const char *name);
 int atoi(const char *nptr);
 
+/* fort370: the return codes f77.c gives (#33); a table here full is
+ * a limit of the compiler's, 12 */
+#ifndef F77_RC_LIMIT
+#define F77_RC_LIMIT 12
+#define F77_RC_TERM 16
+#endif
 #define HIR_MAX_INST (8192 * F77_ROOM)   /* fort370: see F77_ROOM in f77.c */
 /* fort370: an instruction index, or a value no larger -- a block, a
  * use count, a register, a list link.  A halfword on the S/370 build,
@@ -296,7 +302,7 @@ static int hir_new_block(void) {
         fdputs(" inl_depth=", 2);
         fdputuint(2, (unsigned)hl_inl_depth_dbg);
         fdputs(")\n", 2);
-        exit(1);
+        exit(F77_RC_LIMIT);
     }
     bb_start[b] = -1;  /* set lazily when block becomes current */
     bb_end[b] = -1;
@@ -329,7 +335,7 @@ static int hi_emit(int kind, int ty, int s1, int s2, int val, char *name) {
         fdputs(" fn=", 2);
         fdputs(hl_cur_fn_dbg ? hl_cur_fn_dbg : "?", 2);
         fdputs(")\n", 2);
-        exit(1);
+        exit(F77_RC_LIMIT);
     }
     h_ld_ro[idx] = 0;
     h_kind[idx] = kind;
@@ -459,7 +465,7 @@ static int hi_emit_jmptab(int index_val, int def_blk, int *targets, int span) {
     int j;
     if (hjt_n + span > HIR_MAX_JT) {
         fdputs("f77: jump-table target pool overflow\n", 2);
-        exit(1);
+        exit(F77_RC_LIMIT);
     }
     idx = hi_emit(HI_JMPTAB, 0, index_val, -1, def_blk, NULL);
     hjt_base[idx] = hjt_n;

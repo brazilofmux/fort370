@@ -577,7 +577,7 @@ static char *bg_fdone;
 static hir_ix *bg_walk;
 
 static int bg_walk_push(int sp, int v) {
-    if (sp >= HIR_MAX_INST) { fdputs("f77: burg walk stack overflow\n", 2); exit(1); }
+    if (sp >= HIR_MAX_INST) { fdputs("f77: burg walk stack overflow\n", 2); exit(F77_RC_TERM); }
     bg_walk[sp] = v;
     return sp + 1;
 }
@@ -916,7 +916,7 @@ static void hir_burg_body(void);
 static void hir_burg(void) {
     bg_cost = (int *)calloc((size_t)BG_COST_SZ, sizeof(int));
     bg_rule = (short *)calloc((size_t)BG_COST_SZ, sizeof(short));
-    if (!bg_cost || !bg_rule) { fdputs("f77: out of storage for instruction selection\n", 2); exit(1); }
+    if (!bg_cost || !bg_rule) { fdputs("f77: out of storage for instruction selection\n", 2); exit(F77_RC_TERM); }
     hir_burg_body();
     free(bg_cost); bg_cost = 0;
     free(bg_rule); bg_rule = 0;

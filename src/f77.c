@@ -87,7 +87,18 @@ static char *f77_getenv(const char *name) {
 #include "f77_contract.h"
 
 static void f77_error(char *msg);
+static void f77_limit(char *msg);
 static int f77_nerr;      /* errors so far; a unit with any is not given to the back end */
+/* fort370: the return code, the worst severity reported, as IBM's
+ * compilers give it (#33): 4 a warning, 8 an error, 12 a table of the
+ * compiler's too small for the source, 16 the compile not done at all
+ * (no storage, the source or the output not to be had) */
+#define F77_RC_WARN 4
+#define F77_RC_ERROR 8
+#define F77_RC_LIMIT 12
+#define F77_RC_TERM 16
+static int f77_rc;
+static void f77_note_rc(int rc) { if (rc > f77_rc) f77_rc = rc; }
 static int f77_keepall;   /* the source is read once: all of it stays in the window */
 
 #include "f77_card.h"
@@ -185,6 +196,25 @@ static void f77_error(char *msg) {
     fdputs(lx_stmt, 2);
     fdputc('\n', 2);
     f77_nerr = f77_nerr + 1;
+    f77_note_rc(F77_RC_ERROR);
+}
+
+/* An error that is the compiler's: one of its tables is full */
+static void f77_limit(char *msg) {
+    int q;
+    q = f77_quiet;
+    f77_error(msg);
+    if (!q) f77_note_rc(F77_RC_LIMIT);
+}
+
+/* A warning: said, and the compile goes on */
+static void f77_warn(int line, char *msg) {
+    if (f77_quiet) return;
+    f77_put_where(line);
+    fdputs("warning: ", 2);
+    fdputs(msg, 2);
+    fdputc('\n', 2);
+    f77_note_rc(F77_RC_WARN);
 }
 
 /* fort370: two subprograms (or ENTRY points) of one name -- the CALL
@@ -196,6 +226,7 @@ static void f77_report_at(int line, char *msg) {
     fdputs(msg, 2);
     fdputc('\n', 2);
     f77_nerr = f77_nerr + 1;
+    f77_note_rc(F77_RC_ERROR);
 }
 static void f77_check_unit_names(void) {
     int i;
@@ -272,6 +303,7 @@ static void f77_scan_units(void) {
     int started;
     int ended;        /* fort370: the unit begun last has had its END */
     int mains;        /* main programs begun */
+    int last;         /* the line of the statement read last */
 
     f77_nunit = 0;
     f77_nent = 0;
@@ -285,6 +317,7 @@ static void f77_scan_units(void) {
     started = 0;
     ended = 0;
     mains = 0;
+    last = 1;
     pos = lx_pos;
     line = lx_line;
 
@@ -312,7 +345,7 @@ static void f77_scan_units(void) {
         if (started && ended && !f77_starts("SUBROUTINE") && !f77_starts("BLOCKDATA")
             && f77_unit_header_ty() < 0) {
             if (mains > 0) { f77_error("more than one main program"); return; }
-            if (f77_nunit >= F77_MAX_UNIT) { f77_error("too many program units"); return; }
+            if (f77_nunit >= F77_MAX_UNIT) { f77_limit("too many program units"); return; }
             f77_unit_done(f77_nunit - 1, pos);
             f77_upos[f77_nunit] = pos;
             f77_uline[f77_nunit] = line;
@@ -387,7 +420,7 @@ static void f77_scan_units(void) {
              * blocks it names.  It compiles to an empty function that
              * nothing calls; the name is mangled so it cannot collide
              * with a subprogram. */
-            if (f77_nunit >= F77_MAX_UNIT) { f77_error("too many program units"); return; }
+            if (f77_nunit >= F77_MAX_UNIT) { f77_limit("too many program units"); return; }
             if (f77_nunit > 0) f77_unit_done(f77_nunit - 1, pos);
             f77_upos[f77_nunit] = pos;
             f77_uline[f77_nunit] = line;
@@ -412,7 +445,7 @@ static void f77_scan_units(void) {
             started = 1;
             ended = 0;
         } else if (f77_starts("SUBROUTINE") || rty >= 0) {
-            if (f77_nunit >= F77_MAX_UNIT) { f77_error("too many program units"); return; }
+            if (f77_nunit >= F77_MAX_UNIT) { f77_limit("too many program units"); return; }
             if (f77_nunit > 0) f77_unit_done(f77_nunit - 1, pos);
             f77_upos[f77_nunit] = pos;
             f77_uline[f77_nunit] = line;
@@ -529,9 +562,14 @@ static void f77_scan_units(void) {
             started = 1;
         }
         if (started && f77_is_unit_end()) ended = 1;
+        last = lx_stmt_line;
         pos = lx_pos;
         line = lx_line;
     }
+    /* fort370: the source ends inside a unit, with no END.  FORTRAN H
+     * stops there, return code 16; taken as ended, as it always was
+     * here, but said (#33) */
+    if (started && !ended) f77_warn(last, "the source ends without an END statement");
 
     if (f77_nunit > 0) f77_unit_done(f77_nunit - 1, lx_pos);
     if (!f77_keepall) lx_keep = 0x7FFFFFFF;
@@ -541,7 +579,7 @@ static void f77_scan_units(void) {
         int q;
         for (q = 0; q < f77_nent; q++) {
             int par;
-            if (f77_nunit >= F77_MAX_UNIT) { f77_error("too many program units"); return; }
+            if (f77_nunit >= F77_MAX_UNIT) { f77_limit("too many program units"); return; }
             par = f77_ent_parent[q];
             f77_upos[f77_nunit] = f77_ent_pos[q];
             f77_uline[f77_nunit] = f77_ent_line[q];
@@ -855,7 +893,7 @@ int main(int argc, char **argv) {
 #else
     if (argc < 3) {
         fdputs("usage: f77 source.f output.asm\n", 2);
-        return 1;
+        return F77_RC_TERM;
     }
     inname = argv[1];
     outname = argv[2];
@@ -865,7 +903,7 @@ int main(int argc, char **argv) {
         fdputs("f77: cannot open ", 2);
         fdputs(inname, 2);
         fdputc('\n', 2);
-        return 1;
+        return F77_RC_TERM;
     }
     f77_inname = inname;
     lx_inname = inname;
@@ -880,7 +918,7 @@ int main(int argc, char **argv) {
 
     if (argc < 3) {
         fdputs("usage: f77 source.f output.s\n", 2);
-        return 1;
+        return F77_RC_TERM;
     }
 
     fd = open(argv[1], O_RDONLY | O_BINARY);
@@ -888,7 +926,7 @@ int main(int argc, char **argv) {
         fdputs("f77: cannot open ", 2);
         fdputs(argv[1], 2);
         fdputc('\n', 2);
-        return 1;
+        return F77_RC_TERM;
     }
     n = (int)read(fd, src, sizeof(src) - 1);
     if (n < 0) n = 0;
@@ -901,17 +939,17 @@ int main(int argc, char **argv) {
     lx_line = 1;
 #endif
 
-    if (f77_arena_init() != 0) { fdputs("f77: no storage for the compiler's tables\n", 2); return 1; }
+    if (f77_arena_init() != 0) { fdputs("f77: no storage for the compiler's tables\n", 2); return F77_RC_TERM; }
     f77_scan_units();
     lx_inc_record = 0;               /* INCLUDE's pieces are known; a second reading repeats them */
-    if (f77_nunit == 0) { fdputs("f77: empty source\n", 2); return 1; }
+    if (f77_nunit == 0) { fdputs("f77: empty source\n", 2); return F77_RC_TERM; }
 #ifdef F77_TARGET_S370
     if (f77_nerr == 0) f77_check_persistence();
     if (lx_spool) { fclose(lx_spool); lx_spool = 0; }
     if (!keepall) {
         FILE *again;
         again = f77_reopen_file();
-        if (!again) { fdputs("f77: the source cannot be read again\n", 2); return 1; }
+        if (!again) { fdputs("f77: the source cannot be read again\n", 2); return F77_RC_TERM; }
         lx_keep = 0x7FFFFFFF;
         lx_start(again);
     }
@@ -943,7 +981,7 @@ int main(int argc, char **argv) {
 #endif
     if (!fout) {
         fdputs("f77: cannot open output\n", 2);
-        return 1;
+        return F77_RC_TERM;
     }
     cg_fp = fout;
     cg_outpath = outname;
@@ -951,13 +989,13 @@ int main(int argc, char **argv) {
     cg_flush();
     if (fclose(fout) != 0) {
         fdputs("f77: the output could not be written\n", 2);
-        return 1;
+        return F77_RC_TERM;
     }
 #else
     fd = open(argv[2], O_WRONLY | O_CREAT | O_TRUNC | O_BINARY, 0644);
     if (fd < 0) {
         fdputs("f77: cannot open output\n", 2);
-        return 1;
+        return F77_RC_TERM;
     }
     cg_fd = fd;
     cg_outpath = argv[2];
@@ -994,7 +1032,7 @@ int main(int argc, char **argv) {
 #else
         unlink(argv[2]);
 #endif
-        return 1;
+        return f77_rc;
     }
-    return 0;
+    return f77_rc;              /* 0, or 4 with warnings */
 }

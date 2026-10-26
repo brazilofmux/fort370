@@ -54,11 +54,11 @@ def proc_lg():
     p = p[p.index('//F77CLG   PROC'):p.index('//         PEND')] + '//         PEND\n'
     head, rest = p.split('//ASM ', 1)
     p = '//F77LG    PROC\n//ASM ' + rest
-    p = p.replace('//ASM      EXEC PGM=IFOX00,PARM=\'OBJ,NODECK\',REGION=2048K,\n//            COND=(0,NE,FORT)\n',
+    p = p.replace('//ASM      EXEC PGM=IFOX00,PARM=\'OBJ,NODECK\',REGION=2048K,\n//            COND=(4,LT,FORT)\n',
                   '//ASM      EXEC PGM=IFOX00,PARM=\'OBJ,NODECK\',REGION=2048K\n')
     p = p.replace('//SYSIN    DD DSN=*.FORT.SYSPUNCH,DISP=(OLD,DELETE)', '//SYSIN    DD DDNAME=ASMIN')
-    p = p.replace('COND=((0,NE,FORT),(8,LE,ASM))', 'COND=(8,LE,ASM)')
-    p = p.replace('COND=((0,NE,FORT),(8,LE,ASM),(4,LT,LKED))', 'COND=((8,LE,ASM),(4,LT,LKED))')
+    p = p.replace('COND=((4,LT,FORT),(8,LE,ASM))', 'COND=(8,LE,ASM)')
+    p = p.replace('COND=((4,LT,FORT),(8,LE,ASM),(4,LT,LKED))', 'COND=((8,LE,ASM),(4,LT,LKED))')
     if 'FORT' in p.replace('FORTRAN', '').replace('FORT370', ''):
         sys.exit('inline-check: F77CLG changed shape; proc_lg needs a look')
     return p

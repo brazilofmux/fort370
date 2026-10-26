@@ -34,7 +34,7 @@ static void cg_flush(void) {
     if (!cg_fp) { cg_olen = 0; return; }
     if (cg_olen > 0 && fwrite(cg_out, 1, (size_t)cg_olen, cg_fp) != (size_t)cg_olen) {
         fdputs("f77: write failed\n", 2);
-        exit(1);
+        exit(F77_RC_TERM);
     }
     cg_olen = 0;
 }
@@ -81,7 +81,7 @@ static void cg_die(char *msg, int inst) {
         fdputs(" (", 2); fdputs(bg_op_name(h_kind[s370_emitting]), 2); fdputc(')', 2);
     }
     fdputc(10, 2);
-    exit(1);
+    exit(F77_RC_TERM);
 }
 
 /* One assembler statement: label in column 1, opcode in 10, operands

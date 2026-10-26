@@ -212,7 +212,7 @@ static void ssa_build_cfg(void) {
                     fdputs("f77: instructions after a block's terminator (fn=", 2);
                     fdputs(hl_cur_fn_dbg ? hl_cur_fn_dbg : "?", 2);
                     fdputs(")\n", 2);
-                    exit(1);
+                    exit(F77_RC_TERM);
                 }
                 i = i + 1;
             }
@@ -220,14 +220,14 @@ static void ssa_build_cfg(void) {
             if (k == HI_BR) {
                 if (cursor + 1 > SSA_SUCC_SZ) {
                     fdputs("f77: too many CFG successor edges\n", 2);
-                    exit(1);
+                    exit(F77_RC_TERM);
                 }
                 ssa_succ[cursor] = h_val[term];
                 ssa_nsucc[b] = 1;
             } else if (k == HI_BRC) {
                 if (cursor + 2 > SSA_SUCC_SZ) {
                     fdputs("f77: too many CFG successor edges\n", 2);
-                    exit(1);
+                    exit(F77_RC_TERM);
                 }
                 ssa_succ[cursor] = h_src2[term];
                 ssa_succ[cursor + 1] = h_val[term];
@@ -244,7 +244,7 @@ static void ssa_build_cfg(void) {
                 /* default first */
                 if (cursor + 1 > SSA_SUCC_SZ) {
                     fdputs("f77: too many CFG successor edges\n", 2);
-                    exit(1);
+                    exit(F77_RC_TERM);
                 }
                 ssa_succ[cursor] = h_val[term];
                 n = 1;
@@ -261,7 +261,7 @@ static void ssa_build_cfg(void) {
                     if (!seen) {
                         if (cursor + n + 1 > SSA_SUCC_SZ) {
                             fdputs("f77: too many CFG successor edges\n", 2);
-                            exit(1);
+                            exit(F77_RC_TERM);
                         }
                         ssa_succ[cursor + n] = tgt;
                         n = n + 1;
@@ -307,7 +307,7 @@ static void ssa_build_cfg(void) {
     }
     if (total > SSA_MAX_PRED) {
         fdputs("f77: too many CFG edges\n", 2);
-        exit(1);
+        exit(F77_RC_TERM);
     }
 
     /* Fill predecessors (with bounds validation) */
@@ -362,7 +362,7 @@ static void ssa_compute_rpo(void) {
                 top = top + 1;
                 if (top >= SSA_DFS) {
                     fdputs("f77: RPO DFS stack overflow\n", 2);
-                    exit(1);
+                    exit(F77_RC_TERM);
                 }
                 ssa_rblk[top] = s;
                 ssa_rci[top] = 0;
@@ -493,7 +493,7 @@ static void ssa_compute_df(void) {
                          * file that used to fail silently (GitHub issue
                          * 53).  Every other one stops here. */
                         fdputs("f77: too many dominance-frontier entries\n", 2);
-                        exit(1);
+                        exit(F77_RC_TERM);
                     }
                     ssa_df[base + ssa_dfc[runner]] = b;
                     ssa_dfc[runner] = ssa_dfc[runner] + 1;
@@ -522,7 +522,7 @@ static void ssa_find_promo(void) {
     int *ok;                        /* fort370: the heap, for this call */
 
     ok = (int *)malloc(sizeof(int) * HL_MAX_ALLOCA);
-    if (!ok) { fdputs("f77: out of storage\n", 2); exit(1); }
+    if (!ok) { fdputs("f77: out of storage\n", 2); exit(F77_RC_TERM); }
     /* The promo list is rebuilt at the end of this scan; clear it up
      * front so nothing consults the PREVIOUS function's entries. */
     ssa_npromo = 0;
@@ -733,7 +733,7 @@ static void ssa_build_dtree(void) {
     }
     if (total > SSA_DTC_MAX) {
         fdputs("f77: too many domtree children\n", 2);
-        exit(1);
+        exit(F77_RC_TERM);
     }
 
     b = 1;
@@ -810,7 +810,7 @@ static void ssa_insert_phis(void) {
                     while (j < ssa_npred[d]) {
                         if (h_nparg >= HIR_MAX_PARG) {
                             fdputs("f77: too many phi args\n", 2);
-                            exit(1);
+                            exit(F77_RC_TERM);
                         }
                         h_pblk[h_nparg] = ssa_pred[ssa_pbase[d] + j];
                         h_pval[h_nparg] = -1;
@@ -850,7 +850,7 @@ static void ssa_insert_phis(void) {
 static void ssa_vpush(int v, int val) {
     if (ssa_plog_n >= SSA_PLOG) {
         fdputs("f77: SSA push log overflow (a unit too large to rename)\n", 2);
-        exit(1);
+        exit(F77_RC_TERM);
     }
     ssa_plog[ssa_plog_n] = v;
     ssa_pval[ssa_plog_n] = val;
@@ -988,7 +988,7 @@ static void ssa_rename(void) {
                 top = top + 1;
                 if (top >= SSA_DFS) {
                     fdputs("f77: SSA DFS stack overflow\n", 2);
-                    exit(1);
+                    exit(F77_RC_TERM);
                 }
                 ssa_rblk[top] = child;
                 ssa_rci[top] = -1;
@@ -1262,7 +1262,7 @@ static void hir_ssa_construct_body(void);
 static void *ssa_zalloc(int n, int size) {
     void *p;
     p = calloc((size_t)n, (size_t)size);
-    if (!p) { fdputs("f77: out of storage for SSA construction\n", 2); exit(1); }
+    if (!p) { fdputs("f77: out of storage for SSA construction\n", 2); exit(F77_RC_TERM); }
     return p;
 }
 static void hir_ssa_construct(void) {

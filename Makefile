@@ -51,6 +51,7 @@ test: out/f77
 	@sh tests/host/rtnames.sh
 	@sh tests/host/port.sh
 	@sh tests/host/units.sh
+	@sh tests/host/rc.sh
 	@CC="$(CC)" sh tests/host/stream.sh
 
 RT := f77rt f77misc $(shell cat runtime/s370/f77int.lst) f77dtoa f77main f77err f77math f77mz f77mzc f77mchk f77mlr f77mld f77rec millicode
