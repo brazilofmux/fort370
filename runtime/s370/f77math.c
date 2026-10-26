@@ -466,37 +466,6 @@ double f77m_log10(double x) {
 
 /* --- sine and cosine -------------------------------------------- */
 
-/* sin r and cos r for |r| <= pi/4, by their series to r^17 and r^18. */
-static double m_sin_small(double r) {
-    double r2;
-    double p;
-    r2 = r * r;
-    p = -1.0 / 355687428096000.0;
-    p = p * r2 + 1.0 / 1307674368000.0;
-    p = p * r2 - 1.0 / 6227020800.0;
-    p = p * r2 + 1.0 / 39916800.0;
-    p = p * r2 - 1.0 / 362880.0;
-    p = p * r2 + 1.0 / 5040.0;
-    p = p * r2 - 1.0 / 120.0;
-    p = p * r2 + 1.0 / 6.0;
-    return r - r * r2 * p;
-}
-static double m_cos_small(double r) {
-    double r2;
-    double p;
-    r2 = r * r;
-    p = 1.0 / 6402373705728000.0;
-    p = p * r2 - 1.0 / 20922789888000.0;
-    p = p * r2 + 1.0 / 87178291200.0;
-    p = p * r2 - 1.0 / 479001600.0;
-    p = p * r2 + 1.0 / 3628800.0;
-    p = p * r2 - 1.0 / 40320.0;
-    p = p * r2 + 1.0 / 720.0;
-    p = p * r2 - 1.0 / 24.0;
-    p = p * r2 + 0.5;
-    return 1.0 - r2 * p;
-}
-
 /* 2/pi to 392 bits, fourteen at a time, the leading bits first. */
 static const unsigned int m_2opi[28] = {
     0x28BE, 0x1836, 0x3939, 0x0415, 0x0A7F, 0x0275, 0x1F47, 0x3534, 0x3770,
@@ -635,28 +604,6 @@ static double m_reduce(double x, int *quad) {
     return r;
 }
 
-double f77m_sin(double x) __asm__("M@SIN");
-double f77m_sin(double x) {
-    int q;
-    double r;
-    r = m_reduce(x, &q);
-    if (q == 0) return m_sin_small(r);
-    if (q == 1) return m_cos_small(r);
-    if (q == 2) return -m_sin_small(r);
-    return -m_cos_small(r);
-}
-
-double f77m_cos(double x) __asm__("M@COS");
-double f77m_cos(double x) {
-    int q;
-    double r;
-    r = m_reduce(x, &q);
-    if (q == 0) return m_cos_small(r);
-    if (q == 1) return -m_sin_small(r);
-    if (q == 2) return -m_cos_small(r);
-    return m_sin_small(r);
-}
-
 /* sin(j/16) and cos(j/16), j = 0..13, each in two parts */
 static const Hw m_sincost[14][4] = {
     { {{0x00000000u, 0x00000000u}}, {{0x00000000u, 0x00000000u}}, {{0x41100000u, 0x00000000u}}, {{0x00000000u, 0x00000000u}} },
@@ -760,6 +707,103 @@ static double m_tan_pair(double rh, double rl, int q) {
     SUM_ADD(&s, ql, 0);
     return sum_round(&s, 0);
 }
+
+/* sin or cos of r = rh + rl, |r| <= pi/4 plus a little, quadrant q:
+ * q 0 sin r, 1 cos r, 2 -sin r, 3 -cos r.  r = j/16 + d, |d| <= 1/32,
+ * and sin r and cos r each the sum m_tan_pair forms -- sin(j/16) cos d
+ * + cos(j/16) sin d and the like, sin d - d and cos d - 1 by their
+ * short series -- rounded once. */
+static double m_sc_pair(double rh, double rl, int q) {
+    Sum s;
+    double ah;
+    double al;
+    double dh;
+    double d;
+    double d2;
+    double p;
+    double sd;
+    double cm;
+    double sh;
+    double sl;
+    double ch;
+    double cl;
+    double r;
+    int j;
+    if (rh < 0.0) { ah = -rh; al = -rl; } else { ah = rh; al = rl; }
+    j = (int)(ah * 16.0 + 0.5);
+    if (j > 13) j = 13;
+    dh = ah - (double)j * 0.0625;
+    d = dh + al;
+    d2 = d * d;
+    p = 1.0 / 362880.0;
+    p = p * d2 - 1.0 / 5040.0;
+    p = p * d2 + 1.0 / 120.0;
+    p = p * d2 - 1.0 / 6.0;
+    sd = (d * d2) * p;
+    p = 1.0 / 40320.0;
+    p = p * d2 - 1.0 / 720.0;
+    p = p * d2 + 1.0 / 24.0;
+    p = p * d2 - 0.5;
+    cm = d2 * p;
+    sh = m_sincost[j][0].d;
+    sl = m_sincost[j][1].d;
+    ch = m_sincost[j][2].d;
+    cl = m_sincost[j][3].d;
+    s.n = 0;
+    s.q = 0;
+    if (q & 1) {
+        SUM_ADD(&s, ch, 0);
+        SUM_ADD(&s, cl, 0);
+        SUM_MUL(&s, ch, cm, 0);
+        SUM_MUL(&s, -sh, dh, 0);
+        SUM_MUL(&s, -sh, al, 0);
+        SUM_MUL(&s, -sl, dh, 0);
+        SUM_MUL(&s, -sh, sd, 0);
+    } else {
+        SUM_ADD(&s, sh, 0);
+        SUM_ADD(&s, sl, 0);
+        SUM_MUL(&s, sh, cm, 0);
+        SUM_MUL(&s, ch, dh, 0);
+        SUM_MUL(&s, ch, al, 0);
+        SUM_MUL(&s, cl, dh, 0);
+        SUM_MUL(&s, ch, sd, 0);
+    }
+    r = sum_round(&s, 0);
+    if (!(q & 1) && rh < 0.0) r = -r;   /* sin is odd */
+    return q & 2 ? -r : r;
+}
+
+/* x = k pi/2 + rh + rl as f77m_tan reduces it, and sin or cos (cosine
+ * 1) of it: cos x is sin x's next quadrant */
+static double m_sincos(double x, int cosine) {
+    Sum t;
+    double kd;
+    double k;
+    double rh;
+    double rl;
+    int ki;
+    if (m_fabs(x) >= 1048576.0) {
+        rh = m_reduce_big(m_fabs(x), &ki, &rl);
+        if (x < 0.0) { rh = -rh; rl = -rl; ki = -ki; }
+        return m_sc_pair(rh, rl, (ki + cosine) & 3);
+    }
+    kd = x / c_pio2();
+    k = (double)(long)(kd < 0.0 ? kd - 0.5 : kd + 0.5);
+    t.n = 0;
+    t.q = 0;
+    SUM_ADD(&t, x - k * c_pio2_1(), 0);
+    SUM_MUL(&t, -k, c_pio2_2(), 0);
+    SUM_MUL(&t, -k, c_pio2_3(), 0);
+    SUM_MUL(&t, -k, k_pio2_4.d, 0);
+    rh = sum_round(&t, &rl);
+    return m_sc_pair(rh, rl, (((int)k) + cosine) & 3);
+}
+
+double f77m_sin(double x) __asm__("M@SIN");
+double f77m_sin(double x) { return m_sincos(x, 0); }
+
+double f77m_cos(double x) __asm__("M@COS");
+double f77m_cos(double x) { return m_sincos(x, 1); }
 
 /* r in two parts: below 2^20 the reduction by pi/2 in four (k times
  * each of the last three exact in extended), above it Payne and
