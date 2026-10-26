@@ -22,12 +22,19 @@
 *
 * From C or Fortran: double DTAN(double), cc370's convention: R1 to
 * the argument, the result in FPR0, R2-R13 kept.  Nothing here calls
-* anything; the work areas are in the CSECT, as in f77xsum.
+* anything; the work areas are in the CSECT, as in f77xsum, and R13 a
+* frame on the C stack, as a C function's.
 *
 DTAN     CSECT
          STM   14,12,12(13)
          BALR  12,0
          USING *,12
+         L     15,76(,13)            a frame on the C stack, as C's:
+         ST    13,4(,15)             the program-interrupt exit takes
+         ST    15,8(,13)             an underflow there for the
+         LR    13,15                 runtime's, zero without a word
+         LA    15,96(,15)
+         ST    15,76(,13)
          LD    0,0(,1)
          STD   0,TX
          LTDR  0,0                   2^20 or more: C
@@ -212,12 +219,14 @@ TP9      STD   4,TNACC
          SDR   2,2
          AXR   4,0
          BAL   10,RND
-TRET     L     14,12(,13)
+TRET     L     13,4(,13)
+         L     14,12(,13)
          LM    2,12,28(13)
          BR    14
 THUGE    LD    0,=X'7FFFFFFFFFFFFFFF'
          B     TRET
 TC       L     15,=V(M@DTANC)        FORTLIB's checks etc., in C
+         L     13,4(,13)
          L     14,12(,13)
          LM    0,12,20(13)
          BR    15

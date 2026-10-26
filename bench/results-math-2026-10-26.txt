@@ -18,6 +18,9 @@ DSQRT in assembler (runtime/s370/f77msq.asm): 0.12.  The same bits as
 the C one at 200,000 arguments (tests/s370/sqrtx.f).
 DTAN in assembler (runtime/s370/f77mtan.asm): 0.39.  The same bits
 (tests/s370/tanx.f).
+DATAN, DASIN and DACOS in assembler (runtime/s370/f77matn.asm): DATAN
+0.40, DASIN 0.68.  The same bits (tests/s370/atanx.f).  DSQRT 0.13 on
+a frame of the C stack, as all four now are.
 
 Accuracy, the same day: each function at 1,000 arguments (DTAN at
 4,000 more, out to 100), fort370's and FORTLIB's bits printed by the

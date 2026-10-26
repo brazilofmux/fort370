@@ -27,7 +27,7 @@ repository root after `make runtime`."""
 import glob, os, re, shutil, subprocess, sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-RT = ['f77rt', 'f77misc'] + open(os.path.join(REPO, 'runtime/s370/f77int.lst')).read().split() + ['f77dtoa', 'f77main', 'f77err', 'f77math', 'f77mz', 'f77mzc', 'f77mchk', 'f77mlr', 'f77mld', 'f77rec', 'f77ishim', 'f77cshim', 'f77xsum', 'f77msq', 'f77mtan', 'f77spie', 'millicode']
+RT = ['f77rt', 'f77misc'] + open(os.path.join(REPO, 'runtime/s370/f77int.lst')).read().split() + ['f77dtoa', 'f77main', 'f77err', 'f77math', 'f77mz', 'f77mzc', 'f77mchk', 'f77mlr', 'f77mld', 'f77rec', 'f77ishim', 'f77cshim', 'f77xsum', 'f77msq', 'f77mtan', 'f77matn', 'f77spie', 'millicode']
 
 
 def zerofill(deck):

@@ -16,12 +16,19 @@
 * the argument, the root in FPR0, R2-R13 kept.  Zero gives zero; a
 * negative argument goes to the C entry M@DSQRN, which gives FORTLIB's
 * message and takes the root of its magnitude.  Nothing else here
-* calls anything; the work areas are in the CSECT, as in f77xsum.
+* calls anything; the work areas are in the CSECT, as in f77xsum, and
+* R13 a frame on the C stack, as a C function's.
 *
 DSQRT    CSECT
          STM   14,12,12(13)
          BALR  12,0
          USING *,12
+         L     15,76(,13)            a frame on the C stack, as C's:
+         ST    13,4(,15)             the program-interrupt exit takes
+         ST    15,8(,13)             an underflow there for the
+         LR    13,15                 runtime's, zero without a word
+         LA    15,96(,15)
+         ST    15,76(,13)
          LD    0,0(,1)
          LTDR  0,0
          BZ    SZERO
@@ -117,14 +124,16 @@ SDONE    S     15,=F'64'             the root's char, 64 + e/2
          OR    4,15
          STM   4,5,RW
          LD    0,RW
-SRET     L     14,12(,13)
+SRET     L     13,4(,13)
+         L     14,12(,13)
          LM    2,12,28(13)
          BR    14
 SZERO    SDR   0,0
          B     SRET
 SNEG     L     15,=V(M@DSQRN)        FORTLIB's message, in C: its
-         L     14,12(,13)            address while R12 is still ours,
-         LM    0,12,20(13)           then the caller's registers
+         L     13,4(,13)             address while R12 is still ours,
+         L     14,12(,13)            then the caller's registers
+         LM    0,12,20(13)
          BR    15
 *
 * SLOW: whether (2R + 1)^2 < 4N, R in R6:R7 and the high word of 4N
