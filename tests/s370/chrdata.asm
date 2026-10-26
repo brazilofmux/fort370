@@ -18,37 +18,17 @@ L00011   L     15,L00012
          ST    1,S00000+72
 L00004   DS    0H
          L     5,C00014
-         LA    0,T00003
-         ST    0,P00015+0
-         LA    0,7
-         ST    0,P00015+4
-         L     0,C00016
-         ST    0,P00015+8
-         LA    0,7
-         ST    0,P00015+12
          LA    1,P00015
-         L     15,C00017
+         L     15,C00016
          BALR  14,15
-         LA    0,6
-         ST    0,P00015+0
-         L     0,C00018
-         ST    0,P00015+4
-         LA    1,P00015
-         L     15,C00019
+         LA    1,P00017
+         L     15,C00018
          BALR  14,15
-         L     0,C00021
-         ST    0,P00015+0
-         LA    0,7
-         ST    0,P00015+4
-         LA    1,P00015
-         L     15,C00022
+         LA    1,P00020
+         L     15,C00021
          BALR  14,15
-         LA    0,T00003
-         ST    0,P00015+0
-         LA    0,7
-         ST    0,P00015+4
-         LA    1,P00015
-         L     15,C00022
+         LA    1,P00022
+         L     15,C00021
          BALR  14,15
          AH    5,C00023
          LA    2,3
@@ -65,14 +45,12 @@ L00006   DS    0H
          LR    4,5
          AR    4,2
          LR    0,4
-         ST    0,P00015+0
-         LA    0,3
-         ST    0,P00015+4
-         LA    1,P00015
-         L     15,C00022
+         ST    0,P00026+0
+         LA    1,P00026
+         L     15,C00021
          BALR  14,15
-         AH    3,C00026
-         A     2,C00027
+         AH    3,C00027
+         A     2,C00028
          B     L00005
 L00009   DS    0H
          L     13,4(,13)
@@ -91,22 +69,30 @@ S00000   DS    0D
          DS    8D
          DS    D
 T00003   DS    XL24
-P00015   DS    4F
+P00015   DC    A(T00003)
+         DC    F'7'
+         DC    A(Q00001)
+         DC    F'7'
+P00017   DC    F'6'
+         DC    A(Q00002)
+P00020   DC    A(G00019)
+         DC    F'7'
+P00022   DC    A(T00003)
+         DC    F'7'
+P00026   DC    A(0)
+         DC    F'3'
 C00014   DC    A(G00013)
-C00016   DC    A(Q00001)
-C00017   DC    V(F77STRCP)
-C00018   DC    A(Q00002)
-C00019   DC    V(F77WRBEG)
-C00021   DC    A(G00020)
-C00022   DC    V(F77WRA)
+C00016   DC    V(F77STRCP)
+C00018   DC    V(F77WRBEG)
+C00021   DC    V(F77WRA)
 C00024   DC    F'0'
 C00025   DC    V(F77WREND)
-C00027   DC    F'3'
+C00028   DC    F'3'
 C00023   DC    H'-3'
-C00026   DC    H'-1'
+C00027   DC    H'-1'
 Q00002   DC    C'(1X,''>'',A7,1X,A7,1X,2A3)'
 Q00001   DC    C'GHIJKLM'
-G00020   CSECT
+G00019   CSECT
          DS    0D
          DC    X'D6D5C54EE3E6D6'
 G00013   CSECT

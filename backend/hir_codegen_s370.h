@@ -94,7 +94,8 @@ static void s370_scache_clear(void);
 static int s370_scache[16];
 /* Code labels (Lnnnnn) by offset in the CSECT, numbered from the first
  * label the unit allocated.  A label 4K or more past the code base
- * (the BALR 12,0) is "far": a branch to it loads its address into R15
+ * (the BALR 12,0), or 8K with a second code base (s370_ncb), is
+ * "far": a branch to it loads its address into R15
  * from the pool and branches 0(,15).  A sizing pass (cg_dry) finds
  * them before the real one; see s370_gen_unit. */
 #define S370_MAX_ULBL (8192 * F77_ROOM)    /* fort370: labels in one unit; a unit past it is refused */
@@ -104,6 +105,7 @@ static char *s370_far;
 static int  s370_code_base;
 static int  s370_sizing_changed;
 static int  s370_area_end_sized;   /* the static area's extent the sizing found */
+static int  s370_code_sized;       /* the code's extent the sizing found */
 static int s370_lbl_far(int lbl) {
     lbl = lbl - s370_lbl_base;
     return lbl >= 0 && lbl < S370_MAX_ULBL && s370_far[lbl];
@@ -327,6 +329,8 @@ static char *s370_gname(char *name) {
 static int s370_area_lbl;     /* Snnnnn, the area */
 static int s370_near_limit;   /* bytes the data bases reach */
 static int s370_nbases;       /* 1: R13; 2: +R11; 3: +R10 */
+static int s370_ncb;          /* code bases past R12: 0, or 1 (s370_cb_reg) */
+static int s370_cb_reg(void) { return 12 - s370_nbases; }
 static int s370_area_size;    /* running size during layout */
 static int s370_unit_is_main;
 static int s370_cur_unit;
@@ -1446,6 +1450,108 @@ static int s370_npl;
 static int s370_plist_lbl;   /* the unit's parameter list */
 static int s370_plist_n;     /* its length in words */
 
+/* A CALL's parameter list as FORTRAN H builds it: in the static area,
+ * assembled once, each argument whose address the linkage editor can
+ * fix an address constant (a local, a COMMON member, a constant, the
+ * call's temporaries, a procedure), the last word's high byte X'80'.
+ * Only an address known at run time (a dummy argument passed on, an
+ * element at a computed subscript) is stored at the call, into its
+ * A(0) word, which no constant is written as.  Lists of the same text
+ * are one list.  A unit with more
+ * lists than the table holds fills the shared one for the rest. */
+#define S370_MAX_CL   (1024 * F77_ROOM)
+#define S370_CL_TEXT  (32768 * F77_ROOM)
+static int  s370_cl_lbl[S370_MAX_CL];
+static int  s370_cl_off[S370_MAX_CL];   /* its words' text in s370_cl_text, ';' between */
+static int  s370_cl_n[S370_MAX_CL];
+static char s370_cl_vl[S370_MAX_CL];    /* the last word's high byte is X'80' */
+static char s370_cl_dw[S370_MAX_CL];    /* on a doubleword: a floating value is stored in it */
+static int  s370_ncl;
+static char s370_cl_text[S370_CL_TEXT];
+static int  s370_cl_top;
+#define S370_CL_ARGS  256
+static int  s370_cl_tl[S370_CL_ARGS];   /* per argument: its temporary, -1 an address constant, -2 stored */
+static char s370_cl_buf[4096];          /* the list being built */
+static char s370_cl_root[HIR_MAX_CARG]; /* the argument is its root; s370_cl_disp the rest */
+static int  s370_cl_disp[HIR_MAX_CARG];
+
+/* Whether argument address v is one the linkage editor can fix: a
+ * static object, a COMMON block, a string or a procedure (*root) plus
+ * a constant (*disp), through ADDIs and COPYs. */
+static int s370_arg_root(int v, int *root, int *disp) {
+    int lim;
+    int k;
+    *disp = 0;
+    lim = 0;
+    while (v >= 0 && lim < 64) {
+        k = h_kind[v];
+        if (k == HI_ADDI) { *disp = *disp + h_val[v]; v = h_src1[v]; lim = lim + 1; continue; }
+        if (k == HI_COPY) { v = h_src1[v]; lim = lim + 1; continue; }
+        break;
+    }
+    if (v < 0) return 0;
+    k = h_kind[v];
+    *root = v;
+    if (k == HI_ALLOCA && s370_alab[v] >= 0) return 1;
+    if (k == HI_GADDR || k == HI_SADDR) return 1;
+    return k == HI_FADDR && *disp == 0;
+}
+
+/* Its address constant, "A(T00012+8)" or "V(NAME)", with extra
+ * displacement disp0 (s370_cl_roots took the chain off). */
+static int s370_arg_adcon(int v, int disp0, char *out) {
+    int disp;
+    int k;
+    char *nm;
+    if (!s370_arg_root(v, &v, &disp)) return 0;
+    disp = disp + disp0;
+    k = h_kind[v];
+    if (k == HI_ALLOCA) nm = s370_lab('T', s370_alab[v]);
+    else if (k == HI_GADDR) nm = s370_gname(h_name[v]);
+    else if (k == HI_SADDR) nm = s370_lab('Q', s370_str_lbl[h_val[v]]);
+    else if (disp == 0) nm = s370_extname(h_name[v]);
+    else return 0;
+    strcpy(out, k == HI_FADDR ? "V(" : "A(");
+    strcat(out, nm);
+    if (disp != 0) {
+        char d[16];
+        int p;
+        unsigned int u;
+        p = 15;
+        d[p] = 0;
+        u = (unsigned int)(disp < 0 ? -disp : disp);
+        do { p = p - 1; d[p] = (char)('0' + u % 10); u = u / 10; } while (u > 0);
+        p = p - 1;
+        d[p] = disp < 0 ? '-' : '+';
+        strcat(out, d + p);
+    }
+    strcat(out, ")");
+    return 1;
+}
+
+/* The label of the list with this text, made if new; -1 if the table
+ * is full. */
+static int s370_cl_find(char *text, int n, int vl, int dw) {
+    int i;
+    int len;
+    i = 0;
+    while (i < s370_ncl) {
+        if (s370_cl_n[i] == n && s370_cl_vl[i] == vl && s370_cl_dw[i] == dw && strcmp(s370_cl_text + s370_cl_off[i], text) == 0) return s370_cl_lbl[i];
+        i = i + 1;
+    }
+    len = (int)strlen(text) + 1;
+    if (s370_ncl >= S370_MAX_CL || s370_cl_top + len > S370_CL_TEXT) return -1;
+    memcpy(s370_cl_text + s370_cl_top, text, (size_t)len);
+    s370_cl_off[i] = s370_cl_top;
+    s370_cl_top = s370_cl_top + len;
+    s370_cl_n[i] = n;
+    s370_cl_vl[i] = (char)vl;
+    s370_cl_dw[i] = (char)dw;
+    s370_cl_lbl[i] = cg_label();
+    s370_ncl = s370_ncl + 1;
+    return s370_cl_lbl[i];
+}
+
 static void s370_call_result(int i) {
     if (bg_uses[i] == 0) return;
     if (ra_is_fpv(i)) {
@@ -1602,6 +1708,7 @@ static void s370_ccall(int i) {
     int words;
     int libm;
     int pass;
+    int stat;
     char mem[40];
     n = h_val[i];
     base = h_cbase[i];
@@ -1615,8 +1722,48 @@ static void s370_ccall(int i) {
         else words = words + 1;
         j = j + 1;
     }
+    /* A list of its own, as for a CALL: a constant or an address the
+     * linkage editor fixes is a word assembled there, as is the zero
+     * word widening a REAL; the rest is stored at the call. */
     pl = -1;
-    if (words > 0) {
+    stat = 0;
+    if (words > 0 && n <= S370_CL_ARGS) {
+        int len;
+        int dw;
+        len = 0;
+        dw = 0;
+        j = 0;
+        while (j < n && len >= 0) {
+            int v;
+            int c;
+            int root;
+            char ad[40];
+            v = h_carg[base + j];
+            s370_cl_tl[j] = -2;
+            strcpy(ad, "A(0)");                /* stored at the call; F'0' is the constant */
+            if (v >= 0 && ra_is_fpv(v)) {
+                dw = 1;
+                if (ty_is_double(h_ty[v])) strcat(ad, ";A(0)");
+                else if (libm) strcat(ad, ";F'0'");
+            } else if (v >= 0 && bg_const_imm_inst(v, &c, &root) && hi_inst_remat(root)) {
+                f_reset(); f_s("F'"); f_n(c); f_c('\'');
+                strcpy(ad, s370_line);
+                s370_cl_tl[j] = -1;
+            } else if (v >= 0 && s370_arg_adcon(v, s370_cl_root[base + j] ? s370_cl_disp[base + j] : 0, ad)) {
+                s370_cl_tl[j] = -1;
+            }
+            if (len + (int)strlen(ad) + 2 > (int)sizeof(s370_cl_buf)) len = -1;
+            else {
+                if (j > 0) s370_cl_buf[len++] = ';';
+                strcpy(s370_cl_buf + len, ad);
+                len = len + (int)strlen(ad);
+            }
+            j = j + 1;
+        }
+        if (len >= 0) pl = s370_cl_find(s370_cl_buf, words, 0, dw);
+        stat = pl >= 0;
+    }
+    if (words > 0 && !stat) {
         if (s370_plist_lbl < 0) s370_plist_lbl = cg_label();
         pl = s370_plist_lbl;
         if (words > s370_plist_n) s370_plist_n = words;
@@ -1642,14 +1789,17 @@ static void s370_ccall(int i) {
                     f_reset(); f_s("0,"); f_s(s370_lab('P', pl)); f_c('+'); f_n(off);
                     asm_ins(dbl ? "STD" : "STE", s370_line, 4);
                 }
-                if (pass == 1 && !dbl && wide) {
+                if (pass == 1 && !dbl && wide && !stat) {
                     f_reset(); f_s(s370_lab('P', pl)); f_c('+'); f_n(off + 4); f_s("(4),"); f_s(s370_lab('P', pl)); f_c('+'); f_n(off + 4);
                     asm_ins("XC", s370_line, 6);
                 }
                 off = off + (wide ? 8 : 4);
             } else {
-                if (pass == 1) {
+                if (pass == 1 && !(stat && s370_cl_tl[j] == -1)) {
                     s370_load_into(0, v);
+                    if (s370_cl_root[base + j] && s370_cl_disp[base + j] != 0) {
+                        f_reset(); f_s("0,"); f_s(s370_pool_f(s370_cl_disp[base + j])); asm_ins("A", s370_line, 4);
+                    }
                     f_reset(); f_s("0,"); f_s(s370_lab('P', pl)); f_c('+'); f_n(off);
                     asm_ins("ST", s370_line, 4);
                 }
@@ -1694,7 +1844,62 @@ static void s370_call(int i) {
     bymask = (callp || !h_name[i]) ? 0 : s370_byval_mask(h_name[i]);
 
     s370_tmp_reset();
-    if (n > 0) {
+    pl = -1;
+    if (n > 0 && n <= S370_CL_ARGS) {
+        int len;
+        len = 0;
+        j = 0;
+        while (j < n && len >= 0) {
+            int v;
+            int c;
+            int root;
+            char ad[40];
+            v = h_carg[base + j];
+            s370_cl_tl[j] = -1;
+            if (ra_is_fpv(v) || (bymask & (1 << j))) {
+                s370_cl_tl[j] = s370_new_tmp();
+                strcpy(ad, "A(");
+                strcat(ad, s370_lab('W', s370_cl_tl[j]));
+                strcat(ad, ")");
+            } else if (v >= 0 && bg_const_imm_inst(v, &c, &root) && hi_inst_remat(root) &&
+                       (j < n - 1 || (c >= 0 && c <= 0x7FFFFF))) {
+                f_reset(); f_s("F'"); f_n(c); f_c('\'');     /* a value: a CHARACTER length */
+                strcpy(ad, s370_line);
+            } else if (!s370_arg_adcon(v, s370_cl_root[base + j] ? s370_cl_disp[base + j] : 0, ad)) {
+                strcpy(ad, "A(0)");
+                s370_cl_tl[j] = -2;            /* stored at the call */
+            }
+            if (len + (int)strlen(ad) + 2 > (int)sizeof(s370_cl_buf)) len = -1;
+            else {
+                if (j > 0) s370_cl_buf[len++] = ';';
+                strcpy(s370_cl_buf + len, ad);
+                len = len + (int)strlen(ad);
+            }
+            j = j + 1;
+        }
+        if (len >= 0) pl = s370_cl_find(s370_cl_buf, n, 1, 0);
+        if (pl < 0) s370_tmp_reset();
+    }
+    if (pl >= 0) {
+        j = 0;
+        while (j < n) {
+            int v;
+            v = h_carg[base + j];
+            if (s370_cl_tl[j] >= 0) s370_store_tmp(s370_cl_tl[j], v);
+            else if (s370_cl_tl[j] == -2) {
+                s370_load_into(0, v);
+                f_reset(); f_s("0,"); f_s(s370_lab('P', pl)); f_c('+'); f_n(4 * j);
+                asm_ins("ST", s370_line, 4);
+            }
+            j = j + 1;
+        }
+        if (s370_cl_tl[n - 1] == -2) {
+            f_reset(); f_s(s370_lab('P', pl)); f_c('+'); f_n(4 * (n - 1)); f_s(",X'80'");
+            asm_ins("OI", s370_line, 4);
+        }
+        f_reset(); f_s("1,"); f_s(s370_lab('P', pl));
+        asm_ins("LA", s370_line, 4);
+    } else if (n > 0) {
         if (s370_plist_lbl < 0) s370_plist_lbl = cg_label();
         pl = s370_plist_lbl;
         if (n > s370_plist_n) s370_plist_n = n;
@@ -1709,6 +1914,9 @@ static void s370_call(int i) {
                 f_reset(); f_s("0,"); f_s(s370_lab('W', tl)); asm_ins("LA", s370_line, 4);
             } else {
                 s370_load_into(0, v);
+                if (s370_cl_root[base + j] && s370_cl_disp[base + j] != 0) {
+                    f_reset(); f_s("0,"); f_s(s370_pool_f(s370_cl_disp[base + j])); asm_ins("A", s370_line, 4);
+                }
             }
             f_reset(); f_s("0,"); f_s(s370_lab('P', pl)); f_c('+'); f_n(4 * j);
             asm_ins("ST", s370_line, 4);
@@ -1727,6 +1935,48 @@ static void s370_call(int i) {
     }
     asm_ins("BALR", "14,15", 2);
     s370_call_result(i);
+}
+
+/* Before the selector counts uses: an argument that s370_call's list
+ * will carry as an address constant becomes its root, the rest of
+ * the chain in s370_cl_disp, so that nothing computes the address
+ * into a register for it. */
+static int s370_io_name(char *nm) {
+    return strncmp(nm, "f77_wr_", 7) == 0 || strcmp(nm, "exit") == 0;
+}
+static void s370_cl_roots(void) {
+    int i;
+    int j;
+    int k;
+    int n;
+    int c;
+    int root;
+    int disp;
+    int bymask;
+    i = 0;
+    while (i < h_ninst) {
+        k = h_kind[i];
+        if ((k == HI_CALL || k == HI_CALLP) && h_cbase[i] >= 0) {
+            n = h_val[i];
+            j = 0;
+            while (j < n) { s370_cl_root[h_cbase[i] + j] = 0; j = j + 1; }
+            if (k == HI_CALL && h_name[i] && !s370_crt_on() && s370_io_name(h_name[i])) { i = i + 1; continue; }
+            if (n > S370_CL_ARGS) { i = i + 1; continue; }
+            bymask = (k == HI_CALLP || !h_name[i]) ? 0 : s370_byval_mask(h_name[i]);
+            j = 0;
+            while (j < n) {
+                c = h_cbase[i] + j;
+                if (h_carg[c] >= 0 && !(bymask & (1 << j)) && !ra_is_fpv(h_carg[c]) &&
+                    s370_arg_root(h_carg[c], &root, &disp)) {
+                    h_carg[c] = root;
+                    s370_cl_root[c] = 1;
+                    s370_cl_disp[c] = disp;
+                }
+                j = j + 1;
+            }
+        }
+        i = i + 1;
+    }
 }
 
 /* ---- one instruction ---- */
@@ -2394,6 +2644,7 @@ static void s370_emit_area(void) {
     int pad;
 
     asm_stmt("", "DROP", "12");
+    if (s370_ncb) { f_reset(); f_n(s370_cb_reg()); asm_stmt("", "DROP", s370_line); }
     asm_stmt(s370_lab('S', s370_area_lbl), "DS", "0D");
     asm_stmt("", "DS", "18F");                       /* save area */
     asm_stmt("", "DS", "F");                         /* saved R1 */
@@ -2444,6 +2695,28 @@ static void s370_emit_area(void) {
                 off = off + 4;
                 q = q + 1;
             }
+        }
+        i = i + 1;
+    }
+    /* the CALLs' parameter lists */
+    i = 0;
+    while (i < s370_ncl) {
+        char *w;
+        char *e;
+        int q;
+        w = s370_cl_text + s370_cl_off[i];
+        if (s370_cl_dw[i] && (off & 7)) { asm_stmt("", "DS", "F"); off = off + 4; }
+        q = 0;
+        while (q < s370_cl_n[i]) {
+            e = strchr(w, ';');
+            f_reset();
+            if (q == s370_cl_n[i] - 1 && s370_cl_vl[i]) { f_s("XL1'80',"); f_c(w[0]); f_s("L3"); f_s(w + 1); }   /* AL3(), VL3() or FL3'' */
+            else if (e) { *e = 0; f_s(w); *e = ';'; }
+            else f_s(w);
+            asm_stmt(q == 0 ? s370_lab('P', s370_cl_lbl[i]) : "", "DC", s370_line);
+            off = off + 4;
+            if (e) w = e + 1;
+            q = q + 1;
         }
         i = i + 1;
     }
@@ -3273,9 +3546,28 @@ static void s370_gen_unit(Node *fn) {
     s370_gen_unit_body(fn);
     f77_lst_unit_end();
 }
+
+/* The instructions that will become code: the selected ones with a
+ * use, or an effect, that are not rematerialized at their uses. */
+static int s370_live_insts(void) {
+    int i;
+    int k;
+    int n;
+    n = 0;
+    i = 0;
+    while (i < h_ninst) {
+        k = h_kind[i];
+        if (k != HI_NOP && !hi_inst_remat(i) &&
+            (bg_uses[i] > 0 || k == HI_STORE || k == HI_CALL || k == HI_CALLP || k == HI_BR || k == HI_BRC)) n = n + 1;
+        i = i + 1;
+    }
+    return n;
+}
+
 static void s370_gen_unit_body(Node *fn) {
     int b;
     int attempt;
+    int nlive;
     char csect_name[16];
 
     s370_cur_unit = fn->unit;
@@ -3313,6 +3605,8 @@ static void s370_gen_unit_body(Node *fn) {
     s370_ntmp = 0;
     s370_tmp_next = 0;
     s370_npl = 0;
+    s370_ncl = 0;
+    s370_cl_top = 0;
     s370_plist_lbl = -1;
     s370_plist_n = 0;
     s370_lbl_base = cg_lbl;
@@ -3320,6 +3614,7 @@ static void s370_gen_unit_body(Node *fn) {
     s370_pc = 0;
     s370_mark_strings();
     s370_layout();
+    s370_cl_roots();
     s370_mark_loop_consts();
     { int z; z = 0; while (z < h_ninst + 16 && z < HIR_MAX_INST) { ra_pair_of[z] = -1; ra_pair_lo[z] = 0; z = z + 1; } }
     if (!getenv("F77_NO_HOIST")) s370_hoist_bases();
@@ -3341,18 +3636,34 @@ static void s370_gen_unit_body(Node *fn) {
      * constant pool: a far branch costs an address constant); a static
      * area past the data bases' reach costs another base and a second
      * try. */
+    /* Code past 4K: as H, a second code base, which costs the
+     * allocator a register.  The instructions the code will have
+     * foretell it: a unit of 650 or more has gone past 4K, but for
+     * two just under; one of less than 400 has not.  Between, the
+     * sizing decides, and a unit past 4K is allocated again. */
     attempt = 0;
+    s370_ncb = 0;
+    nlive = s370_live_insts();
+    if (nlive >= 650 && !getenv("F77_NO_CB")) s370_ncb = 1;
     for (;;) {
         int save_ts;
-        ra_gpr_avail = RA_NGPR - (s370_nbases - 1);
+        ra_gpr_avail = RA_NGPR - (s370_nbases - 1) - s370_ncb;
         save_ts = hl_temp_stack;
         hir_regalloc();
         s370_emit_csect(fn, csect_name, 1);
-        if (s370_area_end_sized + 256 <= s370_near_limit || attempt >= 2 || s370_nbases >= 3) break;
-        s370_nbases = s370_nbases + 1;
-        s370_near_limit = 4096 * s370_nbases;
-        hl_temp_stack = save_ts;
-        attempt = attempt + 1;
+        if (!(s370_area_end_sized + 256 <= s370_near_limit || attempt >= 2 || s370_nbases >= 3)) {
+            s370_nbases = s370_nbases + 1;
+            s370_near_limit = 4096 * s370_nbases;
+            hl_temp_stack = save_ts;
+            attempt = attempt + 1;
+            continue;
+        }
+        if (s370_ncb == 0 && nlive >= 400 && s370_code_sized > 4096 && !getenv("F77_NO_CB")) {
+            s370_ncb = 1;
+            hl_temp_stack = save_ts;
+            continue;
+        }
+        break;
     }
 
     if (getenv("F77_DUMP")) ra_dump_intervals(fn->name);
@@ -3361,8 +3672,8 @@ static void s370_gen_unit_body(Node *fn) {
     s370_emit_area();
 }
 
-/* The CSECT, in a sizing pass first: branch targets 4K or more past
- * the code base are far and need the longer form, which moves later
+/* The CSECT, in a sizing pass first: branch targets past the code
+ * bases' reach are far and need the longer form, which moves later
  * labels further still, so the sizing repeats until no label turns
  * far (a 25K unit took eleven passes); then the real pass.  Everything the emission allocates (labels,
  * pool entries, temporaries, parameter lists, global labels) is
@@ -3373,6 +3684,8 @@ static void s370_emit_csect(Node *fn, char *csect, int size_only) {
     int sv_npool;
     int sv_ntmp;
     int sv_npl;
+    int sv_ncl;
+    int sv_cl_top;
     int sv_plist_lbl;
     int sv_plist_n;
     int pass;
@@ -3382,6 +3695,8 @@ static void s370_emit_csect(Node *fn, char *csect, int size_only) {
     sv_npool = s370_npool;
     sv_ntmp = s370_ntmp;
     sv_npl = s370_npl;
+    sv_ncl = s370_ncl;
+    sv_cl_top = s370_cl_top;
     sv_plist_lbl = s370_plist_lbl;
     sv_plist_n = s370_plist_n;
     memcpy(s370_glbl_save, s370_glbl, sizeof(s370_glbl));
@@ -3395,6 +3710,8 @@ static void s370_emit_csect(Node *fn, char *csect, int size_only) {
         s370_npool = sv_npool;
         s370_ntmp = sv_ntmp;
         s370_npl = sv_npl;
+        s370_ncl = sv_ncl;
+        s370_cl_top = sv_cl_top;
         s370_plist_lbl = sv_plist_lbl;
         s370_plist_n = sv_plist_n;
         memcpy(s370_glbl, s370_glbl_save, sizeof(s370_glbl));
@@ -3408,7 +3725,7 @@ static void s370_emit_csect(Node *fn, char *csect, int size_only) {
         changed = 0;
         l = 0;
         while (l < cg_lbl - s370_lbl_base && l < S370_MAX_ULBL) {
-            if (s370_lbl_pc[l] >= 0 && s370_lbl_pc[l] - s370_code_base >= 4096 && !s370_far[l]) { s370_far[l] = 1; changed = 1; }
+            if (s370_lbl_pc[l] >= 0 && s370_lbl_pc[l] - s370_code_base >= 4096 * (1 + s370_ncb) && !s370_far[l]) { s370_far[l] = 1; changed = 1; }
             l = l + 1;
         }
         if (getenv("F77_FAR_DEBUG")) {
@@ -3429,12 +3746,15 @@ static void s370_emit_csect(Node *fn, char *csect, int size_only) {
         /* the measure the caller wants, then everything back as it
          * was: the real emission numbers its labels from here again */
         s370_area_end_sized = s370_area_end();
+        s370_code_sized = s370_pc;
         cg_lbl = sv_lbl;
         l = sv_npool;
         while (l < s370_npool) { if (s370_pk_name[l]) free(s370_pk_name[l]); s370_pk_name[l] = 0; l = l + 1; }
         s370_npool = sv_npool;
         s370_ntmp = sv_ntmp;
         s370_npl = sv_npl;
+        s370_ncl = sv_ncl;
+        s370_cl_top = sv_cl_top;
         s370_plist_lbl = sv_plist_lbl;
         s370_plist_n = sv_plist_n;
         memcpy(s370_glbl, s370_glbl_save, sizeof(s370_glbl));
@@ -3451,6 +3771,8 @@ static int s370_area_end(void) {
     if (s370_plist_lbl >= 0) off = off + 4 * s370_plist_n;
     i = 0;
     while (i < s370_npl) { if (s370_pl_n[i] < 0) off = off + 4 * hjt_span[-s370_pl_n[i] - 1]; else off = off + 4 * s370_pl_n[i]; i = i + 1; }
+    i = 0;
+    while (i < s370_ncl) { if (s370_cl_dw[i]) off = (off + 7) & ~7; off = off + 4 * s370_cl_n[i]; i = i + 1; }
     off = (off + 7) & ~7;
     i = 0;
     while (i < s370_npool) {
@@ -3483,6 +3805,19 @@ static void s370_emit_code(Node *fn, char *csect) {
     asm_stmt("", "USING", "*,12");
     asm_stmt("", "DROP", "15");
     s370_code_base = s370_pc;
+    if (s370_ncb) {
+        /* H's second code base: R12+4096, for the code past 4K */
+        int lcb;
+        int r;
+        char rs[4];
+        lcb = cg_label();
+        r = s370_cb_reg();
+        strcpy(rs, s370_r(r));
+        asm_stmt(s370_lab('L', lcb), "DS", "0H");
+        f_reset(); f_s(rs); f_s(",2048(,12)"); asm_ins("LA", s370_line, 4);
+        f_reset(); f_s(rs); f_s(",2048(,"); f_s(rs); f_c(')'); asm_ins("LA", s370_line, 4);
+        f_reset(); f_s(s370_lab('L', lcb)); f_s("+4096,"); f_s(rs); asm_stmt("", "USING", s370_line);
+    }
     {
         int lgo;
         int lac;

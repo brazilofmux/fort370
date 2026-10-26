@@ -75,10 +75,8 @@ quotient and the remainder from one `DR` where H divides twice
 
 The inner loops are H's: daxpy is `LD / MDR / AD / STD / BXLE`, and
 matmul's is five instructions to H's eight; an outer loop that only
-counts is one `BXH`. What H does that this compiler does not yet:
-parameter lists built once in static storage, and a second base
-register for code beyond 4K (a branch to such a target here loads its
-address from the pool, `L 15,=A(L) / BC m,0(,15)`). The MVS package
+counts is one `BXH`. As H's, a call's parameter list is built once in
+static storage, and code past 4K has a second base register. The MVS package
 is FORT370.xmit and F77RT.xmit (or F77RT.upd), built by `make mvs`. `docs/BACKEND.md` has the design and the record of the
 work.
 

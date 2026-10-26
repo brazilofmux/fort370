@@ -22,8 +22,6 @@ L00004   DS    0H
 L00005   DS    0H
 L00007   DS    0H
 L00009   DS    0H
-         LA    0,0
-         ST    0,P00015+0
          LA    1,P00015
          L     15,C00016
          BALR  14,15
@@ -48,7 +46,7 @@ S00000   DS    0D
          DS    D
          DS    8D
          DS    D
-P00015   DS    1F
+P00015   DC    F'0'
          DS    XL4
 C00016   DC    V(EXIT)
 * TEN

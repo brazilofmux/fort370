@@ -17,19 +17,13 @@ L00007   L     15,L00008
          USING S00000,13
          ST    1,S00000+72
 L00002   DS    0H
-         LA    0,6
-         ST    0,P00009+0
-         L     0,C00010
-         ST    0,P00009+4
          LA    1,P00009
+         L     15,C00010
+         BALR  14,15
          L     15,C00011
          BALR  14,15
-         L     15,C00012
-         BALR  14,15
 L00003   DS    0H
-         LA    0,1
-         ST    0,P00009+0
-         LA    1,P00009
+         LA    1,P00012
          L     15,C00013
          BALR  14,15
          B     L00005
@@ -50,10 +44,12 @@ S00000   DS    0D
          DS    D
          DS    8D
          DS    D
-P00009   DS    2F
-C00010   DC    A(Q00001)
-C00011   DC    V(F77WRBEG)
-C00012   DC    V(F77WREND)
+P00009   DC    F'6'
+         DC    A(Q00001)
+P00012   DC    F'1'
+         DS    XL4
+C00010   DC    V(F77WRBEG)
+C00011   DC    V(F77WREND)
 C00013   DC    V(EXIT)
 Q00001   DC    C'('' >STOPONE ENDS WITH RC=1'')'
 F77@GO   CSECT

@@ -117,12 +117,19 @@ DOUBLE PRECISION, as H and FORTLIB expect.
 
 **Code is based on R12**, set by `BALR 12,0` in the prologue. Code never
 needs addressability for anything but branch targets: constants and data
-are reached through R13. A branch whose target may lie more than 4K
-from the base goes through an address constant, `L 15,A0021` /
-`BCR mask,15`, H's "ADCONS FOR B BLOCK LABELS". The decision uses an
-upper estimate of the target's offset, so a small unit (every kernel,
-most real subroutines) has only direct branches and a large one pays
-one extra instruction on its far branches.
+are reached through R13. A unit whose code passes 4K gets a second code
+base, as H's do: the register below the data bases (R11, R10 or R9),
+set to R12+4096 after the `BALR` and withheld from the allocator. A
+branch to a target past the bases' reach, 4K with one and 8K with two,
+goes through an address constant, `L 15,A0021` / `BC mask,0(,15)`, H's
+"ADCONS FOR B BLOCK LABELS"; a sizing pass finds them. Whether a unit
+will pass 4K is foretold by the instructions it will have, counted
+before allocation: one of 650 or more has (in the FCVS and the tests,
+all but two just under 4K), one of less than 400 has not, and between
+them the sizing decides and a unit past 4K is allocated again. The
+FCVS's far branches went from 6,714 to about 1,700, and its code from
+1,221,795 bytes to 1,190,533, after the register fewer in those units,
+which alone costs about 9K.
 
 **Prologue and epilogue** are H's:
 
@@ -149,18 +156,30 @@ one extra instruction on its far branches.
 For an INTEGER function, R0 is loaded before the `LM`; for a REAL or
 DOUBLE one, FPR0 is loaded and survives the `LM` untouched.
 
-**Calls** build a parameter list of addresses. Every argument is passed
-by reference, including the arguments of runtime routines: a by-value
-integer or double in the HIR is stored to a temporary and the
-temporary's address goes in the list. Lists whose words are all
-compile-time constants are assembled statically; computed addresses are
-stored into the list before the call, as H does.
+**Calls** build a parameter list of addresses, as H does: one for each
+call, assembled in the static area. An argument whose address the
+linkage editor fixes (a local, a COMMON member, a constant, the call's
+temporary for an expression, a procedure) is an address constant there,
+the last word `XL1'80',AL3(...)`; a CHARACTER length, a value, is
+`F'n'`. Only an address known at run time (a dummy passed on, an
+element at a computed subscript) is stored at the call, into its `A(0)`
+word, and the end bit set again after it. Lists of the same text are
+one list. Before instruction selection such an argument becomes its
+root (the ALLOCA, the COMMON block, the string or the procedure) with
+the rest of its address chain kept beside the call, so nothing computes
+the address into a register for it.
 
-    LA    0,T0040
-    ST    0,PL0003+8
-    LA    1,PL0003
-    L     15,V0002                V(DAXPY) from the pool
+    ST    2,T0012                 an expression's value, to its temporary
+    LA    1,PL0003                A(T0005),A(T0006),A(BLK+8),A(T0012)...
+    L     15,V0002                V(SUB) from the pool
     BALR  14,15
+
+A runtime routine's list, by the C library's convention of values, is
+built the same way: a constant is `F'n'`, an address constant `A(...)`,
+the zero word that widens a REAL for the C library's double `F'0'`;
+the rest is stored. A WRITE's `F77WRBEG(6, format)` is `LA 1,P / L 15
+/ BALR`, where it was seven instructions. Over the FCVS the lists took
+the code from 1,539,319 bytes to 1,221,795 (issue #18).
 
 **Instruction selection.** The BURS grammar has the nonterminals REG,
 IMM (a constant that fits `LA`), FADDR (a static-area label plus

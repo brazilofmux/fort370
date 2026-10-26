@@ -19,18 +19,14 @@ L00012   L     15,L00013
 L00002   DS    0H
          L     5,C00015
          L     3,C00017
-         LA    0,6
-         ST    0,P00018+0
-         L     0,C00019
-         ST    0,P00018+4
          LA    1,P00018
-         L     15,C00020
+         L     15,C00019
          BALR  14,15
-         L     14,C00022
+         L     14,C00021
          L     4,0(,14)
          LR    0,4
-         ST    0,P00018+0
-         LA    1,P00018
+         ST    0,P00022+0
+         LA    1,P00022
          L     15,C00023
          BALR  14,15
          AH    5,C00024
@@ -40,17 +36,11 @@ L00003   DS    0H
          C     4,C00025
          BC    2,L00004
 L00005   DS    0H
-         LA    0,1
-         ST    0,P00018+0
-         LA    1,P00018
+         LA    1,P00026
          L     15,C00023
          BALR  14,15
-         L     0,C00027
-         ST    0,P00018+0
-         LA    0,4
-         ST    0,P00018+4
-         LA    1,P00018
-         L     15,C00028
+         LA    1,P00028
+         L     15,C00029
          BALR  14,15
          AH    3,C00024
          LA    2,4
@@ -59,30 +49,30 @@ L00006   DS    0H
          C     4,C00025
          BC    2,L00007
 L00008   DS    0H
-         L     15,C00029
+         L     15,C00030
          BALR  14,15
 L00009   DS    0H
          B     L00010
 L00004   DS    0H
          L     7,0(2,5)
          LR    0,7
-         ST    0,P00018+0
-         LA    1,P00018
+         ST    0,P00022+0
+         LA    1,P00022
          L     15,C00023
          BALR  14,15
-         AH    4,C00030
-         A     2,C00031
+         AH    4,C00031
+         A     2,C00032
          B     L00003
 L00007   DS    0H
          LE    0,0(2,3)
          STE   0,S00000+176
          LE    0,S00000+176
-         STE   0,P00018+0
-         LA    1,P00018
-         L     15,C00032
+         STE   0,P00033+0
+         LA    1,P00033
+         L     15,C00034
          BALR  14,15
-         AH    4,C00030
-         A     2,C00031
+         AH    4,C00031
+         A     2,C00032
          B     L00006
 L00010   DS    0H
          L     13,4(,13)
@@ -101,29 +91,34 @@ S00000   DS    0D
          DS    8D
          DS    D
          DS    1D
-P00018   DS    2F
+P00018   DC    F'6'
+         DC    A(Q00001)
+P00022   DC    A(0)
+P00026   DC    F'1'
+P00028   DC    A(G00027)
+         DC    F'4'
+P00033   DC    A(0)
+         DS    XL4
 C00015   DC    A(G00014)
 C00017   DC    A(G00016)
-C00019   DC    A(Q00001)
-C00020   DC    V(F77WRBEG)
-C00022   DC    A(G00021)
+C00019   DC    V(F77WRBEG)
+C00021   DC    A(G00020)
 C00023   DC    V(F77WRI)
 C00025   DC    F'0'
-C00027   DC    A(G00026)
-C00028   DC    V(F77WRA)
-C00029   DC    V(F77WREND)
-C00031   DC    F'4'
-C00032   DC    V(F77WRR)
+C00029   DC    V(F77WRA)
+C00030   DC    V(F77WREND)
+C00032   DC    F'4'
+C00034   DC    V(F77WRR)
 C00024   DC    H'-4'
-C00030   DC    H'-1'
+C00031   DC    H'-1'
 Q00001   DC    C'(1X,''>TYPEINIT'',I6,3I3,I2,1X,A4,2F5.1)'
-G00021   CSECT
+G00020   CSECT
          DS    0D
          DC    X'00003039'
 G00014   CSECT
          DS    0D
          DC    X'000000010000000700000007'
-G00026   CSECT
+G00027   CSECT
          DS    0D
          DC    X'C1C2C3C4'
 G00016   CSECT
