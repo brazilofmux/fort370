@@ -32,6 +32,19 @@ has b.lst "04        the option FOO is not one of FORTRAN H's"
 has b.lst "LINECNT=12"
 "$F77" -p LINECNT=10 -l $T/c.lst $T/a.f $T/c.s 2>/dev/null
 has c.lst "PAGE 003"
+# H's numbering past a logical IF, whose statement has an ISN of its
+# own, unlisted; and its cross reference, H's on TK5 but for a name
+# used twice in a statement, which H gives the ISN twice
+printf '      F(X) = X * 2.0\n      Y = 1.0\n      IF (Y .GT. 0.0) Y = F(Y)\n      IF (Y) 10, 20, 30\n   10 Y = 2.0\n   20 CALL S(Y)\n   30 STOP\n      END\n      SUBROUTINE S(A)\n      A = 1.0\n      ENTRY T(A)\n      END\n' > $T/x.f
+"$F77" -p XREF -l $T/x.lst $T/x.f $T/x.s 2>/dev/null
+has x.lst "^    ISN 0006           IF (Y) 10, 20, 30"
+has x.lst "^ F       0002  0004"
+has x.lst "^ Y       0003  0004  0006  0007  0008"
+has x.lst "^ S       0008"
+lacks x.lst "^ X  "
+has x.lst "^     10    0007      0006"
+has x.lst "^ A       0002  0003  0004"
+has x.lst "^ T       0004"
 rm -rf $T
-[ $bad = 0 ] && echo "listing: ISNs as H's, messages under their statements, the options in effect, NOSOURCE, LINECNT and an unknown option"
+[ $bad = 0 ] && echo "listing: ISNs as H's, messages under their statements, the options in effect, NOSOURCE, LINECNT, an unknown option and XREF"
 [ $bad = 0 ]

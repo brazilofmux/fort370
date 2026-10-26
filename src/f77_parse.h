@@ -530,6 +530,7 @@ static int f77_asg_lab[F77_MAX_ASG];
 static int f77_asg_unit[F77_MAX_ASG];
 static int f77_nasg;
 
+static int f77_sym_body(char *nm);
 static int f77_sym(char *nm) {
     int i;
     i = f77_stfb_n;
@@ -537,6 +538,11 @@ static int f77_sym(char *nm) {
         i = i - 1;
         if (strcmp(f77_stfb_name[i], nm) == 0) return f77_stfb_sym[i];
     }
+    f77_xr_note(nm);              /* fort370: XREF (f77_list.h) */
+    return f77_sym_body(nm);
+}
+static int f77_sym_body(char *nm) {
+    int i;
     i = f77_sym_at(nm, f77_scope_base);
     if (i >= 0) return i;
     if (f77_nsym >= F77_MAX_SYM) { f77_limit("too many symbols"); return 0; }
@@ -683,6 +689,7 @@ static int  f77_nunit;
  * then rewrite loads through it into the address itself. */
 static int f77_sym_param(char *nm, int index) {
     int s;
+    f77_xr_note(nm);
     if (f77_nsym >= F77_MAX_SYM) { f77_limit("too many symbols"); return 0; }
     s = f77_nsym;
     strcpy(f77_sname[s], nm);
@@ -788,8 +795,10 @@ static signed char *f77_ldef;   /* fort370: a statement carries it */
 static int f77_nlabel;
 
 /* Block for a label, created on first mention so forward GOTOs work. */
+static int f77_xr_def_on;          /* fort370: f77_label_def's own lookup */
 static int f77_label_blk(int n) {
     int i;
+    if (!f77_xr_def_on) f77_xr_label(n, 0);
     i = f77_label_base;
     while (i < f77_nlabel) {
         if (f77_lnum[i] == n) return f77_lblk[i];
@@ -809,7 +818,9 @@ static int f77_label_blk(int n) {
 static int f77_label_def(int n) {
     int b;
     int q;
+    f77_xr_def_on = 1;
     b = f77_label_blk(n);
+    f77_xr_def_on = 0;
     for (q = f77_label_base; q < f77_nlabel; q++)
         if (f77_lnum[q] == n) f77_ldef[q] = 1;
     return b;
@@ -2374,7 +2385,7 @@ static int f77_primary(void) {
         {
             int si;
             si = f77_stf_find(nm);
-            if (si >= 0) return f77_stf_expand(si);
+            if (si >= 0) { f77_xr_note(nm); return f77_stf_expand(si); }
         }
 
         /* Intrinsics, unless a unit in this file defines the name --
@@ -2396,6 +2407,7 @@ static int f77_primary(void) {
             if (in != IN_NONE && !(lx_rp < lx_rpe && *lx_rp == '(')) in = IN_NONE;
             if (in != IN_NONE && ds >= 0 && f77_srank[ds] > 0) in = IN_NONE;
         }
+        if (in != IN_NONE || u >= 0) f77_xr_note(nm);
         if (in != IN_NONE) {
             int a; int ahi; int aty;
             int b; int bhi; int bty;
@@ -3481,8 +3493,10 @@ static int f77_stf_define(void) {
     while (lx_t == T_NAME) {
         if (n < F77_MAX_STF_ARGS) {
             strcpy(f77_stf_arg[f77_stf_n][n], lex_name);
+            f77_xr_off = 1;        /* fort370: a dummy is no name of the unit's, for XREF */
             f77_stf_argty[f77_stf_n][n] = f77_sty[f77_sym(lex_name)];
             f77_stf_arglen[f77_stf_n][n] = f77_slen[f77_sym(lex_name)];
+            f77_xr_off = 0;
         }
         n = n + 1;
         f77_tok();
@@ -5522,6 +5536,7 @@ static void f77_open_do(void) {
     if (ctl_n >= F77_MAX_CTL) { f77_limit("control nesting too deep"); return; }
     ctl_kind[ctl_n] = F77_CTL_DO;
     ctl_label[ctl_n] = lab;
+    f77_xr_label(lab, 0);
     ctl_var[ctl_n] = s;
     ctl_step[ctl_n] = m3;
     ctl_stephi[ctl_n] = step_hi;
@@ -5628,6 +5643,7 @@ static void f77_open_dowhile(void) {
     if (ctl_n >= F77_MAX_CTL) { f77_limit("control nesting too deep"); return; }
     ctl_kind[ctl_n] = F77_CTL_DO;
     ctl_label[ctl_n] = lab;
+    f77_xr_label(lab, 0);
     ctl_var[ctl_n] = -1;
     ctl_test[ctl_n] = b_test;
     ctl_body[ctl_n] = b_body;
@@ -5991,7 +6007,12 @@ static char *f77_intrinsic_proc(char *nm) {
 
 /* Index of an existing symbol, or -1 (no creation). */
 static int f77_sym_find(char *nm) {
-    return f77_sym_at(nm, f77_scope_base);
+    int s;
+    int i;
+    s = f77_sym_at(nm, f77_scope_base);
+    for (i = 0; i < f77_stfb_n; i++) if (strcmp(f77_stfb_name[i], nm) == 0) return s;
+    if (s >= 0) f77_xr_note(nm);
+    return s;
 }
 
 /* ABS(X) or SF(X) as an actual argument is a value, not a variable:
@@ -6515,6 +6536,7 @@ static void f77_stmt_call(int skip) {
     f77_scan_from(skip);
     if (lx_t != T_NAME) { f77_error("CALL needs a subroutine name"); return; }
     strcpy(nm, lex_name);
+    f77_xr_note(nm);
     f77_tok();
 
     nargs = 0;
@@ -6804,6 +6826,7 @@ static void f77_bind_unit(int u) {
     int rty;
 
     f77_cur_unit = u;
+    if (f77_ukind[u] != F77_UNIT_PROGRAM) f77_xr_note(f77_uname[u]);
     f77_result_sym = -1;
     nparam = 0;
     f77_unit_nparams = 0;
@@ -7454,6 +7477,7 @@ static void f77_wr_begin(int unit_val, int fmt_label) {
         fa = f77_fmt_dyn_addr(f77_fmt_dyn);
     } else if (fmt_label >= 0) {
         fs = f77_find_format(fmt_label);
+        f77_xr_label(fmt_label, 0);
         if (fs < 0) { f77_error("no FORMAT statement with that label"); fs = 0; }
         fa = hi_emit(HI_SADDR, HL_ADDR_TY, -1, -1, fs, NULL);
     } else {
@@ -8077,6 +8101,7 @@ static void f77_stmt_read(int skip) {
         fa = f77_fmt_dyn_addr(f77_fmt_dyn);
     } else if (fmt_label >= 0) {
         fs = f77_find_format(fmt_label);
+        f77_xr_label(fmt_label, 0);
         if (fs < 0) { f77_error("no FORMAT statement with that label"); fs = 0; }
         fa = hi_emit(HI_SADDR, HL_ADDR_TY, -1, -1, fs, NULL);
     } else {
@@ -8661,6 +8686,7 @@ static void f77_statement(void) {
             lx_stmt_label = -1;
             f77_statement();
             lx_stmt_label = save_label;
+            f77_lst_isn_skip();   /* fort370: H numbers the statement in it too, unlisted */
         }
         f77_goto_blk(b_end);
         f77_begin_blk(b_end);
@@ -8776,6 +8802,12 @@ static void f77_statement(void) {
         /* A no-op in the flow, except where the unit being compiled is
          * this ENTRY: its code begins here (falling into an ENTRY
          * statement goes on past it, as for any other). */
+        /* fort370: its name and dummies, for XREF */
+        f77_scan_from(5);
+        while (lx_t != T_EOF) {
+            if (lx_t == T_NAME) f77_xr_note(lex_name);
+            f77_tok();
+        }
         if (f77_entry_state == 2 && lx_stmt_line == f77_entry_line) {
             f77_goto_blk(f77_entry_blk);
             f77_begin_blk(f77_entry_blk);

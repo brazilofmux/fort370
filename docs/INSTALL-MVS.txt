@@ -161,8 +161,11 @@ Or, without RECEIVE, IEBUPDTE makes the same library of F77RT.upd:
   NAME=MAIN, OPT=00, LINECNT=50, SIZE=0000K, SOURCE, EBCDIC, NOLIST,
   NODECK, LOAD, NOMAP, NOEDIT, NOID, NOXREF.  NOSOURCE leaves the
   source out of the listing (not the messages), and LINECNT sets the
-  lines on a page; the rest are taken and shown in the listing, but do
-  nothing yet.  An option H does not have is a warning.  With F77CLG,
+  lines on a page.  XREF adds H's cross reference after each unit's
+  source: each name, with the ISN of every statement it is in (once a
+  statement, where H gives an ISN for each use), and each label with
+  the statement carrying it and those referring to it.  The rest are
+  taken and shown in the listing, but do nothing yet.  An option H does not have is a warning.  With F77CLG,
   //RUN EXEC F77CLG,PARM.FORT='NOSOURCE'.  (A PARM of two data set
   names, dd:SRC dd:ASM, still names the source and the output.)
 

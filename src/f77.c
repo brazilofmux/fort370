@@ -93,6 +93,10 @@ static void f77_lst_card(int p, int kind);            /* f77_list.h */
 static void f77_warn(int line, char *msg);
 static int f77_quiet;
 static void f77_lst_note(int line, int sev, char *text);
+static void f77_xr_note(char *nm);
+static void f77_xr_label(int n, int def);
+static void f77_lst_isn_skip(void);
+static int f77_xr_off;     /* names noted for XREF not now (f77_list.h) */
 static int f77_nerr;      /* errors so far; a unit with any is not given to the back end */
 /* fort370: the return code, the worst severity reported, as IBM's
  * compilers give it (#33): 4 a warning, 8 an error, 12 a table of the
