@@ -45,6 +45,17 @@ lacks x.lst "^ X  "
 has x.lst "^     10    0007      0006"
 has x.lst "^ A       0002  0003  0004"
 has x.lst "^ T       0004"
+# MAP: each name of the unit's own, its type and storage (a callee
+# put in line keeps its names to itself); LIST: the code, as written
+printf '      COMMON /BLK/ A(10), N\n      COMMON Q(2,0:3)\n      CHARACTER*8 T\n      N = 1\n      CALL S(A, N)\n      END\n      SUBROUTINE S(C, M)\n      DIMENSION C(M)\n      C(1) = 0.0\n      END\n' > $T/m.f
+"$F77" -p MAP,LIST -l $T/m.lst $T/m.f $T/m.s 2>/dev/null
+has m.lst "^     N         I\*4       COMMON /BLK/ +000028"
+has m.lst "^     Q         R\*4       COMMON // +000000           (2,0:3)"
+has m.lst "^     T         CHAR\*8    LOCAL"
+has m.lst "^     C         R\*4       DUMMY                       (\*)"
+has m.lst "G E N E R A T E D"
+has m.lst "^ F77MAIN  CSECT"
+has m.lst "^ S        CSECT"
 rm -rf $T
-[ $bad = 0 ] && echo "listing: ISNs as H's, messages under their statements, the options in effect, NOSOURCE, LINECNT, an unknown option and XREF"
+[ $bad = 0 ] && echo "listing: ISNs as H's, messages under their statements, the options in effect, NOSOURCE, LINECNT, an unknown option, XREF, MAP and LIST"
 [ $bad = 0 ]

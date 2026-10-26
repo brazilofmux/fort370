@@ -164,8 +164,14 @@ Or, without RECEIVE, IEBUPDTE makes the same library of F77RT.upd:
   lines on a page.  XREF adds H's cross reference after each unit's
   source: each name, with the ISN of every statement it is in (once a
   statement, where H gives an ISN for each use), and each label with
-  the statement carrying it and those referring to it.  The rest are
-  taken and shown in the listing, but do nothing yet.  An option H does not have is a warning.  With F77CLG,
+  the statement carrying it and those referring to it.  MAP lists
+  each of the unit's names with its type and its storage: a local, a
+  dummy, a static one (SAVE or DATA), in COMMON at its offset in its
+  block, an external, a PARAMETER, and an array's bounds.  (H's MAP
+  gives addresses; here the back end makes them after the map.)  LIST
+  puts the assembler generated for each unit in its part of the
+  listing; SYSPUNCH has it as always.  NAME, OPT, SIZE, EBCDIC, DECK,
+  LOAD, EDIT and ID are taken and shown, and do nothing.  An option H does not have is a warning.  With F77CLG,
   //RUN EXEC F77CLG,PARM.FORT='NOSOURCE'.  (A PARM of two data set
   names, dd:SRC dd:ASM, still names the source and the output.)
 

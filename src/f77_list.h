@@ -39,6 +39,8 @@ static char f77_lst_date[24];
 static int f77_lst_ndiag;      /* the unit's messages */
 static int f77_lst_usev;       /* their highest severity */
 static int f77_lst_tdiag;      /* the step's */
+static int f77_lst_mid;        /* a unit read, its code still to come */
+static int f77_lst_nerr0;      /* errors before the unit: none of its own, LIST its code */
 
 /* the unit's statements: the line each begins on, and its ISN, in pairs */
 static int *f77_lst_sline;
@@ -263,7 +265,7 @@ static int f77_xr_grow(void **a, int elt, int *cap, int n) {
 }
 
 static int f77_xr_active(void) {
-    return f77_lst && f77_lst_on && f77_opt_xref && f77_inline_depth == 0 && !f77_quiet && !f77_xr_off;
+    return f77_lst && f77_lst_on && (f77_opt_xref || f77_opt_map) && f77_inline_depth == 0 && !f77_quiet && !f77_xr_off;
 }
 
 static void f77_xr_note(char *nm) {
@@ -412,6 +414,7 @@ static void f77_lst_unit_begin(int u) {
     f77_lst_on = f77_uentry_parent[u] < 0 && !f77_quiet;
     if (!f77_lst_on) return;
     f77_lst_isn = 1;
+    f77_lst_nerr0 = f77_nerr;
     f77_lst_nsline = 0;
     f77_xr_nn = 0;
     f77_xr_nr = 0;
@@ -423,16 +426,138 @@ static void f77_lst_unit_begin(int u) {
     f77_lst_options("           COMPILER OPTIONS - ");
 }
 
-/* The unit's text read: its messages, those of the scan before it
- * among them, its statistics */
-static void f77_lst_unit_end(int last) {
+
+/* --- MAP: the unit's names and their storage ------------------------
+ * H's MAP gives each name's address in the module; here the addresses
+ * are the back end's, made after this, so each name has its type, its
+ * kind of storage -- a local, a dummy, a static one (SAVE, DATA), in
+ * COMMON at its offset in its block, an external, a PARAMETER -- and an
+ * array its bounds. */
+static void f77_map_type(int s, char *b) {
+    int t;
+    t = f77_sty[s];
+    if (t == TY_CHAR) { if (f77_slen[s] < 0) strcpy(b, "CHAR*(*)"); else sprintf(b, "CHAR*%d", f77_slen[s]); return; }
+    if (t == TY_DOUBLE) { strcpy(b, "R*8"); return; }
+    if (t == TY_FLOAT) { strcpy(b, "R*4"); return; }
+    if (t == TY_CPLX) { strcpy(b, "C*8"); return; }
+    if (t == TY_DCPLX) { strcpy(b, "C*16"); return; }
+    if (f77_slog[s]) { strcpy(b, f77_snar[s] == 1 ? "L*1" : "L*4"); return; }
+    strcpy(b, f77_snar[s] == 2 ? "I*2" : "I*4");
+}
+
+static int f77_map_cmp(const void *a, const void *b) {
+    char *x;
+    char *y;
+    int lx;
+    int ly;
+    x = f77_sname[*(const int *)a];
+    y = f77_sname[*(const int *)b];
+    lx = (int)strlen(x);
+    ly = (int)strlen(y);
+    if (lx != ly) return lx - ly;
+    return strcmp(x, y);
+}
+
+static void f77_map_print(void) {
+    int *ord;
+    int n;
+    int i;
+    int k;
+    char b[200];
+    char ty[20];
+    if (!f77_lst || !f77_opt_map || f77_xr_nn == 0) return;
+    ord = (int *)malloc(sizeof(int) * (size_t)f77_xr_nn);
+    if (!ord) return;
+    /* the unit's own names (XREF's notes): not a callee's, put in line */
+    n = 0;
+    for (i = 0; i < f77_xr_nn; i++) {
+        int s;
+        s = f77_sym_at(f77_xr_name[i], f77_scope_base);
+        if (s >= 0) ord[n++] = s;
+    }
+    qsort(ord, (size_t)n, sizeof(int), f77_map_cmp);
+    f77_lst_heading();
+    f77_lst_put(0, "                      *****  S T O R A G E    M A P  *****");
+    f77_lst_put(0, "    NAME      TYPE      STORAGE                     DIMENSIONS");
+    for (i = 0; i < n; i++) {
+        int s;
+        char *c;
+        char u[80];
+        s = ord[i];
+        f77_map_type(s, ty);
+        c = u;
+        if (f77_sparam[s]) strcpy(u, "PARAMETER");
+        else if (f77_sexternal[s]) strcpy(u, "EXTERNAL");
+        else if (f77_sintrinsic[s]) strcpy(u, "INTRINSIC");
+        else if (f77_sarg[s]) strcpy(u, "DUMMY");
+        else if (f77_scom[s] && f77_sgidx[s] >= 0) {
+            char *g;
+            g = ps_gname[f77_sgidx[s]];
+            if (strncmp(g, "f77c_", 5) == 0) g = g + 5;
+            if (strcmp(g, "_BLNK_") == 0 || strcmp(g, "_BLNK__") == 0) g = "";
+            sprintf(u, "COMMON /%.8s/ +%06X", g, f77_sgoff[s]);
+        }
+        else if (f77_sgidx[s] >= 0) strcpy(u, "STATIC");
+        else strcpy(u, "LOCAL");
+        sprintf(b, "    %-8s  %-8s  %-26s  ", f77_sname[s], ty, c);
+        if (f77_srank[s] > 0) {
+            strcat(b, "(");
+            for (k = 0; k < f77_srank[s]; k++) {
+                char d[40];
+                if (f77_sextsym[s][k] >= 0) sprintf(d, "%s*", k ? "," : "");
+                else if (f77_slo[s][k] == 1) sprintf(d, "%s%d", k ? "," : "", f77_sext[s][k]);
+                else sprintf(d, "%s%d:%d", k ? "," : "", f77_slo[s][k], f77_slo[s][k] + f77_sext[s][k] - 1);
+                if (strlen(b) + strlen(d) < sizeof b - 4) strcat(b, d);
+            }
+            strcat(b, ")");
+        }
+        f77_lst_put(0, b);
+    }
+    free(ord);
+}
+
+/* The unit's text read: its cross reference, and with LIST the code
+ * that is now generated from it, into the listing as it is written */
+static int f77_lst_last;       /* the unit's last line */
+static char f77_lst_asm[100];
+static int f77_lst_asmn;
+static void f77_lst_unit_mid(int last) {
+    if (!f77_lst || !f77_lst_on) return;
+    f77_lst_last = last;
+    f77_lst_on = 0;
+    f77_lst_mid = 1;
+    f77_xr_print();
+    f77_map_print();
+    if (f77_opt_list && f77_nerr == f77_lst_nerr0) {
+        f77_lst_heading();
+        f77_lst_put(0, "                      *****  G E N E R A T E D    A S S E M B L E R  *****");
+        f77_lst_asmn = 0;
+        f77_lst_asm_on = 1;
+    }
+}
+
+static void f77_lst_asm_c(int ch) {
+    if (ch == '\n') {
+        f77_lst_asm[f77_lst_asmn] = 0;
+        f77_lst_put(0, f77_lst_asm);
+        f77_lst_asmn = 0;
+        return;
+    }
+    if (f77_lst_asmn < (int)sizeof f77_lst_asm - 1) f77_lst_asm[f77_lst_asmn++] = (char)ch;
+}
+
+/* The unit done: its messages, those of the scan before it among them,
+ * its statistics */
+static void f77_lst_unit_end(void) {
     char b[200];
     int i;
     int k;
     int first;
-    if (!f77_lst || !f77_lst_on) return;
-    f77_xr_print();
-    f77_lst_on = 0;
+    int last;
+    if (!f77_lst || !f77_lst_mid) return;
+    f77_lst_mid = 0;
+    f77_lst_asm_on = 0;
+    last = f77_lst_last;
     first = 1;
     k = 0;
     for (i = 0; i < f77_lst_nmsg; i++) {

@@ -97,6 +97,8 @@ static void f77_xr_note(char *nm);
 static void f77_xr_label(int n, int def);
 static void f77_lst_isn_skip(void);
 static int f77_xr_off;     /* names noted for XREF not now (f77_list.h) */
+static int f77_lst_asm_on; /* the code being written goes into the listing too (LIST) */
+static void f77_lst_asm_c(int ch);
 static int f77_nerr;      /* errors so far; a unit with any is not given to the back end */
 /* fort370: the return code, the worst severity reported, as IBM's
  * compilers give it (#33): 4 a warning, 8 an error, 12 a table of the
@@ -618,7 +620,10 @@ static void hl_func_body(Node *fn);
 static void hl_func(Node *fn) {
     f77_lst_unit_begin(fn->unit);
     hl_func_body(fn);
-    f77_lst_unit_end(lx_line);
+    f77_lst_unit_mid(lx_line);
+#ifndef F77_TARGET_S370
+    f77_lst_unit_end();          /* the S/370 back end's s370_gen_unit ends it, after the code */
+#endif
 }
 static void hl_func_body(Node *fn) {
     int b_entry;

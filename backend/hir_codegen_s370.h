@@ -42,6 +42,7 @@ static void cg_flush(void) {
 static int cg_dry;          /* a sizing pass: emit nothing, count bytes */
 static void cg_c(int ch) {
     if (cg_dry) return;
+    if (f77_lst_asm_on) f77_lst_asm_c(ch);     /* fort370: LIST (f77_list.h) */
     if (cg_olen >= CG_MAX_OUT) cg_flush();
     cg_out[cg_olen] = (char)ch;
     cg_olen = cg_olen + 1;
@@ -3266,7 +3267,13 @@ static int s370_bxle_ok(int brc) {
 static void s370_emit_csect(Node *fn, char *csect, int size_only);
 static void s370_emit_code(Node *fn, char *csect);
 static int s370_area_end(void);
+static void s370_gen_unit_body(Node *fn);
+/* fort370: the unit's part of the listing ends after its code (LIST) */
 static void s370_gen_unit(Node *fn) {
+    s370_gen_unit_body(fn);
+    f77_lst_unit_end();
+}
+static void s370_gen_unit_body(Node *fn) {
     int b;
     int attempt;
     char csect_name[16];
