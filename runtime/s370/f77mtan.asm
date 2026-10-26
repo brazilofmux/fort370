@@ -17,19 +17,26 @@
 *   in two parts and short series of d; one over the other by a
 *   quotient corrected in extended; that rounded.
 *
-* An argument of 2^20 or more, or one at a singularity, goes to the C
-* entry M@DTANC (f77c_tan: FORTLIB's messages, Payne and Hanek).
+* DSIN and DCOS are f77math.c's m_sincos and m_sc_pair: the same
+* reduction, and of the two sums the one their quadrant wants, rounded
+* once, with its sign.  R5 says which: 0 DTAN, 1 DSIN, 2 DCOS.
 *
-* From C or Fortran: double DTAN(double), cc370's convention: R1 to
-* the argument, the result in FPR0, R2-R13 kept.  Nothing here calls
-* anything; the work areas are in the CSECT, as in f77xsum, and R13 a
-* frame on the C stack, as a C function's.
+* An argument of 2^20 or more, or one at a singularity, goes to the C
+* entries M@DTANC, M@DSINC, M@DCOSC (f77c_tan, f77c_sin, f77c_cos:
+* FORTLIB's messages, Payne and Hanek).
+*
+* From C or Fortran: double DTAN(double), DSIN(double), DCOS(double),
+* cc370's convention: R1 to the argument, the result in FPR0, R2-R13
+* kept.  Nothing here calls anything; the work areas are in the CSECT,
+* as in f77xsum, and R13 a frame on the C stack, as a C function's.
 *
 DTAN     CSECT
          STM   14,12,12(13)
          BALR  12,0
-         USING *,12
-         L     15,76(,13)            a frame on the C stack, as C's:
+TBASE    DS    0H
+         USING TBASE,12
+         SR    5,5                   DTAN
+TFRAME   L     15,76(,13)            a frame on the C stack, as C's:
          ST    13,4(,15)             the program-interrupt exit takes
          ST    15,8(,13)             an underflow there for the
          LR    13,15                 runtime's, zero without a word
@@ -62,6 +69,8 @@ TK2      LDR   0,2
          LD    0,TT
          SD    0,=XL8'4E00000080000000'
          STD   0,TK                  k
+         LTR   5,5                   DSIN and DCOS: no singularity
+         BNZ   TRED
 * the check: m_reduce's r, and the gap when k is odd (f77m_tan_gap)
          TM    TKI+3,X'01'
          BZ    TRED
@@ -165,6 +174,8 @@ TP3      MVC   TT(4),=XL4'4E000000'
          SLL   2,5                   sin and cos (j/16), in two parts
          LA    3,TSCT(2)
          MVC   TSH(32),0(3)
+         LTR   5,5
+         BNZ   SC
 * which is over which: q odd, -cos over sin; and r < 0 negates the top
          SR    7,7                   R7 the top's sign: 1 minus
          TM    TKI+3,X'01'
@@ -226,10 +237,62 @@ TRET     L     13,4(,13)
 THUGE    LD    0,=X'7FFFFFFFFFFFFFFF'
          B     TRET
 TC       L     15,=V(M@DTANC)        FORTLIB's checks etc., in C
-         L     13,4(,13)
+         CH    5,=H'1'
+         BL    TC1
+         L     15,=V(M@DSINC)
+         BE    TC1
+         L     15,=V(M@DCOSC)
+TC1      L     13,4(,13)
          L     14,12(,13)
          LM    0,12,20(13)
          BR    15
+*
+* m_sc_pair(rh, rl, (k + cosine) & 3): q 0 sin r, 1 cos r, 2 -sin r,
+* 3 -cos r; sin r's sign r's
+*
+SC       L     4,TKI
+         AR    4,5                   R5 - 1 is cosine
+         BCTR  4,0
+         N     4,=F'3'
+         SR    6,6
+         LR    7,4
+         N     7,=F'1'
+         BZ    SC1
+         BAL   11,SUMC
+         B     SC2
+SC1      BAL   11,SUMS
+SC2      BAL   10,RND
+         LTR   7,7
+         BNZ   SC3
+         LD    2,TRH
+         LTDR  2,2
+         BNL   SC3
+         LCDR  0,0                   sin is odd
+SC3      N     4,=F'2'
+         BZ    TRET
+         LCDR  0,0
+         B     TRET
+*
+* DSIN and DCOS
+*
+         ENTRY DSIN
+         DROP  12
+DSIN     STM   14,12,12(13)
+         USING DSIN,15
+         L     12,=A(TBASE)
+         DROP  15
+         USING TBASE,12
+         LA    5,1
+         B     TFRAME
+         ENTRY DCOS
+         DROP  12
+DCOS     STM   14,12,12(13)
+         USING DCOS,15
+         L     12,=A(TBASE)
+         DROP  15
+         USING TBASE,12
+         LA    5,2
+         B     TFRAME
 *
 * SUMS: sin r = sh + sl + sh cm + ch dh + ch al + cl dh + ch sd, into
 * FPR4:6 from zero; SUMC: cos r = ch + cl + ch cm - sh dh - sh al -

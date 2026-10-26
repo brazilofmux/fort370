@@ -76,4 +76,5 @@ DCOS 1e-20..1e-5  1.00  86.7%     0.50 100.0%
 In C they took 0.56 s for 200,000 calls, from 0.21.  CDSIN's worst at
 zmath's arguments 2.17 units to 1.43, CDEXP's 1.69 to 1.45, CDCOS's
 1.84 to 1.89 (its own products).
-
+In assembler (runtime/s370/f77mtan.asm, beside DTAN): DSIN 0.19, DCOS
+0.20.  The same bits as the C (tests/s370/sinx.f).

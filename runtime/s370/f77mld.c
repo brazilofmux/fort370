@@ -13,8 +13,11 @@ double f77f_dlog_c(double x) __asm__("M@DLOGC");
 double f77f_dlog_c(double x) { return f77c_log(x, 0); }
 double f77f_dlog10_c(double x) __asm__("M@DLG10C");
 double f77f_dlog10_c(double x) { return f77c_log10(x, 0); }
-double f77f_dsin(double x) { return f77c_sin(x, 0); }
-double f77f_dcos(double x) { return f77c_cos(x, 0); }
+/* DSIN and DCOS are f77mtan.asm too; 2^20 and past come here */
+double f77f_dsin_c(double x) __asm__("M@DSINC");
+double f77f_dsin_c(double x) { return f77c_sin(x, 0); }
+double f77f_dcos_c(double x) __asm__("M@DCOSC");
+double f77f_dcos_c(double x) { return f77c_cos(x, 0); }
 /* DTAN is f77mtan.asm; 2^20 and past, and the singularities, come here */
 double f77f_dtan_c(double x) __asm__("M@DTANC");
 double f77f_dtan_c(double x) { return f77c_tan(x, 0); }
