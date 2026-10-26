@@ -3,7 +3,9 @@
 #define F77M_NO_MAP
 #include "f77m.h"
 
-double f77f_dsqrt(double x) { return f77c_sqrt(x, 0); }
+/* DSQRT is f77msq.asm; its negative arguments come here for the message */
+double f77f_dsqrt_neg(double x) __asm__("M@DSQRN");
+double f77f_dsqrt_neg(double x) { return f77c_sqrt(x, 0); }
 double f77f_dexp(double x) { return f77c_exp(x, 0); }
 double f77f_dlog(double x) { return f77c_log(x, 0); }
 double f77f_dlog10(double x) { return f77c_log10(x, 0); }

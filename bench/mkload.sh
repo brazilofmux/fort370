@@ -19,7 +19,7 @@ done
 # the assembler: the shims for the integer intrinsics passed as
 # arguments, the extended-precision sum of the mathematical ones, and
 # the SPIE exit for program interrupts
-for f in f77ishim f77cshim f77xsum f77spie; do
+for f in f77ishim f77cshim f77xsum f77msq f77spie; do
   if [ ! -f "$R/out/crt/$f.o" ] || [ "$R/runtime/s370/$f.asm" -nt "$R/out/crt/$f.o" ]; then
     as370 -o "$R/out/crt/$f.o" "$R/runtime/s370/$f.asm" >/dev/null
   fi
@@ -29,5 +29,5 @@ as370 -o "$O/$n.o" "$O/$n.asm"
 # the output file's name is the load module's member name
 ( cd "$O" && cc370 -o "$n" "$n.o" "$R/out/crt/f77rt.o" "$R/out/crt/f77misc.o" $(for f in $(cat "$R/runtime/s370/f77int.lst"); do echo "$R/out/crt/$f.o"; done) "$R/out/crt/f77dtoa.o" \
       "$R/out/crt/f77main.o" "$R/out/crt/f77err.o" "$R/out/crt/f77math.o" "$R/out/crt/f77mz.o" "$R/out/crt/f77mzc.o" "$R/out/crt/f77mchk.o" "$R/out/crt/f77mlr.o" "$R/out/crt/f77mld.o" \
-      "$R/out/crt/f77rec.o" "$R/out/crt/f77ishim.o" "$R/out/crt/f77cshim.o" "$R/out/crt/f77xsum.o" "$R/out/crt/f77spie.o" "$R/out/crt/millicode.o" -Wl,--sparse-text -flinker-output=xmit )
+      "$R/out/crt/f77rec.o" "$R/out/crt/f77ishim.o" "$R/out/crt/f77cshim.o" "$R/out/crt/f77xsum.o" "$R/out/crt/f77msq.o" "$R/out/crt/f77spie.o" "$R/out/crt/millicode.o" -Wl,--sparse-text -flinker-output=xmit )
 echo "$O/$n.xmit"
