@@ -8,6 +8,44 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-10-26
+
+Tagged `v2026.10.26`: FORTRAN H's parameter lists and its second code
+base past 4K (issue #18), the code a fifth smaller; the DOUBLE
+PRECISION functions in assembler, two to three times faster with the
+same results, and DSIN and DCOS rounded once (issue #3).  Built from
+`b8d8a1b`: FORT370.xmit SHA256 `97a7ee1ba98f124f…`, 631,840 bytes;
+F77RT.xmit SHA256 `2d4897ea76084977…`, 632,720 bytes; F77RT.upd SHA256
+`94adc8c368cc6def…`, 649,520 bytes; FORT370.aws SHA256
+`1c2873d04ebdc56d…`, 1,266,441 bytes.  All 192 FCVS programs, 130
+tests, the 600K source and the 85-deep nesting test compile on the
+guest to the host's assembler, byte for byte, in REGION=6144K; the
+FCVS runs 3346 tests passed and the 2 failed by design.
+
+- A CALL's parameter list is built once, as H builds it: one for each
+  call, in the static area, the address of a local, a COMMON member, a
+  constant, an expression's temporary or a procedure assembled there,
+  and only an address known at run time (a dummy passed on, an element
+  at a computed subscript) stored at the call.  The runtime's calls
+  the same: a WRITE's beginning was seven instructions and is three.
+- Code past 4K has a second base register, as H's: only a branch 8K
+  away or more loads its address from the pool.
+- Over the FCVS the object code is 22.7% smaller (1,539,319 bytes to
+  1,190,533) and has about 28% fewer instructions.
+- DSQRT, DEXP, DLOG, DLOG10, DSIN, DCOS, DTAN, DATAN, DATAN2, DASIN,
+  DACOS, DSINH, DCOSH, DTANH and X**Y are in assembler, the same
+  operations as the C they came from, so the same results, without
+  its calls: DSQRT 0.43 s for 200,000 calls to 0.13, DTAN 1.14 to
+  0.35, DASIN 1.61 to 0.69, X**Y 1.47 to 0.62; FORTLIB's take 0.04 to
+  0.15 (bench/results-math-2026-10-26.txt, bench/mathtime.py).
+- DSIN and DCOS were up to 2.4 units off; they are within half a unit
+  at every argument tested, reduced as DTAN is and their final sum
+  rounded once.  FORTLIB's are off by tens of thousands of units at
+  |x| <= 50; its DTAN by 175 in its first period, and its X**Y in the
+  last digit five times in six, measured against mpmath.
+- DLOG of an unnormalized argument called itself until the stack ran
+  out (a multiplication by 1.0 that cc370 folds away); it normalizes.
+
 ## 2026-10-25
 
 Tagged `v2026.10.25`: FORTRAN H's return codes (issue #33), its

@@ -23,17 +23,17 @@ These instructions do not go stale, but the figures below describe one
 particular build.  Check them against whatever you actually downloaded
 rather than against this file.
 
-  FORT370.xmit  SHA256 2193f6f6b6292cebaee535d6bc1f65b1fbaa8846dc25642efb7da23f5cdc4501
-                631120 bytes, FB80 when it lands on the guest
-  F77RT.xmit    SHA256 3ff63e1acd8a689aa744c4d43e67b457b641b285f2393d2b4d47660704f1e443
-                615440 bytes, FB80
-  F77RT.upd     SHA256 3938d42fbd52fdce02616533a4cd7b1fc788bb6c5ace8ae742d62a18a2c264aa
-                631360 bytes, FB80
-  FORT370.aws   SHA256 7617d2eb96753276f035cd7c94234c3083c03b9eb977ddf5718b0cdc2e5fb9ce
-                1248481 bytes, an AWS tape image
-  built         from fort370 ffafb95 (release 2026-10-25) with mvslovers'
+  FORT370.xmit  SHA256 97a7ee1ba98f124f6c5af5dcaeac7141578b519b9ace64dc3afc29e4cad84299
+                631840 bytes, FB80 when it lands on the guest
+  F77RT.xmit    SHA256 2d4897ea76084977506b7ecd2560a66332241c4e9ac7891bdd394d18ae3163ba
+                632720 bytes, FB80
+  F77RT.upd     SHA256 94adc8c368cc6deffb43f0eb89f3d5533e2b645cd99964194b026a46c3ba1104
+                649520 bytes, FB80
+  FORT370.aws   SHA256 1c2873d04ebdc56d3ac0aac851c8ae7911542ca9a4c9344602e2cd520e43f77e
+                1266441 bytes, an AWS tape image
+  built         from fort370 b8d8a1b (release 2026-10-26) with mvslovers'
                 cc370 1.6.3 and libc370 2.16.0
-  tested        all 192 FCVS programs, 122 test programs and a unit
+  tested        all 192 FCVS programs, 130 test programs and a unit
                 at each size limit compiled on the guest by this
                 module in REGION=6144K, the assembler byte for
                 byte the host compiler's (bench/port-sweep.py);
