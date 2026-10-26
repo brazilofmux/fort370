@@ -101,9 +101,9 @@ mvs: out/mvs/FORT370.xmit out/mvs/F77RT.upd out/mvs/FORT370.aws
 # The clock is pinned (as370 and ld370 stamp the date and time into the
 # deck and the module), so two builds of the same source are the same
 # bytes and a package's SHA256 reproduces; MVSDATE/MVSTIME choose it.
-MVSDATE ?= 26298
+MVSDATE ?= 26299
 MVSTIME ?= 120000
-MVSCLOCK = ASMDATE=10/25/26 ASMTIME=12.00 LDDATE=$(MVSDATE) LDTIME=$(MVSTIME)
+MVSCLOCK = ASMDATE=10/26/26 ASMTIME=12.00 LDDATE=$(MVSDATE) LDTIME=$(MVSTIME)
 out/mvs/FORT370.xmit: $(SRC) runtime/s370/millicode.c runtime/s370/f77std.h Makefile
 	@mkdir -p out/mvs
 	$(MVSCLOCK) cc370 -O1 -w -DF77_TARGET_S370 -I backend -c -o out/mvs/f77.o src/f77.c
