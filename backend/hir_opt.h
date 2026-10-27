@@ -739,11 +739,13 @@ static int ho_dead_blocks(void) {
                 changed = 1;
             }
         } else if (h_kind[i] == HI_PHI && h_pbase[i] >= 0) {
-            /* Live block PHI: make args from dead predecessors self-ref */
+            /* Live block PHI: make args from dead predecessors self-ref.
+             * Once done, it is no change: counted every round, it kept
+             * hir_opt going to its last (68 of the FCVS programs). */
             j = 0;
             while (j < h_pcnt[i]) {
                 t = h_pblk[h_pbase[i] + j];
-                if (t >= 0 && t < bb_nblk && !ho_use[t]) {
+                if (t >= 0 && t < bb_nblk && !ho_use[t] && h_pval[h_pbase[i] + j] != i) {
                     h_pval[h_pbase[i] + j] = i;
                     changed = 1;
                 }
