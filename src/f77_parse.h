@@ -1357,6 +1357,19 @@ static int f77_elem_bytes(int s, int off) {
     return hi_emit(HI_MUL, TY_INT, off, f77_iconst(t), 0, NULL);
 }
 
+#ifdef F77_TARGET_S370
+/* fort370 issue 37: the array an element's address is of, symbol + 1,
+ * by the instruction that adds the subscript to the array's address;
+ * the code generator names the storage operand by it (an offset alone
+ * does not say: A(I)'s displacement is one element before A).  Not set
+ * for a callee put in line, whose symbols go when it ends. */
+static int f77_avar[HIR_MAX_INST];
+static int f77_avar_tag(int a, int s) {
+    if (a >= 0 && f77_inline_depth == 0) f77_avar[a] = s + 1;
+    return a;
+}
+#endif
+
 static int f77_subscript_addr(int s) {
     int off;
     int cstride;      /* constant part of the running stride */
@@ -1472,8 +1485,8 @@ static int f77_subscript_addr(int s) {
         int cb;
         cb = coff * f77_esize(s);
         if (cb >= -2048 && cb <= 2047)
-            return hi_emit(HI_ADDI, HL_ADDR_TY, f77_sval[s], -1, cb, NULL);
-        return hi_emit(HI_ADD, HL_ADDR_TY, f77_sval[s], f77_iconst(cb), 0, NULL);
+            return f77_avar_tag(hi_emit(HI_ADDI, HL_ADDR_TY, f77_sval[s], -1, cb, NULL), s);
+        return f77_avar_tag(hi_emit(HI_ADD, HL_ADDR_TY, f77_sval[s], f77_iconst(cb), 0, NULL), s);
     }
 #endif
     if (off < 0) off = f77_iconst(0);
@@ -1484,6 +1497,9 @@ static int f77_subscript_addr(int s) {
     byte = f77_elem_bytes(s, off);
 #endif
     addr = hi_emit(HI_ADD, HL_ADDR_TY, f77_sval[s], byte, 0, NULL);
+#ifdef F77_TARGET_S370
+    f77_avar_tag(addr, s);
+#endif
     if (coff != 0 && f77_sty[s] == TY_CHAR && f77_slen[s] < 0) {
         /* assumed-length elements: the offset is a run-time product */
         t = hi_emit(HI_MUL, TY_INT, f77_iconst(coff), f77_slenv[s], 0, NULL);
@@ -1496,6 +1512,9 @@ static int f77_subscript_addr(int s) {
         else
             addr = hi_emit(HI_ADD, HL_ADDR_TY, addr, f77_iconst(cb), 0, NULL);
     }
+#ifdef F77_TARGET_S370
+    f77_avar_tag(addr, s);    /* the last of them: the one a reassociation keeps */
+#endif
     return addr;
 }
 

@@ -56,6 +56,16 @@ has m.lst "^     C         R\*4       DUMMY                       (\*)"
 has m.lst "G E N E R A T E D"
 has m.lst "^ F77MAIN  CSECT"
 has m.lst "^ S        CSECT"
+# LIST's names beside storage operands (issue 37): a SAVE variable, a
+# COMMON scalar, a COMMON array's and a local array's elements by their
+# subscripts; none for a dummy argument, reached through its address
+printf '      SUBROUTINE S(C, M)\n      DIMENSION C(M), D(5)\n      COMMON /BLK/ A(10), N\n      SAVE K\n      DO 10 I = 1, M\n        D(I) = C(I) + A(I)\n   10 CONTINUE\n      N = K\n      K = K + 1\n      CALL T(D)\n      END\n' > $T/n.f
+"$F77" -p LIST -l $T/n.lst $T/n.f $T/n.s 2>/dev/null
+has n.lst "^          L     2,0(,14)                K$"
+has n.lst "^          ST    2,0(,14)                N$"
+has n.lst "^          AE    0,0(2,5)                A$"
+has n.lst "^          STE   0,T00001-4(2)           D$"
+has n.lst "^          LE    0,0(2,4)$"
 rm -rf $T
-[ $bad = 0 ] && echo "listing: ISNs as H's, messages under their statements, the options in effect, NOSOURCE, LINECNT, an unknown option, XREF, MAP and LIST"
+[ $bad = 0 ] && echo "listing: ISNs as H's, messages under their statements, the options in effect, NOSOURCE, LINECNT, an unknown option, XREF, MAP and LIST, its names beside the storage operands"
 [ $bad = 0 ]

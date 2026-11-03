@@ -339,11 +339,11 @@ L00091   L     15,L00092
          ST    1,S00083+72
 L00085   DS    0H
          LA    15,10
-         ST    15,T00084
+         ST    15,T00084               FUNCTIONAL
          LA    15,20
-         ST    15,T00084+4
+         ST    15,T00084+4             FUNCTIONAL
          LA    15,30
-         ST    15,T00084+8
+         ST    15,T00084+8             FUNCTIONAL
 L00087   DS    0H
          LA    0,0
          B     L00089

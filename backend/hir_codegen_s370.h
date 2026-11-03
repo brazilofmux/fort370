@@ -120,6 +120,14 @@ static int s370_dr_ok;
 static int s370_dr_a;
 static int s370_dr_b;
 
+/* fort370 issue 37: the name of the variable a storage operand refers
+ * to, as a remark beside it, as H's LIST has it.  s370_mem_operand sets
+ * it with the operand's text; the next statement whose operands hold
+ * that text carries it, and any statement clears it.  A remark only, so
+ * the object is the same. */
+static char s370_rem[F77_MAX_NAME];
+static char s370_rem_key[48];
+
 static void asm_stmt(char *label, char *op, char *operands) {
     int col;
     int i;
@@ -145,7 +153,16 @@ static void asm_stmt(char *label, char *op, char *operands) {
             if (col >= 71) cg_die("assembler statement past column 71", -1);
             cg_c(*p); p = p + 1; col = col + 1;
         }
+        if (s370_rem[0] && strstr(operands, s370_rem_key)) {
+            i = col < 39 ? 39 : col + 1;
+            if (i + (int)strlen(s370_rem) <= 71) {
+                while (col < i) { cg_c(' '); col = col + 1; }
+                p = s370_rem;
+                while (*p) { cg_c(*p); p = p + 1; }
+            }
+        }
     }
+    s370_rem[0] = 0;
     cg_c('\n');
 }
 
@@ -837,6 +854,136 @@ static void s370_load_into(int d, int v) {
     cg_die("cannot materialize value", v);
 }
 
+/* The unit's variables, for the names: the front end's symbols are
+ * gone by the time the code is made (the arena gives their storage to
+ * the back end's tables), so s370_names_keep takes what is needed
+ * first.  Each is a frame slot (a, and hi for a double's second, or -1)
+ * or static storage (global g, bytes lo up to hi). */
+static int s370_vn_n;
+static int s370_vn_cap;
+static char (*s370_vn_name)[F77_MAX_NAME];
+static int *s370_vn_a;
+static int *s370_vn_g;
+static int *s370_vn_lo;
+static int *s370_vn_hi;
+static int *s370_vn_s;
+
+static void s370_names_keep(void) {
+    int s;
+    int n;
+    n = f77_nsym - f77_scope_base;
+    s370_vn_n = 0;
+    if (n > s370_vn_cap) {
+        free(s370_vn_name); free(s370_vn_a); free(s370_vn_g); free(s370_vn_lo); free(s370_vn_hi); free(s370_vn_s);
+        s370_vn_name = malloc(sizeof *s370_vn_name * (size_t)n);
+        s370_vn_a = malloc(sizeof(int) * (size_t)n);
+        s370_vn_g = malloc(sizeof(int) * (size_t)n);
+        s370_vn_lo = malloc(sizeof(int) * (size_t)n);
+        s370_vn_hi = malloc(sizeof(int) * (size_t)n);
+        s370_vn_s = malloc(sizeof(int) * (size_t)n);
+        s370_vn_cap = n;
+        if (!s370_vn_name || !s370_vn_a || !s370_vn_g || !s370_vn_lo || !s370_vn_hi || !s370_vn_s) {
+            s370_vn_cap = 0;     /* no names, the same code */
+            memset(f77_avar, 0, sizeof f77_avar);
+            return;
+        }
+    }
+    for (s = f77_scope_base; s < f77_nsym; s++) {
+        int k;
+        if (f77_sarg[s] || f77_sparam[s] || f77_sexternal[s] || f77_sintrinsic[s]) continue;
+        k = s370_vn_n;
+        if (f77_sgidx[s] >= 0) {
+            s370_vn_a[k] = -1;
+            s370_vn_g[k] = f77_sgidx[s];
+            s370_vn_lo[k] = f77_sgoff[s];
+            s370_vn_hi[k] = f77_sgoff[s] + f77_esize(s) * f77_sym_nelem(s);
+        } else if (f77_sval[s] >= 0 && h_kind[f77_sval[s]] == HI_ALLOCA) {
+            s370_vn_a[k] = f77_sval[s];
+            s370_vn_g[k] = -1;
+            s370_vn_lo[k] = 0;
+            s370_vn_hi[k] = f77_shi[s];
+        } else continue;
+        strcpy(s370_vn_name[k], f77_sname[s]);
+        s370_vn_s[k] = s;
+        s370_vn_n = k + 1;
+    }
+    /* an element's address: from its symbol to the entry here, + 1 */
+    for (s = 0; s < h_ninst; s++) {
+        int k;
+        if (f77_avar[s] == 0) continue;
+        for (k = 0; k < s370_vn_n && s370_vn_s[k] != f77_avar[s] - 1; k++) ;
+        f77_avar[s] = k < s370_vn_n ? k + 1 : 0;
+    }
+}
+
+/* The variable at byte off of static storage `gname` (a COMMON block or
+ * a SAVE or DATA object): the one bound there whose storage holds off,
+ * the one that starts there first (EQUIVALENCE).  0 if none. */
+static char *s370_static_name(char *gname, int off) {
+    int k;
+    int best;
+    best = -1;
+    for (k = 0; k < s370_vn_n; k++) {
+        if (s370_vn_g[k] < 0 || strcmp(ps_gname[s370_vn_g[k]], gname) != 0) continue;
+        if (off < s370_vn_lo[k] || off >= s370_vn_hi[k]) continue;
+        if (best < 0 || s370_vn_lo[k] == off) best = k;
+        if (s370_vn_lo[k] == off) break;
+    }
+    return best >= 0 ? s370_vn_name[best] : 0;
+}
+
+/* The local variable whose frame slot is ALLOCA a, or 0: a compiler
+ * temporary, or a callee's put in line. */
+static char *s370_local_name(int a) {
+    int k;
+    for (k = 0; k < s370_vn_n; k++)
+        if (s370_vn_g[k] < 0 && (s370_vn_a[k] == a || s370_vn_hi[k] == a)) return s370_vn_name[k];
+    return 0;
+}
+
+/* The name for a storage operand at address `addr` matched as lnt:
+ * the address followed through its adds and copies to a frame slot or
+ * a static symbol.  A dummy argument, reached through a register that
+ * holds its address, has none, as on H. */
+static void s370_name_operand(int addr, int lnt, char *text) {
+    int root;
+    int index;
+    int off;
+    int v;
+    int lim;
+    char *nm;
+    s370_rem[0] = 0;
+    nm = 0;
+    /* an element of an array: the address the subscript was added to it
+     * at, through what was folded on it since */
+    v = addr;
+    lim = 0;
+    while (v >= 0 && lim < 64 && !f77_avar[v]) {
+        if (bg_kind(v) != HI_COPY && bg_kind(v) != HI_ADDI) break;
+        v = h_src1[v];
+        lim = lim + 1;
+    }
+    if (v >= 0 && f77_avar[v]) nm = s370_vn_name[f77_avar[v] - 1];
+    else if (lnt == BG_FADDR) {
+        if (s370_addr_form(addr, BG_FADDR, &root, &index, &off) == 1 && index < 0) nm = s370_local_name(root);
+    } else {
+        if (lnt == BG_SADDR) { v = addr; off = 0; index = -1; }
+        else { s370_addr_form(addr, lnt, &root, &index, &off); v = root; }
+        if (index >= 0) v = -1;     /* subscripted, its displacement no guide */
+        lim = 0;
+        while (v >= 0 && lim < 64) {
+            if (bg_kind(v) == HI_COPY) { v = h_src1[v]; lim = lim + 1; continue; }
+            if (bg_kind(v) == HI_ADDI) { off = off + h_val[v]; v = h_src1[v]; lim = lim + 1; continue; }
+            break;
+        }
+        if (v >= 0 && bg_kind(v) == HI_GADDR && h_name[v]) nm = s370_static_name(h_name[v], off);
+        else if (v >= 0 && bg_kind(v) == HI_ALLOCA) nm = s370_local_name(v);
+    }
+    if (!nm || strlen(text) >= sizeof s370_rem_key) return;
+    strcpy(s370_rem_key, text);
+    strcpy(s370_rem, nm);
+}
+
 /* Address of a near object as symbolic text: Tnnnnn+disp, with an
  * index register when the chain has one: Tnnnnn+disp(X). */
 static char s370_abuf[40];
@@ -864,7 +1011,14 @@ static char *s370_faddr_text(int addr) {
  * nonterminal: symbolic (near static), D(,base) through a register,
  * or through an address constant loaded into scratch s. */
 static char s370_mbuf[48];
+static char *s370_mem_operand0(int addr, int lnt, int s);
 static char *s370_mem_operand(int addr, int lnt, int s) {
+    char *m;
+    m = s370_mem_operand0(addr, lnt, s);
+    s370_name_operand(addr, lnt, m);
+    return m;
+}
+static char *s370_mem_operand0(int addr, int lnt, int s) {
     int base;
     int off;
     int b;
@@ -931,6 +1085,7 @@ static char *s370_mem_operand_rs(int addr, int lnt, int s) {
         i = i + 2;
         while (m[i]) { f_c(m[i]); i = i + 1; }
         fmt_p = save;
+        if (s370_rem[0]) strcpy(s370_rem_key, s370_mbuf3);
         return s370_mbuf3;
     }
     f_reset(); f_s(s370_r(s)); f_c(','); f_s(m); asm_ins("LA", s370_line, 4);
@@ -3580,6 +3735,7 @@ static void s370_gen_unit_body(Node *fn) {
          * and generating from it would only bury the message */
         if (f77_nerr > nerr) return;
     }
+    s370_names_keep();
     f77_arena_phase(1);      /* fort370: the back end's tables, where the front end's were */
     /* No instruction has a pair partner yet.  This was set only further
      * on, and what read it before saw the last unit's -1s, or the first

@@ -210,9 +210,14 @@ Or, without RECEIVE, IEBUPDTE makes the same library of F77RT.upd:
   block, an external, a PARAMETER, and an array's bounds.  (H's MAP
   gives addresses; here the back end makes them after the map.)  LIST
   puts the assembler generated for each unit in its part of the
-  listing; SYSPUNCH has it as always.  NAME, OPT, SIZE, EBCDIC, DECK,
-  LOAD, EDIT and ID are taken and shown, and do nothing.  An option H does not have is a warning.  With F77CLG,
-  //RUN EXEC F77CLG,PARM.FORT='NOSOURCE'.  (A PARM of two data set
+  listing; SYSPUNCH has it as always.  Beside a storage operand that
+  refers to a variable is the variable's name, as in H's LIST: a
+  local, a SAVE or DATA variable, a COMMON member, an array by its
+  element.  A dummy argument, reached through a register holding its
+  address, has none, as on H.  The names are remarks, so the object
+  is the same.  NAME, OPT, SIZE, EBCDIC, DECK, LOAD, EDIT and ID are
+  taken and shown, and do nothing.  An option H does not have is a
+  warning.  With F77CLG, //RUN EXEC F77CLG,PARM.FORT='NOSOURCE'.  (A PARM of two data set
   names, dd:SRC dd:ASM, still names the source and the output.)
 
 

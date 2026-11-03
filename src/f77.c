@@ -643,6 +643,9 @@ static void hl_func_body(Node *fn) {
     }
 
     hir_reset();
+#ifdef F77_TARGET_S370
+    memset(f77_avar, 0, sizeof f77_avar);
+#endif
     hl_nalloca = 0;
     hl_temp_stack = 0;
     f77_sym_reset();
