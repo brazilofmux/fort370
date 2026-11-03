@@ -7616,8 +7616,9 @@ static void f77_check_format(const char *s, int n) {
             continue;
         }
         if (c == 'I' || c == 'F' || c == 'E' || c == 'D' || c == 'G' || c == 'L') {
+            int w, d;
             i = i + 1;
-            if (f77_fmt_digits(s, n, &i) < 0) {
+            if ((w = f77_fmt_digits(s, n, &i)) < 0) {
                 char m[48];
                 sprintf(m, "%c needs a width", c);
                 f77_fmt_bad(m);
@@ -7625,7 +7626,9 @@ static void f77_check_format(const char *s, int n) {
             }
             if (f77_fmt_peek(s, n, &i) == '.') {
                 i = i + 1;
-                if (f77_fmt_digits(s, n, &i) < 0) { f77_fmt_bad("a . needs digits after it"); return; }
+                if ((d = f77_fmt_digits(s, n, &i)) < 0) { f77_fmt_bad("a . needs digits after it"); return; }
+                /* Iw.m: at least m digits in w columns, so F77 has m <= w */
+                if (c == 'I' && d > w) { f77_fmt_bad("Iw.m needs m no more than w"); return; }
             }
             k = f77_fmt_peek(s, n, &i);
             if ((c == 'E' || c == 'G' || c == 'D') && (k == 'E' || k == 'e')) {
@@ -8024,6 +8027,7 @@ static void f77_stmt_print(int skip, int unit) {
     f77_scan_from(skip);
     fmt_label = f77_io_fmt_spec();
     if (lx_t == T_COMMA) f77_tok();
+    else if (lx_t != T_EOF) { f77_error("a comma after the format, before the list"); return; }
     f77_io_int = 0;
     f77_io_rec = -1;
     f77_io_da = 0;
@@ -8062,6 +8066,7 @@ static void f77_stmt_read(int skip) {
         unit_val = f77_iconst(5);
         fmt_label = f77_io_fmt_spec();
         if (lx_t == T_COMMA) f77_tok();
+        else if (lx_t != T_EOF) { f77_error("a comma after the format, before the list"); return; }
     }
     f77_io_announce(unit_val, 0);
 

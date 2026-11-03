@@ -73,6 +73,12 @@ printf '      WRITE (6, 100) 1\n  100 FORMAT (1X, I, 2(F8.2)\n      END\n' > $T/
 expect fmtwidth "line 2: FORMAT: I needs a width"
 printf "      WRITE (6, \047(HI,MOM)\047) 1\n      END\n" > $T/fmtnoh.f
 expect fmtnoh "line 1: FORMAT: H needs its count, nH"
+printf '      WRITE (6, 100) 1234\n  100 FORMAT (1X, I10.20)\n      END\n' > $T/fmtiwm.f
+expect fmtiwm "line 2: FORMAT: Iw.m needs m no more than w"
+printf '      PRINT * 1234\n      END\n' > $T/prcomma.f
+expect prcomma "line 1: a comma after the format, before the list"
+printf '      READ * K\n      END\n' > $T/rdcomma.f
+expect rdcomma "line 1: a comma after the format, before the list"
 printf '      NAMELIST /G/ A, B\n      READ (5, G) A\n      END\n' > $T/nmllist.f
 expect nmllist "line 2: a NAMELIST READ has no list"
 printf '      NAMELIST /G/ A /G/ B\n      END\n' > $T/nmltwice.f
@@ -115,5 +121,5 @@ printf "C     ONE\n      X = 1\n      Y = (2\n" > $T/incbad.inc
 expect incbad "incbad.inc line 3: expected )"
 expect incbad "line 2: expected )"
 rm -rf $T
-[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a misused NAMELIST, an internal file with no format, a substring outside its string, a bad hexadecimal or octal constant, a bit intrinsic misused, a DEFINE FILE misused and an INCLUDE that cannot be done refused, and an included text's errors placed in it"
+[ $bad = 0 ] && echo "units: a missing END, a second main program, an undefined label, leftover text, open DO and IF blocks, a name used twice, a function's type mistaken, a broken FORMAT, a PRINT or READ without the comma before its list, a misused NAMELIST, an internal file with no format, a substring outside its string, a bad hexadecimal or octal constant, a bit intrinsic misused, a DEFINE FILE misused and an INCLUDE that cannot be done refused, and an included text's errors placed in it"
 [ $bad = 0 ]
