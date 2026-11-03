@@ -326,6 +326,19 @@ static void hl_switch_block(int blk) {
  * when ported. */
 static char h_ld_ro[HIR_MAX_INST];
 
+/* Every call argument goes in at h_carg[h_ncarg] and then this: a unit
+ * with more arguments than the pool holds stops here, where it wrote
+ * past the pool's end (wrong parameter lists on the guest's ceilings). */
+static void hi_carg_next(void) {
+    h_ncarg = h_ncarg + 1;
+    if (h_ncarg >= HIR_MAX_CARG) {
+        fdputs("f77: too many call arguments (fn=", 2);
+        fdputs(hl_cur_fn_dbg ? hl_cur_fn_dbg : "?", 2);
+        fdputs(")\n", 2);
+        exit(F77_RC_LIMIT);
+    }
+}
+
 static int hi_emit(int kind, int ty, int s1, int s2, int val, char *name) {
     int idx;
     idx = h_ninst;

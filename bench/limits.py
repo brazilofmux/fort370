@@ -8,7 +8,8 @@ compile the same text.  Shapes:
   straight  A(i)=B(j)*c+A(k), no labels or branches
   if        IF (A(i).GT.B(j)) K=K+c, a branch per statement
   labels    every statement labelled
-  vars      a distinct scalar assigned per statement"""
+  vars      a distinct scalar assigned per statement
+  calls     CALL S with 60 arguments, the same scalar"""
 import sys
 kind, n = sys.argv[1], int(sys.argv[2])
 L=['      REAL A(100),B(100)','      INTEGER K','      K=0',
@@ -22,5 +23,10 @@ elif kind=='labels':
 elif kind=='vars':
     for i in range(n): L.append('      X%04d=%d.0' % (i,i))
     L.append('      A(1)=' + '+'.join('X%04d'%i for i in range(0,n,max(1,n//8)))[:59].rstrip('+'))   # within column 72
+elif kind=='calls':
+    for i in range(n):
+        L.append('      CALL S(X,X,X,X,X,X,X,X,X,X')
+        L += ['     1,X,X,X,X,X,X,X,X,X,X'] * 5
+        L.append('     1)')
 L += ['      WRITE(6,99999) A(1),K','99999 FORMAT(1X,E15.7,I8)','      STOP','      END']
 print('\n'.join(L))
