@@ -1109,7 +1109,23 @@ void f77_dadone(int unit) {
     if (fio_udefv[unit]) *fio_udefv[unit] = fio_dnext(unit);
 }
 
+/* A statement's list is being transferred: a function referenced in it
+ * that does I/O itself (F77 forbids it) would take over the one set of
+ * statement state, and the outer statement's record was lost without a
+ * word (fort370 issue 39).  Set when a statement begins and goes on to
+ * its list, cleared at its end; a READ that ends at its END= or ERR=
+ * goes to the label without its end, so it is not set for that. */
+static int fio_busy;
+static void fio_enter(void) {
+    if (fio_busy) {
+        fprintf(stderr, "f77: an I/O statement in a function referenced in another's I/O list\n");
+        fio_exit(2);
+    }
+    fio_busy = 1;
+}
+
 void f77_wr_begin(int unit, const char *fmt) {
+    fio_enter();
     fio_init_units();
     fio_ibuf = 0;
     fio_out = fio_resolve(unit, 1);
@@ -1125,6 +1141,7 @@ void f77_wr_begin(int unit, const char *fmt) {
  * (gfortran's layout, so files are interchangeable with the oracle);
  * direct-access records are RECL bytes.  Items are raw bytes. */
 void f77_wu_begin_rt(int unit) {
+    fio_enter();
     fio_init_units();
     fio_out = 0;
     fio_unit = unit;
@@ -1149,6 +1166,7 @@ void f77_wu(const void *p, int n) {
 }
 void f77_wu_end(void) {
     int u = fio_unit;
+    fio_busy = 0;
     if (fio_udirect[u]) {
         int recl = fio_urecl[u];
         int off;
@@ -1170,7 +1188,15 @@ void f77_wu_end(void) {
     if (f77s_write(u, fio_ddof(u), fio_urec, fio_ulen) != 0) fio_exit(2);
 }
 /* flags: 1 END= present, 2 ERR=/IOSTAT= present.  0 ok, 1 eof, 2 error */
+static int fio_ru_begin(int unit, int flags);
 int f77_ru_begin_rt(int unit, int flags) {
+    int r;
+    fio_enter();
+    r = fio_ru_begin(unit, flags);
+    if (r) fio_busy = 0;
+    return r;
+}
+static int fio_ru_begin(int unit, int flags) {
     int rc;
     int n;
     fio_init_units();
@@ -1220,7 +1246,7 @@ void f77_ru(void *p, int n) {
     memcpy(p, fio_urec + fio_upos, (size_t)n);
     fio_upos += n;
 }
-void f77_ru_end(void) { }
+void f77_ru_end(void) { fio_busy = 0; }
 
 /* BACKSPACE: back over the previous record.  Formatted: scan back to
  * the newline before it; unformatted: the trailing length word says
@@ -1259,6 +1285,7 @@ void f77_backspace(int unit) {
 /* WRITE into an internal file: the CHARACTER entity at buf, nrec
  * records of len bytes. */
 void f77_wr_begin_int(char *buf, int len, int nrec, const char *fmt) {
+    fio_enter();
     fio_init_units();
     fio_out = F77_NOFILE;
     fio_unit = -1;
@@ -1596,6 +1623,7 @@ void f77_wr_end(void) {
     }
     fio_flush_line();
     fio_ibuf = 0;
+    fio_busy = 0;
 }
 
 /* Unit 6, for the error monitor: opened as a WRITE would open it. */
@@ -1870,7 +1898,13 @@ static double fio_list_real(void) {
  * (`READ (5, *, END=99) X` in a loop) work; end of file in the middle
  * of a statement is always fatal (see fio_next_record). */
 static int fio_rd_setup(const char *fmt, int has_end);
+/* a READ that goes to its END= or ERR= has no list and no end */
+static int fio_rd_done(int r) {
+    if (r) fio_busy = 0;
+    return r;
+}
 int f77_rd_begin(int unit, const char *fmt, int has_end) {
+    fio_enter();
     fio_init_units();
     fio_ibuf = 0;
     fio_in = fio_resolve(unit, 0);
@@ -1878,10 +1912,11 @@ int f77_rd_begin(int unit, const char *fmt, int has_end) {
     if (unit > 0 && unit < FIO_MAXUNIT) fio_uunf[unit] = 0;
     fio_position(fio_in, unit);
     fio_bz = (unit > 0 && unit < FIO_MAXUNIT) ? fio_ubz[unit] : 0;
-    return fio_rd_setup(fmt, has_end);
+    return fio_rd_done(fio_rd_setup(fmt, has_end));
 }
 
 int f77_rd_begin_int(char *buf, int len, int nrec, const char *fmt, int has_end) {
+    fio_enter();
     fio_init_units();
     fio_in = F77_NOFILE;
     fio_unit = -1;
@@ -1889,7 +1924,7 @@ int f77_rd_begin_int(char *buf, int len, int nrec, const char *fmt, int has_end)
     fio_ilen = len;
     fio_inrec = nrec;
     fio_irec = 0;
-    return fio_rd_setup(fmt, has_end);
+    return fio_rd_done(fio_rd_setup(fmt, has_end));
 }
 
 static int fio_rd_setup(const char *fmt, int has_end) {
@@ -2141,6 +2176,7 @@ void f77_rd_z(double *p) {
 }
 
 void f77_rd_end(void) {
+    fio_busy = 0;
     fio_reading = 0;
     fio_ibuf = 0;
 }

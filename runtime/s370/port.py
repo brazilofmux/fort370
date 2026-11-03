@@ -557,6 +557,7 @@ rep('''        n = fread(fio_rec, 1, (size_t)recl, fio_in);
 u_start = s.index('void f77_wu_begin(int unit) {')
 u_end = s.index('/* BACKSPACE: back over the previous record.')
 s = s[:u_start] + '''void f77_wu_begin(int unit) {
+    fio_enter();
     fio_init_units();
     fio_out = 0;
     fio_unit = unit;
@@ -580,6 +581,7 @@ void f77_wu(const void *p, int n) {
 }
 void f77_wu_end(void) {
     int u = fio_unit;
+    fio_busy = 0;
     if (fio_udirect[u]) {
         int recl = fio_urecl[u];
         int off;
@@ -601,7 +603,15 @@ void f77_wu_end(void) {
     if (f77s_write(u, fio_ddof(u), fio_urec, fio_ulen) != 0) exit(2);
 }
 /* flags: 1 END= present, 2 ERR=/IOSTAT= present.  0 ok, 1 eof, 2 error */
+static int fio_ru_begin(int unit, int flags);
 int f77_ru_begin(int unit, int flags) {
+    int r;
+    fio_enter();
+    r = fio_ru_begin(unit, flags);
+    if (r) fio_busy = 0;
+    return r;
+}
+static int fio_ru_begin(int unit, int flags) {
     int rc;
     int n;
     fio_init_units();
@@ -650,7 +660,7 @@ void f77_ru(void *p, int n) {
     memcpy(p, fio_urec + fio_upos, (size_t)n);
     fio_upos += n;
 }
-void f77_ru_end(void) { }
+void f77_ru_end(void) { fio_busy = 0; }
 
 ''' + s[u_end:]
 # DEFINE FILE: its records are f77rec.c's as any direct access unit's,
