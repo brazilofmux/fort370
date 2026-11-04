@@ -83,8 +83,10 @@ files, are the same libraries the other way.
 Each must arrive as a physical-sequential FB/80 data set, unchanged.
 Both are binary: do not let anything translate them to EBCDIC or strip
 trailing blanks.  Any route works -- FTP in binary with a pre-allocated
-target, IND$FILE, or an emulated tape.  For tape, wrap the file in AWS
-blocks and IEBGENER it in, as for any XMIT.
+target, IND$FILE, or an emulated tape.  IND$FILE is much faster into a
+data set with a large block size: allocate it FB 80 with as large a
+BLKSIZE as the volume takes (up to 32720; 19040 on a 3350).  For
+tape, wrap the file in AWS blocks and IEBGENER it in, as for any XMIT.
 
     //GEN      EXEC PGM=IEBGENER
     //SYSUT1   DD UNIT=480,VOL=SER=FORT01,LABEL=(1,NL),DISP=(OLD,KEEP),

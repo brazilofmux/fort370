@@ -8,6 +8,35 @@ names the fort370 commit it was built from, so `git log` between two
 entries has the detail. Host binaries for Linux, macOS and Windows come
 with each release, built and checked by CI on their own platforms.
 
+## 2026-11-03
+
+Tagged `v2026.11.03`: the variable's name beside each storage operand
+in LIST and the generated assembler (issue #37), and the first fixes
+from reports against the released compiler (issues #38 and #39).
+Built from `320c623`: FORT370.xmit SHA256 `9786eff6e6918462…`,
+632,320 bytes; F77RT.xmit SHA256 `cc7299cfc015305b…`, 634,640 bytes;
+F77RT.upd SHA256 `6b40d367a50d162c…`, 651,440 bytes; FORT370.aws
+SHA256 `725697e76a5d8b8e…`, 1,268,887 bytes.  All 192 FCVS programs,
+131 tests, the limit programs, the 600K source and the 85-deep
+nesting test compile on the guest to the host's assembler, byte for
+byte; the FCVS runs 3346 tests passed and the 2 failed by design.
+
+- LIST, and the assembler FORT370 writes, name the variable beside an
+  operand that refers to one, as H's LIST does: a local, a COMMON
+  member, a SAVE or DATA variable, an array element.  A dummy, reached
+  through a register, has none, as on H.  The object is unchanged.
+- FORMAT(I10.20), m greater than w in Iw.m, is an error; it printed
+  asterisks.
+- PRINT and READ with a format need the comma before the list: PRINT *
+  1234 printed 1234.
+- An I/O statement in a function referenced in another's I/O list (F77
+  forbids it) lost the outer statement's record and ran on with 0; the
+  program now stops with a message and 2.
+- A unit with more call arguments than the compiler's pool holds (137
+  calls of 60 arguments, on the guest) compiled to wrong addresses; it
+  stops with return code 12, as for any table too small.
+- INSTALL: IND$FILE is much faster into a large block size.
+
 ## 2026-10-26
 
 Tagged `v2026.10.26`: FORTRAN H's parameter lists and its second code
